@@ -1,0 +1,39 @@
+{
+  "name": "crypto-ai-desktop",
+  "version": "1.0.0",
+  "description": "Crypto AI Desktop Agent",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "build": {
+    "appId": "com.cryptoai.app",
+    "productName": "Crypto AI",
+    "mac": {
+      "category": "public.app-category.finance",
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  },
+  "devDependencies": {
+    "electron": "^36.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.98.0",
+    "@deepgram/sdk": "^5.3.0",
+    "axios": "^1.9.0",
+    "dotenv": "^17.4.2",
+    "groq-sdk": "^1.2.0",
+    "openai": "^6.39.0",
+    "pixi-live2d-display": "^0.4.0",
+    "pixi.js": "^6.5.10",
+    "robotjs": "^0.7.1",
+    "screenshot-desktop": "^1.15.4",
+    "telegram": "^2.26.22",
+    "ws": "^8.21.0"
+  }
+}

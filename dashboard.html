@@ -1,0 +1,3055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Asuka — Dashboard</title>
+<style>
+  :root {
+    --bg:       #000000;
+    --bg1:      #0a0a0a;
+    --bg2:      #111111;
+    --bg3:      #1a1a1a;
+    --border:   rgba(255,255,255,0.08);
+    --border2:  rgba(255,255,255,0.04);
+    --accent:   #00d4ff;
+    --accent2:  #0088ff;
+    --green:    #30d158;
+    --red:      #ff453a;
+    --gold:     #ffd60a;
+    --text:     #f5f5f7;
+    --text2:    #86868b;
+    --text3:    #48484a;
+    --glow:     rgba(229,229,231,0.15);
+    --radius:   12px;
+    --radius-sm:8px;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-font-smoothing:antialiased; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ═══ TOP BAR ═══ */
+  #topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    height: 48px;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+  }
+
+  #logo {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  #topbar-center { display: none; }
+
+  #page-tabs {
+    position: absolute;
+    left: 50%; 
+    transform: translateX(-50%);
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    z-index: 20;
+  }
+
+  .page-tab {
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text2);
+    background: transparent;
+    border: 1px solid transparent;
+  }
+  .page-tab:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+  .page-tab.active { 
+    color: var(--accent); 
+    background: rgba(0,212,255,0.1);
+    border-color: rgba(0,212,255,0.2);
+  }
+
+  /* Page containers */
+  #pages-wrapper {
+    display: flex;
+    flex-direction: row;
+    overflow-x: scroll;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    flex: 1;
+    min-height: 0;
+  }
+  #pages-wrapper::-webkit-scrollbar { display: none; }
+
+  .page { 
+    min-width: 100vw;
+    width: 100vw;
+    height: 100%;
+    scroll-snap-align: start;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  #page-telegram {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    gap: 16px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    height: 100%;
+    box-sizing: border-box;
+  }
+
+  #page-trading {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    gap: 16px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    height: 100%;
+    box-sizing: border-box;
+  }
+
+  .tg-section {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+
+  .tg-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .tg-connect-btn {
+    background: linear-gradient(135deg, #0088cc, #00a8e8);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    font-family: inherit;
+    transition: opacity 0.2s;
+  }
+  .tg-connect-btn:hover { opacity: 0.85; }
+
+  .tg-input {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    margin-bottom: 10px;
+  }
+  .tg-input:focus { border-color: rgba(0,212,255,0.4); }
+
+  .tg-group-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--bg3);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    border: 1px solid var(--border2);
+  }
+
+  .tg-group-name { font-size: 13px; font-weight: 500; }
+  .tg-group-type { font-size: 11px; color: var(--text2); }
+
+  .tg-remove-btn {
+    background: rgba(255,69,58,0.15);
+    border: 1px solid rgba(255,69,58,0.2);
+    color: var(--red);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .tg-add-btn {
+    background: rgba(0,212,255,0.1);
+    border: 1px solid rgba(0,212,255,0.2);
+    color: var(--accent);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .caller-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--bg3);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    border: 1px solid var(--border2);
+  }
+
+  .caller-name { font-size: 13px; font-weight: 600; }
+  .caller-stats { font-size: 11px; color: var(--text2); }
+
+  .win-rate-good { color: var(--green); }
+  .win-rate-bad { color: var(--red); }
+  .win-rate-ok { color: var(--gold); }
+
+  /* Dot trust selector */
+  .trust-dots {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .trust-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .trust-dot.filled {
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 6px rgba(0,212,255,0.5);
+  }
+  .trust-dot:hover { transform: scale(1.3); }
+
+  .signal-item {
+    padding: 12px;
+    background: var(--bg3);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border2);
+    border-left: 3px solid var(--accent);
+  }
+  .signal-item.won { border-left-color: var(--green); }
+  .signal-item.lost { border-left-color: var(--red); }
+
+  .signal-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .signal-coin { font-size: 14px; font-weight: 700; }
+  .signal-direction-long { color: var(--green); font-size: 12px; font-weight: 600; }
+  .signal-direction-short { color: var(--red); font-size: 12px; font-weight: 600; }
+  .signal-details { font-size: 11px; color: var(--text2); }
+  .signal-caller { font-size: 11px; color: var(--accent); margin-top: 4px; }
+  .signal-confidence { 
+    font-size: 11px; 
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(0,212,255,0.1);
+    color: var(--accent);
+  }
+
+  /* Weight settings */
+  .weight-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border2);
+  }
+  .weight-label { font-size: 13px; color: var(--text2); }
+  .weight-val { font-size: 12px; color: var(--accent); font-weight: 600; min-width: 35px; text-align: right; }
+
+  /* ═══ PAGE 3 — PAPER TRADING ═══ */
+  .trading-hero {
+    background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(0,136,255,0.05));
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    text-align: center;
+  }
+
+  .trading-stat-val {
+    font-size: 24px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #fff, var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .trading-stat-label { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+  .trade-item {
+    padding: 12px;
+    background: var(--bg2);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    border: 1px solid var(--border2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .trade-left { display: flex; flex-direction: column; gap: 3px; }
+  .trade-coin { font-size: 14px; font-weight: 700; }
+  .trade-info { font-size: 11px; color: var(--text2); }
+  .trade-pnl-pos { color: var(--green); font-weight: 700; font-size: 14px; }
+  .trade-pnl-neg { color: var(--red); font-weight: 700; font-size: 14px; }
+  .trade-pnl-open { color: var(--gold); font-weight: 700; font-size: 14px; }
+
+  .auto-trade-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--bg2);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  .toggle-label { font-size: 13px; font-weight: 500; }
+  .toggle-sub { font-size: 11px; color: var(--text2); }
+  .toggle-switch {
+    width: 44px; height: 24px;
+    background: var(--bg3);
+    border-radius: 12px;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.3s;
+    border: 1px solid var(--border);
+  }
+  .toggle-switch.on { background: var(--accent); border-color: var(--accent); }
+  .toggle-switch::after {
+    content: '';
+    position: absolute;
+    width: 18px; height: 18px;
+    background: white;
+    border-radius: 50%;
+    top: 2px; left: 2px;
+    transition: transform 0.3s;
+  }
+  .leverage-btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    transition: all 0.2s;
+  }
+  .leverage-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .leverage-btn.active { 
+    background: rgba(0,212,255,0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  /* Intelligence Feed */
+  .intel-item {
+    padding: 10px 12px;
+    background: var(--bg3);
+    border-radius: 8px;
+    border-left: 3px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .intel-item.signal { border-left-color: var(--accent); }
+  .intel-item.warning { border-left-color: var(--red); }
+  .intel-item.news { border-left-color: var(--gold); }
+  .intel-item.whale { border-left-color: #a78bfa; }
+  .intel-item.scan { border-left-color: var(--text2); }
+  .intel-item.win { border-left-color: var(--green); }
+  .intel-item.loss { border-left-color: var(--red); }
+
+  .intel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .intel-type {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  .intel-type-signal { color: var(--accent); }
+  .intel-type-warning { color: var(--red); }
+  .intel-type-news { color: var(--gold); }
+  .intel-type-whale { color: #a78bfa; }
+  .intel-type-scan { color: var(--text2); }
+  .intel-time { font-size: 10px; color: var(--text2); }
+  .intel-body { font-size: 12px; color: var(--text); line-height: 1.4; }
+  .intel-note { font-size: 11px; color: var(--text2); font-style: italic; }
+  .intel-action {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(0,212,255,0.1);
+    color: var(--accent);
+    align-self: flex-start;
+  }
+  .conf-meter {
+    width: 100%;
+    height: 4px;
+    background: var(--bg3);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .conf-meter-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s ease;
+  }
+  .conf-high { background: var(--green); }
+  .conf-med { background: var(--gold); }
+  .conf-low { background: var(--red); }
+
+  .conf-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .conf-badge-high { background: rgba(52,211,153,0.15); color: var(--green); }
+  .conf-badge-med { background: rgba(251,191,36,0.15); color: var(--gold); }
+  .conf-badge-low { background: rgba(255,69,58,0.15); color: var(--red); }
+
+  .conf-warning-box {
+    background: rgba(255,69,58,0.1);
+    border: 1px solid rgba(255,69,58,0.3);
+    color: var(--red);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin-top: 6px;
+  }
+  .conf-notice-box {
+    background: rgba(251,191,36,0.1);
+    border: 1px solid rgba(251,191,36,0.3);
+    color: var(--gold);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin-top: 6px;
+  }
+
+  /* Tooltip */
+  .tooltip-icon {
+    font-size: 12px;
+    color: var(--text2);
+    cursor: help;
+    position: relative;
+  }
+  .tooltip-icon:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 20px;
+    top: -8px;
+    width: 240px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.5;
+    z-index: 100;
+    white-space: normal;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+
+  #live-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    background: rgba(48,209,88,0.1);
+    border: 1px solid rgba(48,209,88,0.2);
+    border-radius: 20px;
+    font-size: 11px;
+    color: var(--green);
+    font-weight: 500;
+  }
+  #live-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
+
+  #session-badge {
+    padding: 3px 10px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 11px;
+    color: var(--text2);
+    font-weight: 500;
+  }
+
+  #topbar-right { display: flex; gap: 8px; align-items: center; }
+
+  .tb-btn {
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  #settings-open-btn {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  #settings-open-btn:hover { background: rgba(255,255,255,0.14); }
+  #close-btn {
+    background: rgba(255,69,58,0.15);
+    border: 1px solid rgba(255,69,58,0.2);
+    color: var(--red);
+  }
+  #close-btn:hover { background: rgba(255,69,58,0.25); }
+
+  /* ═══ MAIN GRID ═══ */
+  #page-1 { overflow: hidden; }
+
+  #main {
+    display: grid;
+    grid-template-columns: 200px 1fr 240px 240px;
+    height: 100%;
+    overflow: hidden;
+    gap: 1px;
+    background: var(--border2);
+  }
+
+  .col {
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .col-header {
+    padding: 14px 16px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text2);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border2);
+  }
+
+  /* ═══ COL 1 — COMPANION ═══ */
+  #col-waifu {
+    background: linear-gradient(180deg, #000 0%, #050a14 100%);
+    position: relative;
+  }
+
+  #waifu-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  #waifu-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  #waifu-ambient {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 180px;
+    background: linear-gradient(to top, rgba(255,255,255,0.03) 0%, transparent 100%);
+    pointer-events: none;
+  }
+
+  #waifu-bottom {
+    flex-shrink: 0;
+    padding: 10px 14px 6px;
+    background: linear-gradient(to top, #000 80%, transparent);
+  }
+
+  #waifu-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 1px;
+    margin-bottom: 3px;
+  }
+
+  #waifu-speech {
+    font-size: 10px;
+    color: var(--text2);
+    line-height: 1.4;
+    min-height: 28px;
+    font-style: italic;
+  }
+
+  #edit-btn {
+    margin: 8px 14px 14px;
+    padding: 8px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text2);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  #edit-btn:hover {
+    background: rgba(255,255,255,0.1);
+    color: var(--text);
+    border-color: rgba(255,255,255,0.15);
+  }
+
+  /* ═══ COL 2 — PORTFOLIO ═══ */
+
+  /* Portfolio hero */
+  #portfolio-hero {
+    padding: 20px 16px 14px;
+    border-bottom: 1px solid var(--border2);
+    flex-shrink: 0;
+    background: linear-gradient(135deg, rgba(229,229,231,0.03) 0%, transparent 60%);
+  }
+  #port-label { font-size: 11px; color: var(--text2); font-weight: 500; margin-bottom: 6px; }
+  #port-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.5px;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  #port-change {
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 12px;
+  }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+
+  #add-wallet-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    background: rgba(229,229,231,0.08);
+    border: 1px solid rgba(229,229,231,0.15);
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #e5e5e7;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  #add-wallet-pill:hover { background: rgba(229,229,231,0.15); }
+
+  /* Sections */
+  .section-label {
+    padding: 10px 16px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text3);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  /* Token rows */
+  #tokens-section { flex-shrink: 0; max-height: 170px; overflow-y: auto; }
+  .token-row {
+    display: flex;
+    align-items: center;
+    padding: 9px 16px;
+    transition: background 0.15s;
+  }
+  .token-row:hover { background: rgba(255,255,255,0.03); }
+  .token-icon {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #e5e5e7;
+    margin-right: 10px; flex-shrink: 0;
+  }
+  .token-name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .token-bal  { font-size: 11px; color: var(--text2); margin-top: 1px; }
+  .token-usd  { font-size: 13px; font-weight: 500; text-align: right; }
+  .token-chg  { font-size: 11px; text-align: right; margin-top: 1px; }
+
+  /* Transactions */
+  #txns-section { flex: 1; overflow-y: auto; }
+  .txn-row {
+    display: flex;
+    align-items: center;
+    padding: 9px 16px;
+    transition: background 0.15s;
+    border-bottom: 1px solid var(--border2);
+  }
+  .txn-row:hover { background: rgba(255,255,255,0.03); }
+  .txn-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    margin-right: 10px; flex-shrink: 0;
+  }
+  .txn-dot.send    { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .txn-dot.receive { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .txn-dot.swap    { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .txn-desc { font-size: 12px; font-weight: 500; flex: 1; }
+  .txn-date { font-size: 10px; color: var(--text2); margin-top: 1px; }
+  .txn-amt  { font-size: 12px; font-weight: 500; text-align: right; }
+
+  /* ═══ COL 3 — WATCHLIST ═══ */
+
+  /* Add coin */
+  #add-coin-row {
+    display: flex;
+    gap: 6px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border2);
+    flex-shrink: 0;
+  }
+  #add-coin-input {
+    flex: 1;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 6px 10px;
+    outline: none;
+    transition: border 0.2s;
+  }
+  #add-coin-input:focus { border-color: rgba(229,229,231,0.2); }
+  #add-coin-input::placeholder { color: var(--text3); }
+
+  #add-coin-btn {
+    padding: 6px 14px;
+    background: var(--accent);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: #000;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: opacity 0.2s;
+  }
+  #add-coin-btn:hover { opacity: 0.85; }
+
+  /* Price rows */
+  #prices-section { overflow-y: auto; flex: 1; }
+  .price-row {
+    display: flex;
+    align-items: center;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border2);
+    transition: background 0.15s;
+    gap: 8px;
+  }
+  .price-row:hover { background: rgba(255,255,255,0.03); }
+  .p-sym {
+    font-size: 13px; font-weight: 600;
+    color: var(--text); width: 44px; flex-shrink: 0;
+  }
+  .p-price { flex: 1; font-size: 13px; font-weight: 500; color: var(--text); }
+  .p-chg { font-size: 12px; font-weight: 600; width: 56px; text-align: right; }
+  .p-bell { font-size: 13px; cursor: pointer; opacity: 0.3; transition: opacity 0.2s; }
+  .p-bell:hover { opacity: 0.8; }
+  .p-bell.active { opacity: 1; }
+  .p-del { font-size: 11px; color: var(--text3); cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+  .price-row:hover .p-del { opacity: 1; }
+  .p-del:hover { color: var(--red); }
+
+  /* Alerts */
+  #alerts-panel { flex-shrink: 0; border-top: 1px solid var(--border); }
+  #add-alert-row {
+    display: flex; gap: 5px; padding: 8px 12px;
+    border-bottom: 1px solid var(--border2); flex-shrink: 0;
+  }
+  .al-input {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-family: inherit;
+    font-size: 11px; padding: 5px 8px; outline: none;
+  }
+  .al-input:focus { border-color: rgba(229,229,231,0.3); }
+  .al-input::placeholder { color: var(--text3); }
+  #alert-coin-input { width: 48px; }
+  #alert-price-input { flex: 1; }
+  #alert-dir-select {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-family: inherit;
+    font-size: 11px; padding: 5px 4px; outline: none; cursor: pointer;
+  }
+  #add-alert-btn {
+    padding: 5px 10px; background: rgba(229,229,231,0.12);
+    border: 1px solid rgba(229,229,231,0.2); border-radius: 6px;
+    color: #e5e5e7; font-size: 11px; font-weight: 600;
+    cursor: pointer; font-family: inherit; transition: all 0.2s;
+  }
+  #add-alert-btn:hover { background: rgba(229,229,231,0.22); }
+  #alerts-list { max-height: 110px; overflow-y: auto; }
+  .alert-row {
+    display: flex; align-items: center; padding: 7px 14px;
+    border-bottom: 1px solid var(--border2); gap: 8px;
+  }
+  .al-sym { font-size: 11px; font-weight: 600; color: #e5e5e7; width: 38px; }
+  .al-info { flex: 1; font-size: 10px; color: var(--text2); }
+  .al-del { font-size: 10px; color: var(--text3); cursor: pointer; transition: color 0.15s; }
+  .al-del:hover { color: var(--red); }
+
+  /* ═══ COL 4 — TRACKED WALLETS ═══ */
+  #add-track-row {
+    display: flex; gap: 6px; padding: 10px 12px;
+    border-bottom: 1px solid var(--border2); flex-shrink: 0;
+  }
+  #tracked-addr-input {
+    flex: 1; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text); font-family: inherit;
+    font-size: 11px; padding: 6px 10px; outline: none;
+  }
+  #tracked-addr-input:focus { border-color: rgba(229,229,231,0.3); }
+  #tracked-addr-input::placeholder { color: var(--text3); }
+  #add-track-btn {
+    padding: 6px 12px; background: rgba(255,255,255,0.08);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); font-size: 11px; font-weight: 600;
+    cursor: pointer; font-family: inherit; transition: all 0.2s;
+  }
+  #add-track-btn:hover { background: rgba(255,255,255,0.14); }
+
+  #tracked-list { flex: 1; overflow-y: auto; }
+  .track-row {
+    display: flex; align-items: center; padding: 10px 14px;
+    border-bottom: 1px solid var(--border2); cursor: pointer;
+    transition: background 0.15s; gap: 10px;
+  }
+  .track-row:hover { background: rgba(255,255,255,0.03); }
+  .track-avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: linear-gradient(135deg, rgba(229,229,231,0.2), rgba(255,255,255,0.2));
+    border: 1px solid rgba(229,229,231,0.15);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0;
+  }
+  .track-info { flex: 1; min-width: 0; }
+  .track-label { font-size: 13px; font-weight: 500; color: var(--text); }
+  .track-addr { font-size: 10px; color: var(--text2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track-pnl { font-size: 11px; font-weight: 600; flex-shrink: 0; }
+  .track-del { font-size: 11px; color: var(--text3); cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+  .track-row:hover .track-del { opacity: 1; }
+  .track-del:hover { color: var(--red); }
+
+  /* Wallet detail */
+  #wallet-detail {
+    display: none; position: absolute; inset: 0;
+    background: var(--bg); z-index: 5; flex-direction: column;
+    overflow: hidden;
+  }
+  #wallet-detail.open { display: flex; }
+  #wd-topbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .back-pill {
+    padding: 4px 12px; border-radius: 20px;
+    background: rgba(255,255,255,0.08); border: 1px solid var(--border);
+    color: var(--text); font-size: 11px; font-weight: 500;
+    cursor: pointer; transition: all 0.2s; font-family: inherit;
+  }
+  .back-pill:hover { background: rgba(255,255,255,0.14); }
+  #wd-name { font-size: 14px; font-weight: 600; color: var(--text); }
+  #wd-addr { font-size: 10px; color: var(--text2); }
+  #wd-body { flex: 1; overflow-y: auto; padding: 14px; }
+  .wd-stat {
+    background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px; margin-bottom: 10px;
+  }
+  .wd-stat-label { font-size: 10px; color: var(--text2); margin-bottom: 4px; font-weight: 500; }
+  .wd-stat-val { font-size: 18px; font-weight: 700; color: var(--text); }
+
+  /* ═══ OVERLAYS ═══ */
+  .overlay {
+    display: none; position: absolute; inset: 0;
+    background: var(--bg); z-index: 50; flex-direction: column;
+  }
+  .overlay.open { display: flex; }
+
+  .overlay-topbar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(20px);
+  }
+  .overlay-title { font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: -0.2px; }
+
+  /* Edit page */
+  #edit-body {
+    display: grid; grid-template-columns: 260px 1fr;
+    flex: 1; overflow: hidden;
+  }
+  #edit-preview {
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; align-items: center;
+    padding: 20px; background: linear-gradient(180deg, #000 0%, #050a14 100%);
+  }
+  #edit-canvas { width: 100%; flex: 1; display: block; }
+  #edit-char-name { font-size: 15px; font-weight: 600; color: var(--text); margin: 8px 0 4px; }
+  #customize-btn {
+    width: 100%; padding: 10px;
+    background: linear-gradient(135deg, rgba(229,229,231,0.12), rgba(255,255,255,0.12));
+    border: 1px solid rgba(229,229,231,0.2); border-radius: var(--radius-sm);
+    color: #e5e5e7; font-size: 12px; font-weight: 600;
+    cursor: pointer; text-align: center; transition: all 0.2s; margin-top: 6px;
+  }
+  #customize-btn:hover { background: rgba(229,229,231,0.2); }
+  #edit-grid { padding: 24px; overflow-y: auto; }
+  #edit-grid-hint { font-size: 11px; color: var(--text2); margin-bottom: 16px; }
+  #char-row { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; }
+  #char-row::-webkit-scrollbar { height: 2px; }
+  #char-row::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .char-card {
+    width: 120px; flex-shrink: 0; height: 170px;
+    background: var(--bg1); border: 1px solid var(--border);
+    border-radius: var(--radius); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; cursor: pointer;
+    transition: all 0.25s; position: relative; overflow: hidden;
+  }
+  .char-card:hover { border-color: rgba(255,255,255,0.2); background: var(--bg2); transform: translateY(-2px); }
+  .char-card.active { border-color: #e5e5e7; box-shadow: 0 0 20px rgba(229,229,231,0.15); }
+  .char-card.locked { opacity: 0.45; cursor: not-allowed; }
+  .char-card.locked:hover { transform: none; }
+  .char-emoji { font-size: 32px; margin-bottom: 8px; }
+  .char-name { font-size: 12px; font-weight: 600; color: var(--text); }
+  .char-badge {
+    position: absolute; top: 8px; right: 8px;
+    font-size: 9px; font-weight: 600; letter-spacing: 0.5px;
+    padding: 2px 6px; border-radius: 4px;
+  }
+  .char-badge.free { background: rgba(48,209,88,0.15); color: var(--green); border: 1px solid rgba(48,209,88,0.2); }
+  .char-badge.pro  { background: rgba(255,214,10,0.12); color: var(--gold);  border: 1px solid rgba(255,214,10,0.2); }
+
+  /* Customize */
+  #customize-body {
+    display: grid; grid-template-columns: 260px 1fr;
+    flex: 1; overflow: hidden;
+  }
+  #cust-preview {
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; align-items: center;
+    padding: 20px; background: linear-gradient(180deg, #000 0%, #050a14 100%);
+  }
+  #cust-canvas { width: 100%; flex: 1; display: block; }
+  #cust-name { font-size: 15px; font-weight: 600; color: var(--text); margin: 8px 0 4px; text-align: center; }
+  #cust-save {
+    width: 100%; padding: 10px; border-radius: var(--radius-sm);
+    background: var(--green); border: none; color: #000;
+    font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 8px;
+    transition: opacity 0.2s; font-family: inherit;
+  }
+  #cust-save:hover { opacity: 0.88; }
+  #cust-options { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 24px; }
+  .co-section { display: flex; flex-direction: column; gap: 10px; }
+  .co-label { font-size: 11px; font-weight: 600; color: var(--text2); letter-spacing: 0.5px; text-transform: uppercase; }
+  .co-input {
+    background: var(--bg1); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text); font-family: inherit;
+    font-size: 13px; padding: 9px 12px; outline: none; width: 100%; transition: border 0.2s;
+  }
+  .co-input:focus { border-color: rgba(229,229,231,0.2); }
+  .co-input::placeholder { color: var(--text3); }
+
+  /* Option cards grid */
+  .opt-grid { display: grid; gap: 8px; }
+  .opt-grid-3 { grid-template-columns: repeat(3,1fr); }
+  .opt-card {
+    padding: 12px 8px; border-radius: var(--radius-sm);
+    background: var(--bg1); border: 1px solid var(--border);
+    cursor: pointer; text-align: center; transition: all 0.2s;
+  }
+  .opt-card:hover { border-color: rgba(255,255,255,0.18); background: var(--bg2); }
+  .opt-card.active {
+    border-color: #e5e5e7;
+    background: rgba(255,255,255,0.03);
+    box-shadow: 0 0 0 3px rgba(229,229,231,0.08);
+  }
+  .opt-emoji { font-size: 22px; margin-bottom: 5px; }
+  .opt-name { font-size: 11px; font-weight: 600; color: var(--text); letter-spacing: 0.3px; }
+  .opt-desc { font-size: 10px; color: var(--text2); margin-top: 2px; }
+
+  /* AI mode cards */
+  .ai-card.active {
+    border-color: var(--gold);
+    background: rgba(255,214,10,0.05);
+    box-shadow: 0 0 0 3px rgba(255,214,10,0.08);
+  }
+  .ai-note {
+    font-size: 10px; color: var(--text2); line-height: 1.5;
+    background: rgba(255,255,255,0.025); border: 1px solid rgba(229,229,231,0.1);
+    border-radius: var(--radius-sm); padding: 10px 12px; margin-top: 4px;
+  }
+
+  /* Slider */
+  .slider-wrap { display: flex; align-items: center; gap: 10px; }
+  .slider-side { font-size: 10px; color: var(--text2); min-width: 28px; }
+  .co-slider { flex: 1; accent-color: #e5e5e7; height: 3px; cursor: pointer; }
+  .slider-val { font-size: 12px; font-weight: 600; color: #e5e5e7; min-width: 36px; }
+
+  /* Color swatches */
+  .swatch-row { display: flex; flex-wrap: wrap; gap: 10px; }
+  .swatch {
+    width: 28px; height: 28px; border-radius: 50%;
+    cursor: pointer; border: 2px solid transparent; transition: all 0.2s;
+  }
+  .swatch:hover { transform: scale(1.18); }
+  .swatch.active { border-color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,0.15); }
+
+  /* Item cards */
+  .item-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+  .item-card {
+    width: 72px; height: 80px; border-radius: var(--radius-sm);
+    background: var(--bg1); border: 1px solid var(--border);
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; cursor: pointer; transition: all 0.2s;
+    position: relative; font-size: 22px;
+  }
+  .item-card:hover { border-color: rgba(255,255,255,0.2); background: var(--bg2); }
+  .item-card.active { border-color: #e5e5e7; background: rgba(255,255,255,0.03); }
+  .item-card.locked { opacity: 0.4; cursor: not-allowed; }
+  .item-lbl { font-size: 9px; color: var(--text2); margin-top: 4px; font-weight: 500; }
+  .item-pro {
+    position: absolute; top: 4px; right: 4px;
+    font-size: 7px; font-weight: 700; padding: 1px 4px; border-radius: 3px;
+    background: rgba(255,214,10,0.15); color: var(--gold); border: 1px solid rgba(255,214,10,0.2);
+  }
+
+  /* Settings */
+  #settings-body { flex: 1; overflow-y: auto; padding: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .s-section { display: flex; flex-direction: column; gap: 12px; }
+  .s-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .s-row { display: flex; flex-direction: column; gap: 5px; }
+  .s-label { font-size: 11px; color: var(--text2); font-weight: 500; }
+  .s-input {
+    background: var(--bg1); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text); font-family: inherit;
+    font-size: 13px; padding: 8px 12px; outline: none; width: 100%; transition: border 0.2s;
+  }
+  .s-input:focus { border-color: rgba(229,229,231,0.2); }
+  .s-input::placeholder { color: var(--text3); }
+  .s-btn {
+    padding: 10px 20px; border-radius: var(--radius-sm); cursor: pointer;
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    text-align: center; transition: all 0.2s;
+  }
+  .s-btn-primary { background: var(--accent); border: none; color: #000; }
+  .s-btn-primary:hover { opacity: 0.88; }
+  .s-btn-ghost { background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--text); }
+  .s-btn-ghost:hover { background: rgba(255,255,255,0.12); }
+  .s-btn-purple { background: rgba(150,0,255,0.12); border: 1px solid rgba(150,0,255,0.2); color: #cc88ff; }
+  .s-btn-purple:hover { background: rgba(150,0,255,0.22); }
+
+  /* Wallet modal */
+  #wallet-modal {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7); z-index: 999;
+    backdrop-filter: blur(8px);
+    align-items: center; justify-content: center;
+  }
+  #wallet-modal.open { display: flex; }
+  #wallet-modal-box {
+    background: var(--bg1); border: 1px solid var(--border);
+    border-radius: 16px; padding: 24px; width: 360px;
+    display: flex; flex-direction: column; gap: 14px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+  }
+  .m-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .m-row { display: flex; flex-direction: column; gap: 5px; }
+  .m-label { font-size: 11px; color: var(--text2); font-weight: 500; }
+  .m-input, .m-select {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text); font-family: inherit;
+    font-size: 13px; padding: 8px 12px; outline: none; width: 100%; transition: border 0.2s;
+  }
+  .m-input:focus, .m-select:focus { border-color: rgba(229,229,231,0.2); }
+  .m-btns { display: flex; gap: 8px; margin-top: 4px; }
+  .m-btn { flex: 1; padding: 10px; border-radius: var(--radius-sm); cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; text-align: center; transition: all 0.2s; border: none; }
+  .m-btn.ok { background: var(--accent); color: #000; }
+  .m-btn.ok:hover { opacity: 0.88; }
+  .m-btn.cancel { background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--text); }
+  .m-btn.cancel:hover { background: rgba(255,255,255,0.12); }
+
+  /* Empty state */
+  .empty-state { padding: 24px 16px; font-size: 12px; color: var(--text3); text-align: center; line-height: 1.5; }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 3px; height: 3px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div id="logo">CRYPTO.AI</div>
+  <div id="topbar-center">
+    <div id="live-pill"><div id="live-dot"></div>Live</div>
+    <div id="session-badge"></div>
+  </div>
+  <div id="page-tabs">
+    <div class="page-tab active" data-page="1">Dashboard</div>
+    <div class="page-tab" data-page="2">📡 Telegram</div>
+    <div class="page-tab" data-page="3">📊 Trading</div>
+  </div>
+  <div id="topbar-right">
+    <div class="tb-btn" id="settings-open-btn">Settings</div>
+    <div class="tb-btn" id="close-btn">Close</div>
+  </div>
+</div>
+
+<!-- PAGE WRAPPER -->
+<div id="pages-wrapper">
+
+<!-- PAGE 1 — DASHBOARD -->
+<div class="page active" id="page-1">
+<!-- MAIN 4-COL -->
+<div id="main">
+
+  <!-- 1: COMPANION -->
+  <div class="col" id="col-waifu">
+    <div id="waifu-wrap">
+      <canvas id="waifu-canvas"></canvas>
+      <div id="waifu-ambient"></div>
+    </div>
+    <div id="waifu-bottom">
+      <div id="waifu-name">Asuka</div>
+      <div id="waifu-speech"></div>
+    </div>
+    <div id="edit-btn">Edit Character</div>
+  </div>
+
+  <!-- 2: PORTFOLIO -->
+  <div class="col">
+    <div class="col-header">Portfolio</div>
+    <div id="portfolio-hero">
+      <div id="port-label">Total Value</div>
+      <div id="port-value">$0.00</div>
+      <div id="port-change" class="pos">+0.00%</div>
+      <div style="display:flex;gap:8px;">
+        <div id="add-wallet-pill">+ Add Wallet</div>
+        <div id="manage-wallets-pill" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:6px 12px;border-radius:20px;font-size:12px;cursor:pointer;color:var(--text2);">Manage</div>
+      </div>
+    </div>
+    <div class="section-label">Tokens</div>
+    <div id="tokens-section">
+      <div class="empty-state">No wallets connected</div>
+    </div>
+    <div class="section-label">Transactions</div>
+    <div id="txns-section">
+      <div class="empty-state">Connect a wallet to see transactions</div>
+    </div>
+  </div>
+
+  <!-- 3: WATCHLIST -->
+  <div class="col">
+    <div class="col-header">Watchlist</div>
+    <div id="add-coin-row">
+      <input id="add-coin-input" placeholder="Add coin (BTC, ETH…)" />
+      <button id="add-coin-btn">Add</button>
+    </div>
+    <div id="prices-section">
+      <div class="empty-state">Add coins above to track prices</div>
+    </div>
+    <div id="alerts-panel">
+      <div class="section-label">Price Alerts</div>
+      <div id="add-alert-row">
+        <input class="al-input" id="alert-coin-input" placeholder="BTC" />
+        <input class="al-input" id="alert-price-input" placeholder="Target price" />
+        <select class="al-input" id="alert-dir-select" style="width:46px">
+          <option value="above">↑</option>
+          <option value="below">↓</option>
+        </select>
+        <div id="add-alert-btn">Set</div>
+      </div>
+      <div id="alerts-list"></div>
+    </div>
+  </div>
+
+  <!-- 4: TRACKED WALLETS -->
+  <div class="col" style="position:relative">
+    <div class="col-header">Tracked Wallets</div>
+    <div id="add-track-row">
+      <input id="tracked-addr-input" placeholder="Paste wallet address…" />
+      <div id="add-track-btn">Track</div>
+    </div>
+    <div id="tracked-list">
+      <div class="empty-state">Track any wallet to see their moves</div>
+    </div>
+
+    <!-- Wallet detail -->
+    <div id="wallet-detail">
+      <div id="wd-topbar">
+        <div class="back-pill" id="wd-back">← Back</div>
+        <div><div id="wd-name"></div><div id="wd-addr"></div></div>
+      </div>
+      <div id="wd-body"></div>
+    </div>
+  </div>
+</div>
+<!-- END PAGE 1 -->
+</div>
+
+<!-- PAGE 2 — TELEGRAM INTELLIGENCE -->
+<div class="page" id="page-2">
+<div id="page-telegram">
+
+  <!-- Connect Section -->
+  <div class="tg-section" id="tg-connect-section">
+    <div class="tg-section-title">📱 Telegram Connection</div>
+    <div id="tg-disconnected">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Connect your Telegram to monitor groups and track signal callers automatically.</p>
+      <input class="tg-input" id="tg-phone" placeholder="+971 50 123 4567" type="tel">
+      <button class="tg-connect-btn" id="tg-connect-btn">Connect Telegram</button>
+    </div>
+    <div id="tg-code-section" style="display:none">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Enter the code sent to your Telegram:</p>
+      <input class="tg-input" id="tg-code" placeholder="12345" type="number">
+      <button class="tg-connect-btn" id="tg-verify-btn">Verify Code</button>
+    </div>
+    <div id="tg-connected-section" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <div style="width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)"></div>
+        <span style="font-size:14px;font-weight:600;color:var(--green)">Connected</span>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">
+        Notification contact: <span id="tg-notify-contact" style="color:var(--accent)">You (Saved Messages)</span>
+        <span id="tg-change-contact" style="color:var(--text2);cursor:pointer;text-decoration:underline;margin-left:8px;">Change</span>
+        <div id="tg-contact-form" style="display:none;margin-top:8px;display:flex;gap:8px;align-items:center;">
+          <input class="tg-input" id="tg-contact-input" placeholder="@username or phone" style="margin:0;flex:1;">
+          <button class="tg-add-btn" id="tg-save-contact-btn">Save</button>
+        </div>
+      </div>
+      <button class="tg-connect-btn" style="background:rgba(255,69,58,0.2);color:var(--red)" id="tg-disconnect-btn">Disconnect</button>
+    </div>
+  </div>
+
+  <!-- Monitored Groups -->
+  <div class="tg-section">
+    <div class="tg-section-title">
+      📡 Monitored Groups
+      <button class="tg-add-btn" id="tg-add-group-btn">+ Add Group</button>
+    </div>
+    <div id="tg-groups-list">
+      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No groups added yet</div>
+    </div>
+    <!-- Group picker -->
+    <div id="tg-group-picker" style="display:none;margin-top:12px;">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Select a group to monitor:</div>
+      <div id="tg-available-groups"></div>
+    </div>
+  </div>
+
+  <!-- Tracked Callers -->
+  <div class="tg-section">
+    <div class="tg-section-title">
+      👥 Tracked Callers
+      <button class="tg-add-btn" id="tg-add-caller-btn">+ Follow Caller</button>
+    </div>
+    <div id="tg-callers-list">
+      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No callers tracked yet</div>
+    </div>
+    <div id="tg-add-caller-form" style="display:none;margin-top:12px;">
+      <input class="tg-input" id="tg-caller-input" placeholder="@username">
+      <div style="display:flex;gap:8px;">
+        <button class="tg-add-btn" id="tg-save-caller-btn">Follow</button>
+        <button class="tg-add-btn" style="background:transparent;color:var(--text2)" id="tg-cancel-caller-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Signal Weights -->
+  <div class="tg-section">
+    <div class="tg-section-title">⚖️ Signal Weights</div>
+    <div id="weight-settings">
+      <div class="weight-row">
+        <div><div class="toggle-label">Caller Trust</div><div class="caller-stats">How much to trust tracked callers</div></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="trust-dots" data-key="callerTrust" data-val="8"></div>
+          <div class="weight-val" id="w-callerTrust">80%</div>
+        </div>
+      </div>
+      <div class="weight-row">
+        <div><div class="toggle-label">Her Analysis</div><div class="caller-stats">Her own technical analysis weight</div></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="trust-dots" data-key="herAnalysis" data-val="6"></div>
+          <div class="weight-val" id="w-herAnalysis">60%</div>
+        </div>
+      </div>
+      <div class="weight-row">
+        <div><div class="toggle-label">Fear & Greed</div><div class="caller-stats">Market sentiment index</div></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="trust-dots" data-key="fearGreed" data-val="4"></div>
+          <div class="weight-val" id="w-fearGreed">40%</div>
+        </div>
+      </div>
+      <div class="weight-row">
+        <div><div class="toggle-label">Funding Rate</div><div class="caller-stats">Market leverage indicator</div></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="trust-dots" data-key="funding" data-val="5"></div>
+          <div class="weight-val" id="w-funding">50%</div>
+        </div>
+      </div>
+      <div class="weight-row">
+        <div><div class="toggle-label">News Sentiment</div><div class="caller-stats">Latest news impact</div></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="trust-dots" data-key="news" data-val="3"></div>
+          <div class="weight-val" id="w-news">30%</div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Alert threshold — notify me when confidence exceeds:</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="trust-dots" data-key="alertThreshold" data-val="9" style="gap:6px;"></div>
+        <div class="weight-val" id="w-alertThreshold">90%</div>
+      </div>
+    </div>
+
+    <!-- Max Drawdown Protection -->
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border2);">
+      <div style="font-size:12px;font-weight:600;margin-bottom:6px;">🛑 Max Drawdown Protection</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Auto-close trade if loss exceeds this % (0 = disabled)</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input class="tg-input" id="max-drawdown-input" placeholder="e.g. 5" type="number" min="0" max="100" style="margin:0;width:80px;">
+        <span style="font-size:12px;color:var(--text2);">%</span>
+        <button class="tg-add-btn" id="save-drawdown-btn">Save</button>
+        <button class="tg-add-btn" style="background:transparent;color:var(--text2)" id="disable-drawdown-btn">Disable</button>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-top:6px;" id="drawdown-hint">Disabled — trades close only at SL or target</div>
+    </div>
+  </div>
+
+  <!-- Intelligence Feed -->
+  <div class="tg-section">
+    <div class="tg-section-title">📡 Intelligence Feed</div>
+    
+    <!-- Two notification toggles -->
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg3);border-radius:8px;">
+        <div>
+          <div style="font-size:12px;font-weight:600;">🔔 Trade Alerts</div>
+          <div style="font-size:11px;color:var(--text2);">Paper trades, signals, wins & losses</div>
+        </div>
+        <div class="toggle-switch" id="trade-notify-toggle"></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg3);border-radius:8px;">
+        <div>
+          <div style="font-size:12px;font-weight:600;">📰 Intel Updates</div>
+          <div style="font-size:11px;color:var(--text2);">Market scans, news, group messages</div>
+        </div>
+        <div class="toggle-switch" id="intel-notify-toggle"></div>
+      </div>
+    </div>
+
+    <div id="intel-feed" style="display:flex;flex-direction:column;gap:8px;max-height:500px;overflow-y:auto;">
+      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">Feed will populate as she reads groups and scans market</div>
+    </div>
+  </div>
+
+  <!-- Chart Image Analysis Toggle -->
+  <div class="tg-section">
+    <div class="tg-section-title">🖼️ Chart Image Analysis</div>
+    <div class="auto-trade-toggle">
+      <div>
+        <div class="toggle-label">Auto-analyze chart images</div>
+        <div class="caller-stats">Claude Vision analyzes every chart image posted by tracked callers</div>
+      </div>
+      <div class="toggle-switch" id="chart-analysis-toggle"></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- PAGE 3 — PAPER TRADING -->
+<div class="page" id="page-3">
+<div id="page-trading">
+
+  <!-- Auto Trading Toggle -->
+  <div class="auto-trade-toggle">
+    <div>
+      <div class="toggle-label">Auto Paper Trading</div>
+      <div class="caller-stats">Automatically paper trade when confidence exceeds threshold</div>
+    </div>
+    <div class="toggle-switch" id="auto-trade-toggle"></div>
+  </div>
+
+  <!-- Independent Scanner Toggle -->
+  <div class="auto-trade-toggle" style="position:relative;">
+    <div>
+      <div class="toggle-label" style="display:flex;align-items:center;gap:6px;">
+        Independent Market Scanner
+        <span class="tooltip-icon" data-tip="Asuka scans the market every hour on her own — analyzing price action, funding rates, fear & greed, whale activity and news. She makes trade decisions without needing any Telegram signal. Like having her own trading brain running 24/7.">ⓘ</span>
+      </div>
+      <div class="caller-stats">She analyzes market every hour independently</div>
+    </div>
+    <div class="toggle-switch" id="independent-scanner-toggle"></div>
+  </div>
+
+  <!-- Coins to Trade -->
+  <div class="tg-section">
+    <div class="tg-section-title">🪙 Coins to Trade</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <button class="leverage-btn active" data-coin="BTC">₿ BTC</button>
+      <button class="leverage-btn active" data-coin="ETH">Ξ ETH</button>
+      <button class="leverage-btn active" data-coin="SOL">◎ SOL</button>
+      <button class="leverage-btn active" data-coin="BNB">⬡ BNB</button>
+      <button class="leverage-btn" data-coin="XRP">✕ XRP</button>
+      <button class="leverage-btn" data-coin="DOGE">Ð DOGE</button>
+      <button class="leverage-btn" data-coin="AVAX">▲ AVAX</button>
+      <button class="leverage-btn" data-coin="LINK">⬡ LINK</button>
+      <button class="leverage-btn" data-coin="ARB">◆ ARB</button>
+      <div id="custom-coin-buttons"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input class="tg-input" id="custom-coin-input" placeholder="Add coin e.g. PEPE, WIF, MEME" style="margin:0;flex:1;text-transform:uppercase;">
+      <button class="tg-add-btn" id="add-custom-coin-btn">+ Add</button>
+    </div>
+    <div style="font-size:11px;color:var(--text2);margin-top:8px;">Active coins scanned every 30 minutes</div>
+  </div>
+
+  <!-- Leverage Selector -->
+  <div class="tg-section">
+    <div class="tg-section-title">⚡ Leverage & Position Size</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <button class="leverage-btn active" data-lev="1">1x Spot</button>
+      <button class="leverage-btn" data-lev="2">2x</button>
+      <button class="leverage-btn" data-lev="5">5x</button>
+      <button class="leverage-btn" data-lev="10">10x</button>
+      <button class="leverage-btn" data-lev="20">20x</button>
+      <button class="leverage-btn" data-lev="50">50x</button>
+      <button class="leverage-btn" data-lev="100">100x</button>
+      <button class="leverage-btn" data-lev="150">150x 🔥</button>
+    </div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:12px;" id="lev-warning">1x — Spot trading, no liquidation risk</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="font-size:12px;color:var(--text2);">Position Size $</div>
+      <input class="tg-input" id="trade-size-input" placeholder="Auto (5% of balance)" type="number" style="margin:0;flex:1;max-width:200px;">
+      <button class="tg-add-btn" id="save-size-btn">Save</button>
+      <button class="tg-add-btn" style="background:transparent;color:var(--text2)" id="reset-size-btn">Auto</button>
+    </div>
+    <div style="font-size:11px;color:var(--text2);margin-top:6px;" id="size-hint">Auto mode uses 5% of paper balance per trade</div>
+  </div>
+
+  <!-- Confidence Threshold -->
+  <div class="tg-section">
+    <div class="tg-section-title" style="justify-content:space-between;">
+      🎯 Trade Confidence Threshold
+      <span class="tooltip-icon" data-tip="She only opens trades when her confidence meets or exceeds this threshold. Lower = trades more often but riskier. Higher = trades rarely but more selective. Auto mode lets her decide based on market conditions.">ⓘ</span>
+    </div>
+    
+    <!-- Auto/Manual toggle -->
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <button class="leverage-btn active" id="conf-manual-btn">Manual</button>
+      <button class="leverage-btn" id="conf-auto-btn">🤖 Auto</button>
+    </div>
+
+    <!-- Manual threshold dots -->
+    <div id="conf-manual-section">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <div class="trust-dots" data-key="tradeThreshold" data-val="2" style="gap:6px;"></div>
+        <div style="font-size:20px;font-weight:700;color:var(--accent);" id="conf-threshold-val">20%</div>
+      </div>
+      <div id="conf-warning" style="font-size:11px;padding:6px 10px;border-radius:6px;display:none;"></div>
+    </div>
+
+    <!-- Auto section -->
+    <div id="conf-auto-section" style="display:none;">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">She automatically adjusts threshold based on:</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.8;">
+        • Fear & Greed index<br>
+        • Recent win rate<br>
+        • Market volatility<br>
+        • Funding rate extremes
+      </div>
+      <div style="margin-top:10px;font-size:13px;color:var(--accent);" id="auto-threshold-display">Current auto threshold: calculating...</div>
+    </div>
+  </div>
+  <div class="trading-hero">
+    <div>
+      <div class="trading-stat-val" id="pt-winrate">0%</div>
+      <div class="trading-stat-label">Win Rate</div>
+    </div>
+    <div>
+      <div class="trading-stat-val" id="pt-pnl">$0</div>
+      <div class="trading-stat-label">Total P&L</div>
+    </div>
+    <div>
+      <div class="trading-stat-val" id="pt-total">0</div>
+      <div class="trading-stat-label">Trades</div>
+    </div>
+  </div>
+  <div style="text-align:center;font-size:12px;color:var(--text2);margin-top:-8px;">Paper Balance: <span id="pt-balance" style="color:var(--accent);font-weight:600;">$10,000</span></div>
+
+  <!-- Open Positions -->
+  <div class="tg-section">
+    <div class="tg-section-title">🟡 Open Positions</div>
+    <div id="pt-open-list">
+      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No open positions</div>
+    </div>
+  </div>
+
+  <!-- Trade History -->
+  <div class="tg-section">
+    <div class="tg-section-title">📋 Trade History</div>
+    <div id="pt-history-list">
+      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No trades yet</div>
+    </div>
+  </div>
+
+  <!-- Lessons Learned -->
+  <div class="tg-section">
+    <div class="tg-section-title">🧠 What She's Learned</div>
+    <div id="lessons-list">
+      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">Lessons appear after first trades close</div>
+    </div>
+  </div>
+
+  <!-- Caller Leaderboard -->
+  <div class="tg-section">
+    <div class="tg-section-title">🏆 Caller Leaderboard</div>
+    <div id="pt-leaderboard">
+      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No data yet</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+</div><!-- end pages-wrapper -->
+
+<!-- EDIT PAGE -->
+<div class="overlay" id="edit-page">
+  <div class="overlay-topbar">
+    <div class="back-pill" id="back-from-edit">← Back</div>
+    <div class="overlay-title">Character Select</div>
+  </div>
+  <div id="edit-body">
+    <div id="edit-preview">
+      <canvas id="edit-canvas"></canvas>
+      <div id="edit-char-name">Asuka</div>
+      <div id="customize-btn">Customize →</div>
+    </div>
+    <div id="edit-grid">
+      <div id="edit-grid-hint">Select a character — scroll to see more</div>
+      <div id="char-row"></div>
+    </div>
+  </div>
+</div>
+
+<!-- CUSTOMIZE PAGE -->
+<div class="overlay" id="customize-page">
+  <div class="overlay-topbar">
+    <div class="back-pill" id="back-from-customize">← Back</div>
+    <div class="overlay-title">Customize</div>
+  </div>
+  <div id="customize-body">
+    <div id="cust-preview">
+      <canvas id="cust-canvas"></canvas>
+      <div id="cust-name">Asuka</div>
+      <button id="cust-save">Save Changes</button>
+    </div>
+    <div id="cust-options">
+
+      <div class="co-section">
+        <div class="co-label">Name</div>
+        <input class="co-input" id="c-name" placeholder="Asuka" />
+      </div>
+
+      <div class="co-section">
+        <div class="co-label">Wake Word</div>
+        <input class="co-input" id="c-wake" placeholder="asuka" />
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Say this word to activate her</div>
+      </div>
+
+      <div class="co-section">
+        <div class="co-label">Personality</div>
+        <div class="opt-grid opt-grid-3">
+          <div class="opt-card active" data-personality="chill"><div class="opt-emoji">😌</div><div class="opt-name">Chill</div><div class="opt-desc">Casual & warm</div></div>
+          <div class="opt-card" data-personality="degen"><div class="opt-emoji">🚀</div><div class="opt-name">Degen</div><div class="opt-desc">Hyped & bullish</div></div>
+          <div class="opt-card" data-personality="analyst"><div class="opt-emoji">📊</div><div class="opt-name">Analyst</div><div class="opt-desc">Data & precise</div></div>
+        </div>
+      </div>
+
+      <div class="co-section">
+        <div class="co-label">AI Response Mode</div>
+        <div class="opt-grid opt-grid-3">
+          <div class="opt-card ai-card" data-ai="fast"><div class="opt-emoji">⚡</div><div class="opt-name">Fast</div><div class="opt-desc">Groq for all</div></div>
+          <div class="opt-card ai-card active" data-ai="balanced"><div class="opt-emoji">⚖️</div><div class="opt-name">Balanced</div><div class="opt-desc">Groq + Claude</div></div>
+          <div class="opt-card ai-card" data-ai="best"><div class="opt-emoji">🧠</div><div class="opt-name">Best</div><div class="opt-desc">Claude for all</div></div>
+        </div>
+        <div class="ai-note">Crypto analysis, trading decisions, contract scans, and whale alerts always use Claude — regardless of mode.</div>
+      </div>
+
+      <div class="co-section">
+        <div class="co-label">Voice Speed</div>
+        <div class="slider-wrap">
+          <div class="slider-side">Slow</div>
+          <input type="range" class="co-slider" id="c-speed" min="70" max="150" value="100" />
+          <div class="slider-side">Fast</div>
+          <div class="slider-val" id="c-speed-val">1.0×</div>
+        </div>
+      </div>
+
+      <div class="co-section">
+        <div class="co-label">Knowledge Level</div>
+        <div class="opt-grid opt-grid-3">
+          <div class="opt-card" data-level="beginner"><div class="opt-emoji">🌱</div><div class="opt-name">Beginner</div><div class="opt-desc">Explains all</div></div>
+          <div class="opt-card active" data-level="intermediate"><div class="opt-emoji">⚡</div><div class="opt-name">Intermediate</div><div class="opt-desc">Normal</div></div>
+          <div class="opt-card" data-level="advanced"><div class="opt-emoji">🔥</div><div class="opt-name">Advanced</div><div class="opt-desc">Raw signals</div></div>
+        </div>
+      </div>
+
+      <div class="co-section">
+        <div class="co-label">Hair Color</div>
+        <div class="swatch-row">
+          <div class="swatch active" style="background:#4CAF50" data-color="green"></div>
+          <div class="swatch" style="background:#9C27B0" data-color="purple"></div>
+          <div class="swatch" style="background:#F44336" data-color="red"></div>
+          <div class="swatch" style="background:#2196F3" data-color="blue"></div>
+          <div class="swatch" style="background:#FF9800" data-color="orange"></div>
+          <div class="swatch" style="background:#E91E63" data-color="pink"></div>
+          <div class="swatch" style="background:#f5f5f7" data-color="white"></div>
+          <div class="swatch" style="background:#1c1c1e;border:1px solid #333" data-color="black"></div>
+        </div>
+      </div>
+
+      <div class="co-section">
+        <div class="co-label">Outfit</div>
+        <div class="item-wrap">
+          <div class="item-card active" data-outfit="default"><span>👘</span><div class="item-lbl">Default</div></div>
+          <div class="item-card locked"><div class="item-pro">PRO</div><span>👗</span><div class="item-lbl">Casual</div></div>
+          <div class="item-card locked"><div class="item-pro">PRO</div><span>🧥</span><div class="item-lbl">Street</div></div>
+          <div class="item-card locked"><div class="item-pro">PRO</div><span>🦾</span><div class="item-lbl">Cyber</div></div>
+        </div>
+      </div>
+
+      <div class="co-section">
+        <div class="co-label">Accessories</div>
+        <div class="item-wrap">
+          <div class="item-card active"><span>✨</span><div class="item-lbl">None</div></div>
+          <div class="item-card locked"><div class="item-pro">PRO</div><span>🕶️</span><div class="item-lbl">Glasses</div></div>
+          <div class="item-card locked"><div class="item-pro">PRO</div><span>🎩</span><div class="item-lbl">Hat</div></div>
+          <div class="item-card locked"><div class="item-pro">PRO</div><span>👑</span><div class="item-lbl">Crown</div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="overlay" id="settings-page">
+  <div class="overlay-topbar">
+    <div class="back-pill" id="back-from-settings">← Back</div>
+    <div class="overlay-title">Settings</div>
+  </div>
+  <div id="settings-body">
+    <div class="s-section">
+      <div class="s-title">API Keys</div>
+      <div class="s-row"><div class="s-label">CoinGecko</div><input class="s-input" id="s-coingecko" placeholder="Optional" /></div>
+      <div class="s-row"><div class="s-label">Moralis</div><input class="s-input" id="s-moralis" placeholder="For wallet tracking" /></div>
+      <div class="s-row"><div class="s-label">YouTube</div><input class="s-input" id="s-youtube" placeholder="For music playback" /></div>
+      <div class="s-row"><div class="s-label">Etherscan</div><input class="s-input" id="s-etherscan" placeholder="For gas tracking" /></div>
+    </div>
+    <div class="s-section">
+      <div class="s-title">Exchange (Read Only)</div>
+      <div class="s-row"><div class="s-label">Binance API Key</div><input class="s-input" id="s-binance-key" placeholder="Read only key" /></div>
+      <div class="s-row"><div class="s-label">Binance Secret</div><input class="s-input" id="s-binance-secret" type="password" placeholder="••••••••" /></div>
+      <div class="s-row"><div class="s-label">Bybit API Key</div><input class="s-input" id="s-bybit-key" placeholder="Read only key" /></div>
+    </div>
+    <div class="s-section">
+      <div class="s-title">Reminders</div>
+      <div class="s-row"><div class="s-label">Morning Alarm (HH:MM)</div><input class="s-input" id="s-alarm" placeholder="08:00" /></div>
+      <div class="s-row"><div class="s-label">Sleep Time (hour)</div><input class="s-input" id="s-sleep" type="number" placeholder="23" /></div>
+      <div class="s-row"><div class="s-label">Water Reminder (minutes)</div><input class="s-input" id="s-water" type="number" placeholder="60" /></div>
+    </div>
+    <div class="s-section">
+      <div class="s-title">Data</div>
+      <div style="display:flex;gap:8px;flex-direction:column">
+        <button class="s-btn s-btn-primary" id="settings-save-btn">Save Settings</button>
+        <button class="s-btn s-btn-ghost" id="export-btn">Export Backup</button>
+        <button class="s-btn s-btn-purple" id="import-btn">Restore Backup</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MANAGE WALLETS MODAL -->
+<div id="manage-wallets-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;backdrop-filter:blur(8px);align-items:center;justify-content:center;">
+  <div style="background:var(--bg1);border:1px solid var(--border);border-radius:16px;padding:24px;width:400px;max-height:500px;display:flex;flex-direction:column;gap:12px;">
+    <div style="font-size:17px;font-weight:700;">Connected Wallets</div>
+    <div id="manage-wallets-list" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:8px;"></div>
+    <div style="display:flex;gap:8px;margin-top:4px;">
+      <div class="m-btn cancel" id="manage-wallets-close" style="flex:1;padding:10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;text-align:center;background:var(--bg2);border:1px solid var(--border);color:var(--text);">Close</div>
+    </div>
+  </div>
+</div>
+
+<!-- WALLET MODAL -->
+<div id="wallet-modal">
+  <div id="wallet-modal-box">
+    <div class="m-title">Add Wallet</div>
+    <div class="m-row"><div class="m-label">Wallet Address</div><input class="m-input" id="wallet-addr-input" placeholder="0x… or Solana address" /></div>
+    <div class="m-row"><div class="m-label">Chain</div>
+      <select class="m-select" id="wallet-chain-select">
+        <option value="eth">Ethereum</option><option value="bsc">BSC</option>
+        <option value="sol">Solana</option><option value="base">Base</option>
+        <option value="arbitrum">Arbitrum</option>
+      </select>
+    </div>
+    <div class="m-row"><div class="m-label">Label</div><input class="m-input" id="wallet-label-input" placeholder="My trading wallet" /></div>
+    <div class="m-btns">
+      <div class="m-btn ok" id="wallet-add-confirm">Add Wallet</div>
+      <div class="m-btn cancel" id="wallet-modal-cancel">Cancel</div>
+    </div>
+  </div>
+</div>
+
+<script src="./assets/live2dcubismcore.min.js"></script>
+<script src="./node_modules/pixi.js/dist/browser/pixi.min.js"></script>
+<script src="./node_modules/pixi-live2d-display/dist/cubism4.min.js"></script>
+<script>
+const { ipcRenderer } = require('electron')
+const { Live2DModel } = PIXI.live2d
+
+let memory={}, settings={}, alerts=[], watchlist=[], trackedWallets=[], prices={}
+let waifuModel=null, editApp=null, custApp=null
+
+// ── Session ──
+const h = new Date().getUTCHours()
+document.getElementById('session-badge').textContent = h<8?'Asia Session':h<16?'Europe Session':'US Session'
+
+// ── Audio ──
+async function playAudio(b64) {
+  if (!b64) return
+  try {
+    const bytes = new Uint8Array(atob(b64).split('').map(c=>c.charCodeAt(0)))
+    const blob = new Blob([bytes],{type:'audio/mpeg'})
+    const ctx = new AudioContext()
+    const buf = await ctx.decodeAudioData(await blob.arrayBuffer())
+    const src = ctx.createBufferSource()
+    const an  = ctx.createAnalyser(); an.fftSize=256
+    src.buffer=buf; src.connect(an); an.connect(ctx.destination); src.start()
+    const arr = new Uint8Array(an.frequencyBinCount)
+    const tick = () => {
+      an.getByteFrequencyData(arr)
+      const v = arr.reduce((a,b)=>a+b)/arr.length
+      if (waifuModel) try { waifuModel.internalModel.coreModel.setParameterValueById('ParamMouthOpenY',Math.min(v/80,1)) } catch(e){}
+      requestAnimationFrame(tick)
+    }
+    tick()
+    return new Promise(r=>{ src.onended=()=>{ if(waifuModel) try{waifuModel.internalModel.coreModel.setParameterValueById('ParamMouthOpenY',0)}catch(e){} r() } })
+  } catch(e){}
+}
+
+// ── Waifu ──
+async function initWaifu() {
+  try {
+    const canvas = document.getElementById('waifu-canvas')
+    const wrap   = document.getElementById('waifu-wrap')
+    const w = wrap.clientWidth || 200
+    const h = wrap.clientHeight || 420
+    canvas.width=w; canvas.height=h
+    const app = new PIXI.Application({view:canvas,autoStart:true,transparent:true,backgroundAlpha:0,width:w,height:h})
+    waifuModel = await Live2DModel.from('./assets/model/huohuo.model3.json')
+    app.stage.addChild(waifuModel)
+    waifuModel.x=w/2; waifuModel.y=h; waifuModel.scale.set(h/8500); waifuModel.anchor.set(0.5,1); waifuModel.motion('idle')
+    document.addEventListener('mousemove', e=>{
+      if (!waifuModel) return
+      const dx=(e.clientX/window.innerWidth-0.5)*2
+      const dy=(e.clientY/window.innerHeight-0.5)*2
+      try {
+        waifuModel.internalModel.coreModel.setParameterValueById('ParamEyeBallX',dx*1.2)
+        waifuModel.internalModel.coreModel.setParameterValueById('ParamEyeBallY',-dy)
+        waifuModel.internalModel.coreModel.setParameterValueById('ParamAngleX',dx*18)
+        waifuModel.internalModel.coreModel.setParameterValueById('ParamAngleY',-dy*12)
+        waifuModel.internalModel.coreModel.setParameterValueById('ParamAngleZ',dx*5)
+      } catch(e){}
+    })
+    setTimeout(async()=>{
+      const g=`Hey${memory.name?' '+memory.name:''}! Dashboard is open.`
+      document.getElementById('waifu-speech').textContent=g
+      await playAudio(await ipcRenderer.invoke('get-voice',g))
+      document.getElementById('waifu-speech').textContent=''
+    },800)
+  } catch(e){ document.getElementById('waifu-speech').textContent='Model not found' }
+}
+
+// ── Load ──
+async function loadData() {
+  memory   = await ipcRenderer.invoke('get-memory')   || {}
+  settings = await ipcRenderer.invoke('get-settings') || {}
+  alerts   = await ipcRenderer.invoke('get-alerts')   || []
+  watchlist = settings.watchlist || []
+  trackedWallets = settings.trackedWallets || []
+  document.getElementById('waifu-name').textContent = settings.characterName || 'Asuka'
+  renderAlerts(); renderTracked(); await loadPrices(); await loadPortfolio()
+}
+
+// ── Prices ──
+async function loadPrices() {
+  renderPrices()
+  for (const coin of watchlist) {
+    try {
+      const txt = await ipcRenderer.invoke('get-crypto-price', coin)
+      if (txt) {
+        const pm=txt.match(/\$([\d,]+\.?\d*)/)
+        const cm=txt.match(/(up|down) ([\d.]+)%/)
+        if (pm) prices[coin]={price:pm[1], change:cm?parseFloat(cm[2])*(cm[1]==='down'?-1:1):0}
+      }
+    } catch(e){}
+    renderPrices()
+  }
+}
+
+function renderPrices() {
+  const sec = document.getElementById('prices-section')
+  if (!watchlist.length) { sec.innerHTML='<div class="empty-state">Add coins above to track prices</div>'; return }
+  sec.innerHTML = watchlist.map(coin=>{
+    const p=prices[coin]
+    const price = p?'$'+p.price:'—'
+    const chg   = p?p.change:null
+    const chgStr= chg!==null?(chg>=0?'+':'')+chg.toFixed(2)+'%':'—'
+    const cls   = chg!==null?(chg>=0?'pos':'neg'):''
+    const bell  = alerts.some(a=>a.coin===coin&&!a.triggered)
+    return `<div class="price-row">
+      <div class="p-sym">${coin.toUpperCase()}</div>
+      <div class="p-price">${price}</div>
+      <div class="p-chg ${cls}">${chgStr}</div>
+      <div class="p-bell ${bell?'active':''}" data-coin="${coin}">🔔</div>
+      <div class="p-del" data-coin="${coin}">✕</div>
+    </div>`
+  }).join('')
+  sec.querySelectorAll('.p-bell').forEach(b=>b.addEventListener('click',e=>{
+    e.stopPropagation()
+    document.getElementById('alert-coin-input').value=b.dataset.coin.toUpperCase()
+    document.getElementById('alert-price-input').focus()
+  }))
+  sec.querySelectorAll('.p-del').forEach(d=>d.addEventListener('click',async e=>{
+    e.stopPropagation()
+    watchlist=watchlist.filter(c=>c!==d.dataset.coin)
+    settings.watchlist=watchlist
+    await ipcRenderer.invoke('save-settings',settings)
+    renderPrices()
+  }))
+}
+
+document.getElementById('add-coin-btn').addEventListener('click',async()=>{
+  const coin=document.getElementById('add-coin-input').value.trim().toLowerCase()
+  if (!coin||watchlist.includes(coin)) return
+  watchlist.push(coin); settings.watchlist=watchlist
+  await ipcRenderer.invoke('save-settings',settings)
+  document.getElementById('add-coin-input').value=''
+  await loadPrices()
+})
+document.getElementById('add-coin-input').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('add-coin-btn').click() })
+
+// ── Alerts ──
+function renderAlerts() {
+  const list=document.getElementById('alerts-list')
+  const active=alerts.filter(a=>!a.triggered)
+  if (!active.length) { list.innerHTML='<div style="padding:8px 14px;font-size:11px;color:var(--text3)">No active alerts</div>'; return }
+  list.innerHTML=active.map(a=>`<div class="alert-row">
+    <div class="al-sym">${a.coin.toUpperCase()}</div>
+    <div class="al-info">${a.direction==='above'?'↑ above':'↓ below'} $${parseFloat(a.target).toLocaleString()}</div>
+    <div class="al-del" data-id="${a.id}">✕</div>
+  </div>`).join('')
+  list.querySelectorAll('.al-del').forEach(d=>d.addEventListener('click',async()=>{
+    alerts=alerts.filter(a=>a.id!==d.dataset.id)
+    await ipcRenderer.invoke('save-alerts',alerts); renderAlerts()
+  }))
+}
+document.getElementById('add-alert-btn').addEventListener('click',async()=>{
+  const coin=document.getElementById('alert-coin-input').value.trim().toLowerCase()
+  const price=document.getElementById('alert-price-input').value.trim()
+  const dir=document.getElementById('alert-dir-select').value
+  if (!coin||!price) return
+  alerts.push({id:Date.now().toString(),coin,target:parseFloat(price),direction:dir,triggered:false})
+  await ipcRenderer.invoke('save-alerts',alerts)
+  document.getElementById('alert-coin-input').value=''
+  document.getElementById('alert-price-input').value=''
+  renderAlerts()
+})
+
+// ── Tracked wallets ──
+function renderTracked() {
+  const list=document.getElementById('tracked-list')
+  if (!trackedWallets.length) { list.innerHTML='<div class="empty-state">Track any wallet to see their moves in real time</div>'; return }
+  list.innerHTML=trackedWallets.map((w,i)=>`<div class="track-row" data-idx="${i}">
+    <div class="track-avatar">👤</div>
+    <div class="track-info">
+      <div class="track-label">${w.label||'Wallet '+(i+1)}</div>
+      <div class="track-addr">${w.address}</div>
+    </div>
+    <div class="track-pnl" style="color:var(--text2)">—</div>
+    <div class="track-del" data-idx="${i}">✕</div>
+  </div>`).join('')
+  list.querySelectorAll('.track-row').forEach(r=>{
+    r.addEventListener('click',e=>{ if(e.target.classList.contains('track-del')) return; openWalletDetail(trackedWallets[parseInt(r.dataset.idx)]) })
+  })
+  list.querySelectorAll('.track-del').forEach(d=>d.addEventListener('click',async e=>{
+    e.stopPropagation()
+    trackedWallets.splice(parseInt(d.dataset.idx),1)
+    settings.trackedWallets=trackedWallets
+    await ipcRenderer.invoke('save-settings',settings); renderTracked()
+  }))
+}
+document.getElementById('add-track-btn').addEventListener('click',async()=>{
+  const addr=document.getElementById('tracked-addr-input').value.trim()
+  if (!addr) return
+  // Detect chain and set auto label
+  const isEth = addr.startsWith('0x')
+  const label = `${isEth ? 'ETH' : 'SOL'} Wallet ${trackedWallets.length+1}`
+  trackedWallets.push({address:addr, label, addedAt:Date.now()})
+  settings.trackedWallets=trackedWallets
+  await ipcRenderer.invoke('save-settings',settings)
+  document.getElementById('tracked-addr-input').value=''
+  renderTracked()
+})
+function openWalletDetail(w) {
+  document.getElementById('wd-name').textContent=w.label||'Wallet'
+  document.getElementById('wd-addr').textContent=w.address.slice(0,8)+'…'+w.address.slice(-6)
+  document.getElementById('wd-body').innerHTML=`
+    <div class="wd-stat"><div class="wd-stat-label">Address</div><div class="wd-stat-val" style="font-size:13px;font-weight:500">${w.address.slice(0,14)}…</div></div>
+    <div class="wd-stat"><div class="wd-stat-label">Added</div><div class="wd-stat-val" style="font-size:14px">${new Date(w.addedAt).toLocaleDateString()}</div></div>
+    <div class="wd-stat"><div class="wd-stat-label">Holdings</div><div class="wd-stat-val" style="font-size:13px;color:var(--text2)">Add Moralis API key in Settings to load holdings</div></div>
+  `
+  document.getElementById('wallet-detail').classList.add('open')
+}
+document.getElementById('wd-back').addEventListener('click',()=>document.getElementById('wallet-detail').classList.remove('open'))
+
+// Manage wallets
+document.getElementById('manage-wallets-pill').addEventListener('click', () => {
+  renderManageWallets()
+  document.getElementById('manage-wallets-modal').style.display = 'flex'
+})
+document.getElementById('manage-wallets-close').addEventListener('click', () => {
+  document.getElementById('manage-wallets-modal').style.display = 'none'
+})
+
+function renderManageWallets() {
+  const wallets = settings.wallets || []
+  const list = document.getElementById('manage-wallets-list')
+  if (!wallets.length) {
+    list.innerHTML = '<div style="color:var(--text2);font-size:13px;text-align:center;padding:20px;">No wallets added yet</div>'
+    return
+  }
+  list.innerHTML = wallets.map((w, i) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg2);border-radius:8px;border:1px solid var(--border2);">
+      <div>
+        <div style="font-size:13px;font-weight:600;">${w.label}</div>
+        <div style="font-size:11px;color:var(--text2);">${w.chain?.toUpperCase()} • ${w.address?.slice(0,8)}...${w.address?.slice(-6)}</div>
+      </div>
+      <button onclick="removeWallet(${i})" style="background:rgba(255,69,58,0.15);border:1px solid rgba(255,69,58,0.3);color:#ff453a;padding:4px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;">Remove</button>
+    </div>
+  `).join('')
+}
+
+async function removeWallet(index) {
+  settings.wallets.splice(index, 1)
+  await ipcRenderer.invoke('save-settings', settings)
+  renderManageWallets()
+  await loadPortfolio()
+}
+
+// ── Add wallet modal ──
+document.getElementById('add-wallet-pill').addEventListener('click',()=>document.getElementById('wallet-modal').classList.add('open'))
+document.getElementById('wallet-modal-cancel').addEventListener('click',()=>document.getElementById('wallet-modal').classList.remove('open'))
+document.getElementById('wallet-add-confirm').addEventListener('click',async()=>{
+  const addr=document.getElementById('wallet-addr-input').value.trim()
+  const chain=document.getElementById('wallet-chain-select').value
+  const label=document.getElementById('wallet-label-input').value.trim()||'My Wallet'
+  console.log('Add wallet clicked:', addr, chain, label)
+  if (!addr) { console.log('No address'); return }
+  settings.wallets = settings.wallets || []
+  // Prevent duplicates
+  if (settings.wallets.some(w => w.address.toLowerCase() === addr.toLowerCase())) {
+    alert('This wallet is already added!')
+    return
+  }
+  settings.wallets.push({address:addr,chain,label,addedAt:Date.now()})
+  console.log('Saving settings with wallets:', settings.wallets.length)
+  const result = await ipcRenderer.invoke('save-settings',settings)
+  console.log('Save result:', result)
+  document.getElementById('wallet-modal').classList.remove('open')
+  document.getElementById('wallet-addr-input').value=''
+  document.getElementById('wallet-label-input').value=''
+  await loadPortfolio()
+})
+
+// ── Page Navigation ──
+const pagesWrapper = document.getElementById('pages-wrapper')
+
+document.querySelectorAll('.page-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.page-tab').forEach(t => t.classList.remove('active'))
+    tab.classList.add('active')
+    const pageNum = parseInt(tab.dataset.page)
+    pagesWrapper.scrollTo({ left: (pageNum - 1) * pagesWrapper.offsetWidth, behavior: 'smooth' })
+    if (pageNum === 2) setTimeout(loadTelegramUI, 300)
+    if (pageNum === 3) setTimeout(loadTradingUI, 300)
+  })
+})
+
+// Update active tab on scroll
+pagesWrapper.addEventListener('scroll', () => {
+  const pageNum = Math.round(pagesWrapper.scrollLeft / pagesWrapper.offsetWidth) + 1
+  document.querySelectorAll('.page-tab').forEach(t => {
+    t.classList.toggle('active', parseInt(t.dataset.page) === pageNum)
+  })
+})
+
+// ── Dot Trust Selector ──
+function initDots() {
+  document.querySelectorAll('.trust-dots').forEach(container => {
+    const key = container.dataset.key
+    let val = parseInt(container.dataset.val) || 5
+    for (let i = 1; i <= 10; i++) {
+      const dot = document.createElement('div')
+      dot.className = `trust-dot ${i <= val ? 'filled' : ''}`
+      dot.addEventListener('click', () => {
+        val = i
+        container.dataset.val = i
+        container.querySelectorAll('.trust-dot').forEach((d, idx) => {
+          d.classList.toggle('filled', idx < i)
+        })
+        const valEl = document.getElementById(`w-${key}`)
+        if (valEl) valEl.textContent = `${i * 10}%`
+        saveWeights()
+      })
+      container.appendChild(dot)
+    }
+  })
+}
+
+function saveWeights() {
+  const weights = {}
+  document.querySelectorAll('.trust-dots').forEach(c => {
+    weights[c.dataset.key] = parseInt(c.dataset.val) * 10
+  })
+  ipcRenderer.send('save-weights', weights)
+}
+
+// ── Telegram UI ──
+async function loadTelegramUI() {
+  const connected = await ipcRenderer.invoke('telegram-status')
+  document.getElementById('tg-disconnected').style.display = connected ? 'none' : 'block'
+  document.getElementById('tg-code-section').style.display = 'none'
+  document.getElementById('tg-connected-section').style.display = connected ? 'block' : 'none'
+
+  if (connected) {
+    const stats = await ipcRenderer.invoke('telegram-get-stats')
+    const settings = await ipcRenderer.invoke('get-settings')
+    renderTgGroups(stats.groups)
+    renderTgCallers(stats.callers, stats.stats)
+    renderIntelFeed()
+
+    // Restore notification toggles
+    if (settings?.tradeNotifications) document.getElementById('trade-notify-toggle').classList.add('on')
+    if (settings?.intelNotifications) document.getElementById('intel-notify-toggle').classList.add('on')
+
+    if (settings?.tgNotifyContact) {
+      document.getElementById('tg-notify-contact').textContent = settings.tgNotifyContact
+    }
+  }
+}
+
+function renderTgGroups(groups) {
+  const list = document.getElementById('tg-groups-list')
+  if (!groups?.length) { list.innerHTML = '<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No groups added yet</div>'; return }
+  list.innerHTML = groups.map(g => `
+    <div class="tg-group-item">
+      <div>
+        <div class="tg-group-name">${g.name}</div>
+        <div class="tg-group-type">${g.type}</div>
+      </div>
+      <button class="tg-remove-btn" onclick="removeGroup(${g.id})">Remove</button>
+    </div>
+  `).join('')
+}
+
+function renderTgCallers(callers, stats) {
+  const list = document.getElementById('tg-callers-list')
+  if (!callers?.length) { list.innerHTML = '<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No callers tracked yet</div>'; return }
+  list.innerHTML = callers.map(c => {
+    const s = stats?.[c] || { winRate: 0, total: 0 }
+    const rateClass = s.winRate >= 65 ? 'win-rate-good' : s.winRate >= 45 ? 'win-rate-ok' : 'win-rate-bad'
+    return `
+    <div class="caller-item">
+      <div>
+        <div class="caller-name">${c}</div>
+        <div class="caller-stats ${rateClass}">${s.winRate}% win rate • ${s.total} calls</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div>
+          <div style="font-size:10px;color:var(--text2);margin-bottom:4px;">Trust</div>
+          <div class="trust-dots" data-key="caller_${c}" data-val="8"></div>
+        </div>
+        <button class="tg-remove-btn" onclick="removeCaller('${c}')">Unfollow</button>
+      </div>
+    </div>`
+  }).join('')
+  // Re-init dots for callers
+  document.querySelectorAll('.caller-item .trust-dots').forEach(container => {
+    const val = parseInt(container.dataset.val) || 8
+    for (let i = 1; i <= 10; i++) {
+      const dot = document.createElement('div')
+      dot.className = `trust-dot ${i <= val ? 'filled' : ''}`
+      dot.addEventListener('click', () => {
+        container.dataset.val = i
+        container.querySelectorAll('.trust-dot').forEach((d, idx) => d.classList.toggle('filled', idx < i))
+      })
+      container.appendChild(dot)
+    }
+  })
+}
+
+function renderTgSignals(signals) {
+  const list = document.getElementById('tg-signals-list')
+  if (!signals?.length) { list.innerHTML = '<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No signals detected yet</div>'; return }
+  list.innerHTML = signals.slice(-10).reverse().map(s => {
+    const statusClass = s.status === 'win' ? 'won' : s.status === 'loss' ? 'lost' : ''
+    const dirClass = s.direction === 'long' ? 'signal-direction-long' : 'signal-direction-short'
+    const time = new Date(s.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    return `
+    <div class="signal-item ${statusClass}">
+      <div class="signal-header">
+        <span class="signal-coin">${s.coin} <span class="${dirClass}">${s.direction?.toUpperCase()}</span></span>
+        <span class="signal-confidence">${s.confidence}%</span>
+      </div>
+      <div class="signal-details">Entry: $${s.entry} → Target: $${s.target} | SL: $${s.stopLoss}</div>
+      <div class="signal-caller">@${s.caller} • ${time} • ${s.groupName}</div>
+    </div>`
+  }).join('')
+}
+
+async function removeGroup(id) {
+  await ipcRenderer.invoke('telegram-remove-group', id)
+  loadTelegramUI()
+}
+
+async function removeCaller(caller) {
+  const stats = await ipcRenderer.invoke('telegram-get-stats')
+  const td = { ...stats, trackedCallers: stats.trackedCallers.filter(c => c !== caller) }
+  // Update via IPC
+  loadTelegramUI()
+}
+
+// Connect Telegram — Step 1: Send phone
+document.getElementById('tg-connect-btn').addEventListener('click', async () => {
+  const phone = document.getElementById('tg-phone').value.trim()
+  if (!phone) return
+  document.getElementById('tg-connect-btn').textContent = 'Sending code...'
+  document.getElementById('tg-connect-btn').disabled = true
+  // Show code section immediately — backend will send code to phone
+  ipcRenderer.invoke('telegram-connect', phone)
+  // Show code input right away
+  setTimeout(() => {
+    document.getElementById('tg-disconnected').style.display = 'none'
+    document.getElementById('tg-code-section').style.display = 'block'
+  }, 1000)
+})
+
+// Listen for code request from backend
+ipcRenderer.on('telegram-needs-code', () => {
+  document.getElementById('tg-disconnected').style.display = 'none'
+  document.getElementById('tg-code-section').style.display = 'block'
+})
+
+// Step 2: Submit code
+document.getElementById('tg-verify-btn').addEventListener('click', async () => {
+  const code = document.getElementById('tg-code').value.trim()
+  if (!code) return
+  document.getElementById('tg-verify-btn').textContent = 'Connecting...'
+  document.getElementById('tg-verify-btn').disabled = true
+  ipcRenderer.send('telegram-code', code)
+  // Wait and check if connected
+  setTimeout(async () => {
+    const connected = await ipcRenderer.invoke('telegram-status')
+    if (connected) {
+      loadTelegramUI()
+    } else {
+      document.getElementById('tg-verify-btn').textContent = 'Verify Code'
+      document.getElementById('tg-verify-btn').disabled = false
+      alert('Could not connect — check the code and try again')
+    }
+  }, 4000)
+})
+
+// Change notification contact
+document.getElementById('tg-change-contact').addEventListener('click', () => {
+  const form = document.getElementById('tg-contact-form')
+  form.style.display = form.style.display === 'none' ? 'flex' : 'none'
+})
+
+document.getElementById('tg-save-contact-btn').addEventListener('click', () => {
+  const contact = document.getElementById('tg-contact-input').value.trim()
+  if (!contact) return
+  document.getElementById('tg-notify-contact').textContent = contact
+  document.getElementById('tg-contact-form').style.display = 'none'
+  document.getElementById('tg-contact-input').value = ''
+  ipcRenderer.send('set-setting', 'tgNotifyContact', contact)
+})
+
+// Disconnect
+document.getElementById('tg-disconnect-btn').addEventListener('click', async () => {
+  await ipcRenderer.invoke('telegram-disconnect')
+  loadTelegramUI()
+})
+
+// Add group
+document.getElementById('tg-add-group-btn').addEventListener('click', async () => {
+  const picker = document.getElementById('tg-group-picker')
+  picker.style.display = picker.style.display === 'none' ? 'block' : 'none'
+  if (picker.style.display === 'block') {
+    const groups = await ipcRenderer.invoke('telegram-get-groups')
+    const avail = document.getElementById('tg-available-groups')
+    avail.innerHTML = groups.map(g => `
+      <div class="tg-group-item" style="cursor:pointer" onclick="addGroup(${JSON.stringify(g).replace(/"/g, '&quot;')})">
+        <div>
+          <div class="tg-group-name">${g.name}</div>
+          <div class="tg-group-type">${g.type}</div>
+        </div>
+        <span style="color:var(--accent);font-size:12px;">+ Add</span>
+      </div>
+    `).join('') || '<div style="color:var(--text2);font-size:13px;padding:10px">No groups found</div>'
+  }
+})
+
+async function addGroup(group) {
+  await ipcRenderer.invoke('telegram-add-group', group)
+  document.getElementById('tg-group-picker').style.display = 'none'
+  loadTelegramUI()
+}
+
+// Add caller
+document.getElementById('tg-add-caller-btn').addEventListener('click', () => {
+  document.getElementById('tg-add-caller-form').style.display = 'block'
+})
+document.getElementById('tg-cancel-caller-btn').addEventListener('click', () => {
+  document.getElementById('tg-add-caller-form').style.display = 'none'
+})
+document.getElementById('tg-save-caller-btn').addEventListener('click', async () => {
+  const caller = document.getElementById('tg-caller-input').value.trim()
+  if (!caller) return
+  await ipcRenderer.invoke('telegram-add-caller', caller.startsWith('@') ? caller : '@' + caller)
+  document.getElementById('tg-add-caller-form').style.display = 'none'
+  document.getElementById('tg-caller-input').value = ''
+  loadTelegramUI()
+})
+
+async function closeTrade(tradeId, currentPrice) {
+  if (!confirm('Close this trade at current price?')) return
+  await ipcRenderer.invoke('close-paper-trade', tradeId, currentPrice)
+  loadTradingUI()
+}
+
+// Confidence threshold control
+const confWarnings = {
+  1: { type: 'warning', msg: '⚠️ 10% threshold — She will trade on almost any signal. Very risky.' },
+  2: { type: 'warning', msg: '⚠️ 20% threshold — Very aggressive. High frequency, high risk.' },
+  3: { type: 'notice', msg: '⚡ 30% threshold — Aggressive trading. Suitable for testing only.' },
+  4: { type: 'notice', msg: '⚡ 40% threshold — Active trading. Moderate risk.' },
+  5: { type: null, msg: null },
+  6: { type: null, msg: null },
+  7: { type: null, msg: null },
+  8: { type: null, msg: null },
+  9: { type: null, msg: null },
+  10: { type: null, msg: '✅ 100% threshold — Almost never trades. Only the highest conviction setups.' }
+}
+
+// Override dot behavior for confidence threshold
+document.querySelector('.trust-dots[data-key="tradeThreshold"]')?.addEventListener('click', (e) => {
+  if (!e.target.classList.contains('trust-dot')) return
+  const container = e.target.closest('.trust-dots')
+  const dots = container.querySelectorAll('.trust-dot')
+  const idx = Array.from(dots).indexOf(e.target) + 1
+  
+  dots.forEach((d, i) => d.classList.toggle('filled', i < idx))
+  container.dataset.val = idx
+  
+  const pct = idx * 10
+  document.getElementById('conf-threshold-val').textContent = `${pct}%`
+  ipcRenderer.send('set-setting', 'paperTradeThreshold', pct)
+  ipcRenderer.send('set-setting', 'independentScanThreshold', pct)
+
+  const warning = confWarnings[idx]
+  const warningEl = document.getElementById('conf-warning')
+  if (warning?.msg) {
+    warningEl.textContent = warning.msg
+    warningEl.className = warning.type === 'warning' ? 'conf-warning-box' : 'conf-notice-box'
+    warningEl.style.display = 'block'
+  } else {
+    warningEl.style.display = 'none'
+  }
+})
+
+// Auto/Manual toggle
+document.getElementById('conf-manual-btn').addEventListener('click', () => {
+  document.getElementById('conf-manual-btn').classList.add('active')
+  document.getElementById('conf-auto-btn').classList.remove('active')
+  document.getElementById('conf-manual-section').style.display = 'block'
+  document.getElementById('conf-auto-section').style.display = 'none'
+  ipcRenderer.send('set-setting', 'autoThreshold', false)
+})
+
+document.getElementById('conf-auto-btn').addEventListener('click', async () => {
+  document.getElementById('conf-auto-btn').classList.add('active')
+  document.getElementById('conf-manual-btn').classList.remove('active')
+  document.getElementById('conf-manual-section').style.display = 'none'
+  document.getElementById('conf-auto-section').style.display = 'block'
+  ipcRenderer.send('set-setting', 'autoThreshold', true)
+  // Calculate current auto threshold
+  const autoThreshold = await ipcRenderer.invoke('get-auto-threshold')
+  document.getElementById('auto-threshold-display').textContent = `Current auto threshold: ${autoThreshold}%`
+})
+
+// Restore confidence settings
+async function restoreConfidenceSettings() {
+  const settings = await ipcRenderer.invoke('get-settings')
+  if (settings?.autoThreshold) {
+    document.getElementById('conf-auto-btn').click()
+  } else {
+    const threshold = settings?.paperTradeThreshold || 20
+    const dotVal = Math.round(threshold / 10)
+    const container = document.querySelector('.trust-dots[data-key="tradeThreshold"]')
+    if (container) {
+      container.dataset.val = dotVal
+      container.querySelectorAll('.trust-dot').forEach((d, i) => d.classList.toggle('filled', i < dotVal))
+      document.getElementById('conf-threshold-val').textContent = `${threshold}%`
+    }
+  }
+}
+
+// Coin selector
+let selectedCoins = ['BTC', 'ETH', 'SOL', 'BNB']
+let customCoins = []
+
+function renderCustomCoins() {
+  const container = document.getElementById('custom-coin-buttons')
+  container.innerHTML = customCoins.map(coin => `
+    <button class="leverage-btn ${selectedCoins.includes(coin) ? 'active' : ''}" data-coin="${coin}" data-custom="true">
+      ${coin} <span style="margin-left:4px;opacity:0.6;font-size:10px;" onclick="removeCustomCoin('${coin}');event.stopPropagation()">✕</span>
+    </button>
+  `).join('')
+  // Attach click handlers to new buttons
+  container.querySelectorAll('.leverage-btn').forEach(btn => {
+    btn.addEventListener('click', () => toggleCoin(btn.dataset.coin, btn))
+  })
+}
+
+function toggleCoin(coin, btn) {
+  if (selectedCoins.includes(coin)) {
+    selectedCoins = selectedCoins.filter(c => c !== coin)
+    btn.classList.remove('active')
+  } else {
+    selectedCoins.push(coin)
+    btn.classList.add('active')
+  }
+  ipcRenderer.send('set-setting', 'tradingCoins', selectedCoins)
+}
+
+function removeCustomCoin(coin) {
+  customCoins = customCoins.filter(c => c !== coin)
+  selectedCoins = selectedCoins.filter(c => c !== coin)
+  ipcRenderer.send('set-setting', 'tradingCoins', selectedCoins)
+  ipcRenderer.send('set-setting', 'customCoins', customCoins)
+  renderCustomCoins()
+}
+
+document.querySelectorAll('.leverage-btn[data-coin]').forEach(btn => {
+  btn.addEventListener('click', () => toggleCoin(btn.dataset.coin, btn))
+})
+
+document.getElementById('add-custom-coin-btn').addEventListener('click', () => {
+  const input = document.getElementById('custom-coin-input')
+  const coin = input.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+  if (!coin) return
+  if (!customCoins.includes(coin)) {
+    customCoins.push(coin)
+    selectedCoins.push(coin)
+    ipcRenderer.send('set-setting', 'tradingCoins', selectedCoins)
+    ipcRenderer.send('set-setting', 'customCoins', customCoins)
+    renderCustomCoins()
+  }
+  input.value = ''
+})
+
+document.getElementById('custom-coin-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('add-custom-coin-btn').click()
+})
+
+// Restore coin selections
+async function restoreCoinSelections(settings) {
+  if (settings?.tradingCoins) selectedCoins = settings.tradingCoins
+  if (settings?.customCoins) { customCoins = settings.customCoins; renderCustomCoins() }
+  document.querySelectorAll('.leverage-btn[data-coin]:not([data-custom])').forEach(btn => {
+    btn.classList.toggle('active', selectedCoins.includes(btn.dataset.coin))
+  })
+}
+
+// Max drawdown protection
+document.getElementById('save-drawdown-btn').addEventListener('click', () => {
+  const val = parseFloat(document.getElementById('max-drawdown-input').value)
+  if (!val || val <= 0) return
+  ipcRenderer.send('set-setting', 'maxDrawdown', val)
+  document.getElementById('drawdown-hint').textContent = `Auto-close if trade loses more than ${val}%`
+  document.getElementById('drawdown-hint').style.color = 'var(--red)'
+})
+document.getElementById('disable-drawdown-btn').addEventListener('click', () => {
+  document.getElementById('max-drawdown-input').value = ''
+  ipcRenderer.send('set-setting', 'maxDrawdown', null)
+  document.getElementById('drawdown-hint').textContent = 'Disabled — trades close only at SL or target'
+  document.getElementById('drawdown-hint').style.color = 'var(--text2)'
+})
+
+// Custom position size
+document.getElementById('save-size-btn').addEventListener('click', () => {
+  const size = parseFloat(document.getElementById('trade-size-input').value)
+  if (!size || size <= 0) return
+  ipcRenderer.send('set-setting', 'paperTradeSize', size)
+  document.getElementById('size-hint').textContent = `Fixed size: $${size} per trade`
+})
+
+document.getElementById('reset-size-btn').addEventListener('click', () => {
+  document.getElementById('trade-size-input').value = ''
+  ipcRenderer.send('set-setting', 'paperTradeSize', null)
+  document.getElementById('size-hint').textContent = 'Auto mode uses 5% of paper balance per trade'
+})
+
+// Auto refresh trading page when trade opens/closes
+ipcRenderer.on('trade-opened', () => {
+  const tab = document.querySelector('.page-tab[data-page="3"]')
+  if (tab) loadTradingUI() // Always refresh regardless of current page
+})
+
+// Auto refresh every 30 seconds if on trading page
+setInterval(() => {
+  const tab = document.querySelector('.page-tab[data-page="3"]')
+  if (tab?.classList.contains('active')) loadTradingUI()
+}, 30000)
+
+// Leverage selector
+const levWarnings = {
+  1: '1x — Spot trading, no liquidation risk',
+  2: '2x — Low leverage, safe for beginners',
+  5: '5x — Moderate leverage, manageable risk',
+  10: '10x — High leverage, significant risk',
+  20: '20x — Very high leverage, expert only',
+  50: '50x — Extreme leverage, liquidation likely on small moves',
+  100: '100x — Maximum risk, 1% move = liquidation',
+  150: '150x — 🔥 EXTREME — 0.67% move = liquidation'
+}
+
+document.querySelectorAll('.leverage-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.leverage-btn').forEach(b => b.classList.remove('active'))
+    btn.classList.add('active')
+    const lev = parseInt(btn.dataset.lev)
+    document.getElementById('lev-warning').textContent = levWarnings[lev] || `${lev}x leverage`
+    ipcRenderer.send('set-setting', 'paperLeverage', lev)
+  })
+})
+
+// Toggles
+document.getElementById('auto-trade-toggle').addEventListener('click', function() {
+  this.classList.toggle('on')
+  ipcRenderer.send('set-setting', 'autoPaperTrade', this.classList.contains('on'))
+})
+
+document.getElementById('independent-scanner-toggle').addEventListener('click', function() {
+  this.classList.toggle('on')
+  ipcRenderer.send('set-setting', 'independentScanner', this.classList.contains('on'))
+  const on = this.classList.contains('on')
+  if (on) ipcRenderer.send('start-independent-scanner')
+})
+
+// ── Trading UI ──
+function renderLeaderboard(stats) {
+  const list = document.getElementById('pt-leaderboard')
+  if (!stats || !Object.keys(stats).length) { list.innerHTML = '<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No data yet</div>'; return }
+  const sorted = Object.entries(stats).sort((a, b) => b[1].winRate - a[1].winRate)
+  list.innerHTML = sorted.map(([caller, s], i) => {
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`
+    const rateClass = s.winRate >= 65 ? 'win-rate-good' : s.winRate >= 45 ? 'win-rate-ok' : 'win-rate-bad'
+    return `
+    <div class="caller-item">
+      <div style="font-size:16px;width:24px">${medal}</div>
+      <div style="flex:1">
+        <div class="caller-name">${caller}</div>
+        <div class="caller-stats">${s.total} calls • ${s.wins}W/${s.losses}L</div>
+      </div>
+      <div class="caller-stats ${rateClass}" style="font-size:16px;font-weight:700">${s.winRate}%</div>
+    </div>`
+  }).join('')
+}
+
+async function loadTradingUI() {
+  const stats = await ipcRenderer.invoke('get-paper-stats')
+  const tgStats = await ipcRenderer.invoke('telegram-get-stats')
+  const settings = await ipcRenderer.invoke('get-settings')
+
+  // Restore toggle states
+  if (settings?.autoPaperTrade) document.getElementById('auto-trade-toggle').classList.add('on')
+  else document.getElementById('auto-trade-toggle').classList.remove('on')
+  
+  if (settings?.independentScanner) document.getElementById('independent-scanner-toggle').classList.add('on')
+  else document.getElementById('independent-scanner-toggle').classList.remove('on')
+
+  if (settings?.chartAnalysis) document.getElementById('chart-analysis-toggle').classList.add('on')
+  else document.getElementById('chart-analysis-toggle').classList.remove('on')
+
+  // Restore leverage
+  if (settings?.paperLeverage) {
+    document.querySelectorAll('.leverage-btn').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.lev) === settings.paperLeverage)
+    })
+    document.getElementById('lev-warning').textContent = levWarnings[settings.paperLeverage] || `${settings.paperLeverage}x leverage`
+  }
+
+  // Restore trade size
+  if (settings?.paperTradeSize) {
+    document.getElementById('trade-size-input').value = settings.paperTradeSize
+    document.getElementById('size-hint').textContent = `Fixed size: $${settings.paperTradeSize} per trade`
+  }
+
+  // Restore coin selections
+  restoreCoinSelections(settings)
+
+  // Restore max drawdown
+  if (settings?.maxDrawdown) {
+    document.getElementById('max-drawdown-input').value = settings.maxDrawdown
+    document.getElementById('drawdown-hint').textContent = `Auto-close if trade loses more than ${settings.maxDrawdown}%`
+    document.getElementById('drawdown-hint').style.color = 'var(--red)'
+  }
+
+  // Restore confidence settings
+  restoreConfidenceSettings()
+
+  // Hero stats
+  document.getElementById('pt-winrate').textContent = `${stats.winRate}%`
+  document.getElementById('pt-total').textContent = stats.totalTrades
+  document.getElementById('pt-balance').textContent = `$${stats.balance?.toFixed(0) || '10,000'}`
+  const pnlEl = document.getElementById('pt-pnl')
+  pnlEl.textContent = `${stats.totalPnl >= 0 ? '+' : ''}$${stats.totalPnl}`
+  pnlEl.style.webkitTextFillColor = stats.totalPnl >= 0 ? 'var(--green)' : 'var(--red)'
+
+  // Open positions
+  const openList = document.getElementById('pt-open-list')
+  const openTrades = stats.trades.filter(t => t.status === 'open')
+  openList.innerHTML = openTrades.length ? openTrades.map(t => {
+    const pnlClass = (t.unrealizedPnl || 0) >= 0 ? 'trade-pnl-pos' : 'trade-pnl-neg'
+    const pnlStr = t.unrealizedPnl !== undefined ? `${t.unrealizedPnl >= 0 ? '+' : ''}$${t.unrealizedPnl} (${t.unrealizedPct >= 0 ? '+' : ''}${t.unrealizedPct}%)` : 'Loading...'
+    const currentStr = t.currentPrice ? `$${t.currentPrice}` : '...'
+    const conf = t.confidence || 0
+    const confClass = conf >= 65 ? 'high' : conf >= 40 ? 'med' : 'low'
+    const badgeClass = `conf-badge-${confClass}`
+    const fillClass = `conf-${confClass}`
+    return `
+    <div class="trade-item" style="flex-direction:column;gap:6px;align-items:flex-start;">
+      <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="trade-coin">${t.coin} ${t.direction?.toUpperCase()} ${t.leverage > 1 ? `${t.leverage}x` : ''}</div>
+          <span class="conf-badge ${badgeClass}">${conf}%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="${pnlClass}" style="font-size:15px;">${pnlStr}</div>
+          <button class="tg-remove-btn" onclick="closeTrade(${t.id}, ${t.currentPrice || t.entry})">Close</button>
+        </div>
+      </div>
+      <div class="conf-meter"><div class="conf-meter-fill ${fillClass}" style="width:${conf}%"></div></div>
+      <div class="trade-info">Entry: $${t.entry} → Current: ${currentStr} | Target: $${t.target} | SL: $${t.stopLoss}</div>
+      <div class="trade-info">Liq: $${t.liquidationPrice} | Size: $${t.size} | Opened: ${new Date(t.openTime).toLocaleTimeString()}</div>
+      <div class="trade-info" style="color:var(--accent);">@${t.caller} • ${t.groupName}</div>
+    </div>`
+  }).join('')
+  : '<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No open positions</div>'
+
+  // History
+  const histList = document.getElementById('pt-history-list')
+  const closed = stats.trades.filter(t => t.status !== 'open')
+  histList.innerHTML = closed.length ? closed.map(t => {
+    const conf = t.confidence || 0
+    const confClass = conf >= 65 ? 'high' : conf >= 40 ? 'med' : 'low'
+    return `
+    <div class="trade-item">
+      <div class="trade-left">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="trade-coin">${t.coin} ${t.direction?.toUpperCase()} ${t.leverage > 1 ? `${t.leverage}x` : ''}</div>
+          <span class="conf-badge conf-badge-${confClass}">${conf}%</span>
+        </div>
+        <div class="conf-meter" style="width:120px;"><div class="conf-meter-fill conf-${confClass}" style="width:${conf}%"></div></div>
+        <div class="trade-info">$${t.entry} → $${t.closePrice} • ${t.closeReason}</div>
+        <div class="trade-info">@${t.caller}</div>
+      </div>
+      <div class="${t.status === 'win' ? 'trade-pnl-pos' : 'trade-pnl-neg'}">${t.pnl >= 0 ? '+' : ''}$${t.pnl}</div>
+    </div>`
+  }).join('')
+  : '<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No trades yet</div>'
+
+  // Leaderboard from Telegram caller stats
+  // Load lessons
+  const lessonsData = await ipcRenderer.invoke('get-trading-lessons')
+  const lessonsList = document.getElementById('lessons-list')
+  const lessons = lessonsData?.lessons || []
+  if (lessons.length) {
+    lessonsList.innerHTML = lessons.slice(-10).reverse().map(l => `
+      <div style="padding:10px 12px;background:var(--bg3);border-radius:8px;margin-bottom:6px;border-left:3px solid ${l.won ? 'var(--green)' : 'var(--red)'};">
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">${l.won ? '✅' : '❌'} ${l.coin} ${l.direction?.toUpperCase()} — ${l.won ? '+' : ''}$${l.pnl}</div>
+        <div style="font-size:12px;color:var(--text);">${l.lesson}</div>
+        ${l.rule ? `<div style="font-size:11px;color:var(--accent);margin-top:4px;">📋 Rule: ${l.rule}</div>` : ''}
+      </div>
+    `).join('')
+
+    // Show winning patterns
+    const patterns = lessonsData?.patterns?.filter(p => p.count >= 2) || []
+    if (patterns.length) {
+      lessonsList.innerHTML += `<div style="margin-top:10px;font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;">PATTERNS IDENTIFIED</div>`
+      lessonsList.innerHTML += patterns.map(p => {
+        const wr = Math.round(p.wins/p.count*100)
+        return `<div style="font-size:11px;padding:6px 10px;background:var(--bg3);border-radius:6px;margin-bottom:4px;color:${wr >= 60 ? 'var(--green)' : 'var(--red)'};">${wr >= 60 ? '✅' : '❌'} ${p.pattern} (${wr}% — ${p.count} trades)</div>`
+      }).join('')
+    }
+  }
+
+  renderLeaderboard(tgStats.stats)
+}
+
+document.getElementById('chart-analysis-toggle').addEventListener('click', function() {
+  this.classList.toggle('on')
+  ipcRenderer.send('set-setting', 'chartAnalysis', this.classList.contains('on'))
+})
+
+// Listen for independent signal
+ipcRenderer.on('independent-signal', (e, signal) => {
+  // Refresh trading page if open
+  const tab = document.querySelector('.page-tab[data-page="3"]')
+  if (tab?.classList.contains('active')) loadTradingUI()
+  // Show notification
+  const notif = new Notification('🤖 Asuka Independent Signal', {
+    body: `${signal.direction?.toUpperCase()} ${signal.coin} — ${signal.confidence}% confidence\n${signal.reason}`
+  })
+})
+
+// Listen for paper trade closed
+ipcRenderer.on('paper-trade-closed', (e, trade) => {
+  const tab = document.querySelector('.page-tab[data-page="3"]')
+  if (tab?.classList.contains('active')) loadTradingUI()
+  new Notification(`${trade.status === 'win' ? '✅' : '❌'} Paper Trade ${trade.status?.toUpperCase()}`, {
+    body: `${trade.direction?.toUpperCase()} ${trade.coin} — P&L: ${trade.pnl >= 0 ? '+' : ''}$${trade.pnl} (${trade.closeReason})`
+  })
+})
+ipcRenderer.on('telegram-signal', (event, signal) => {
+  const tgTab = document.querySelector('.page-tab[data-page="2"]')
+  if (tgTab?.classList.contains('active')) loadTelegramUI()
+  // Add to intel feed
+  addToIntelFeed({
+    type: 'signal',
+    source: `@${signal.caller} in ${signal.groupName}`,
+    body: `${signal.direction?.toUpperCase()} ${signal.coin} — Entry: $${signal.entry} → Target: $${signal.target} | SL: $${signal.stopLoss}`,
+    note: `${signal.confidence}% confidence`,
+    action: 'Paper Trade Opened',
+    notify: true
+  })
+})
+
+// Intelligence feed
+const INTEL_KEY = 'asuka_intel_feed'
+function getIntelFeed() {
+  try { return JSON.parse(localStorage.getItem(INTEL_KEY) || '[]') } catch(e) { return [] }
+}
+function addToIntelFeed(item) {
+  const feed = getIntelFeed()
+  feed.unshift({ ...item, time: Date.now() })
+  if (feed.length > 100) feed.splice(100)
+  localStorage.setItem(INTEL_KEY, JSON.stringify(feed))
+  renderIntelFeed()
+
+  // Trade notifications (signals, wins, losses)
+  const tradeTypes = ['signal', 'win', 'loss']
+  const tradeNotifyOn = document.getElementById('trade-notify-toggle')?.classList.contains('on')
+  const intelNotifyOn = document.getElementById('intel-notify-toggle')?.classList.contains('on')
+
+  const isTradeEvent = tradeTypes.includes(item.type)
+  const shouldNotify = isTradeEvent ? tradeNotifyOn : intelNotifyOn
+
+  if (shouldNotify && item.notify !== false) {
+    ipcRenderer.send('tg-intel-notify', item)
+  }
+  if (shouldNotify && (item.type === 'signal' || item.type === 'warning' || item.type === 'win' || item.type === 'loss')) {
+    new Notification(
+      item.type === 'signal' ? '📡 New Signal' :
+      item.type === 'win' ? '✅ Trade Won' :
+      item.type === 'loss' ? '❌ Trade Lost' : '⚠️ Warning',
+      { body: item.body }
+    )
+  }
+}
+
+function renderIntelFeed() {
+  const feed = getIntelFeed()
+  const container = document.getElementById('intel-feed')
+  if (!container) return
+  if (!feed.length) {
+    container.innerHTML = '<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">Feed will populate as she reads groups and scans market</div>'
+    return
+  }
+  const typeLabels = { signal:'🟢 SIGNAL', warning:'⚠️ WARNING', news:'📰 NEWS', whale:'🐋 WHALE', scan:'📊 SCAN', win:'✅ WIN', loss:'❌ LOSS', note:'💭 NOTE' }
+  container.innerHTML = feed.map(item => {
+    const time = new Date(item.time).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' })
+    const label = typeLabels[item.type] || item.type?.toUpperCase()
+    return `
+    <div class="intel-item ${item.type || ''}">
+      <div class="intel-header">
+        <span class="intel-type intel-type-${item.type || 'note'}">${label}${item.source ? ` | ${item.source}` : ''}</span>
+        <span class="intel-time">${time}</span>
+      </div>
+      <div class="intel-body">${item.body}</div>
+      ${item.note ? `<div class="intel-note">💭 ${item.note}</div>` : ''}
+      ${item.action ? `<div class="intel-action">${item.action}</div>` : ''}
+    </div>`
+  }).join('')
+}
+
+// Notification toggles
+document.getElementById('trade-notify-toggle').addEventListener('click', function() {
+  this.classList.toggle('on')
+  ipcRenderer.send('set-setting', 'tradeNotifications', this.classList.contains('on'))
+})
+
+document.getElementById('intel-notify-toggle').addEventListener('click', function() {
+  this.classList.toggle('on')
+  ipcRenderer.send('set-setting', 'intelNotifications', this.classList.contains('on'))
+})
+
+// Listen for intel events from main process
+ipcRenderer.on('intel-event', (e, item) => addToIntelFeed(item))
+
+// Listen for paper trade events — add to feed
+ipcRenderer.on('trade-opened', (e, trade) => {
+  addToIntelFeed({
+    type: 'signal',
+    source: `@${trade.caller}`,
+    body: `${trade.direction?.toUpperCase()} ${trade.coin} ${trade.leverage > 1 ? trade.leverage + 'x' : ''} — Entry: $${trade.entry} | Target: $${trade.target} | SL: $${trade.stopLoss}`,
+    note: `${trade.confidence}% confidence | Size: $${trade.size}`,
+    action: 'Paper Trade Opened'
+  })
+})
+
+ipcRenderer.on('paper-trade-closed', (e, trade) => {
+  const isWin = trade.status === 'win'
+  addToIntelFeed({
+    type: isWin ? 'win' : 'loss',
+    source: `@${trade.caller}`,
+    body: `${trade.direction?.toUpperCase()} ${trade.coin} closed at $${trade.closePrice}`,
+    note: `P&L: ${trade.pnl >= 0 ? '+' : ''}$${trade.pnl} | ${trade.closeReason}`,
+    action: isWin ? '✅ WIN' : '❌ LOSS',
+    notify: true
+  })
+  const tab = document.querySelector('.page-tab[data-page="3"]')
+  if (tab) loadTradingUI()
+  new Notification(`${isWin ? '✅' : '❌'} Paper Trade ${trade.status?.toUpperCase()}`, {
+    body: `${trade.direction?.toUpperCase()} ${trade.coin} — P&L: ${trade.pnl >= 0 ? '+' : ''}$${trade.pnl} (${trade.closeReason})`
+  })
+})
+
+ipcRenderer.on('independent-signal', (e, signal) => {
+  addToIntelFeed({
+    type: 'scan',
+    source: 'Asuka Independent Scan',
+    body: `${signal.direction?.toUpperCase()} ${signal.coin} — Entry: $${signal.entry} | Target: $${signal.target}`,
+    note: `${signal.confidence}% confidence — ${signal.reason}`,
+    action: 'Auto Paper Trade'
+  })
+  const tab = document.querySelector('.page-tab[data-page="3"]')
+  if (tab) loadTradingUI()
+})
+
+// Also render feed when Telegram page loads
+function loadIntelFeedUI() {
+  renderIntelFeed()
+  const settings2 = ipcRenderer.invoke('get-settings').then(s => {
+    if (s?.intelNotifications) document.getElementById('intel-notify-toggle').classList.add('on')
+  })
+}
+
+// ── Portfolio ──────────────────────────────────────────────────────────────
+async function loadPortfolio() {
+  const wallets = settings.wallets || [];
+  if (!wallets.length) {
+    document.getElementById('tokens-section').innerHTML = '<div class="empty-state">No wallets connected</div>';
+    document.getElementById('txns-section').innerHTML = '<div class="empty-state">Connect a wallet to see transactions</div>';
+    document.getElementById('port-value').textContent = '$0.00';
+    return;
+  }
+
+  document.getElementById('tokens-section').innerHTML = '<div class="empty-state">Loading...</div>';
+  document.getElementById('txns-section').innerHTML = '<div class="empty-state">Loading...</div>';
+
+  let totalValue = 0;
+  let allTokens = [];
+  let allTxns = [];
+
+  for (const wallet of wallets) {
+    try {
+      const data = await ipcRenderer.invoke('get-wallet-data', wallet.address, wallet.chain);
+      if (data?.tokens) {
+        allTokens = allTokens.concat(data.tokens.map(t => ({ ...t, walletLabel: wallet.label })));
+        totalValue += data.totalUsd || 0;
+      }
+      if (data?.txns) {
+        allTxns = allTxns.concat(data.txns.map(t => ({ ...t, walletLabel: wallet.label })));
+      }
+    } catch(e) { console.error('Wallet load error:', e.message); }
+  }
+
+  // Update total value
+  document.getElementById('port-value').textContent = `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  // Render tokens
+  if (allTokens.length) {
+    document.getElementById('tokens-section').innerHTML = allTokens.slice(0, 20).map(t => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2);">
+        <div>
+          <div style="font-size:13px;font-weight:600;">${t.symbol || 'Unknown'}</div>
+          <div style="font-size:11px;color:var(--text2);">${t.walletLabel}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:13px;font-weight:600;">$${(t.usdValue || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</div>
+          <div style="font-size:11px;color:var(--text2);">${parseFloat(t.balance || 0).toFixed(4)} ${t.symbol}</div>
+        </div>
+      </div>`).join('');
+  } else {
+    document.getElementById('tokens-section').innerHTML = '<div class="empty-state">No tokens found</div>';
+  }
+
+  // Render transactions
+  if (allTxns.length) {
+    document.getElementById('txns-section').innerHTML = allTxns.slice(0, 20).map(t => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2);">
+        <div>
+          <div style="font-size:12px;font-weight:600;">${t.type || 'Transfer'} ${t.symbol || ''}</div>
+          <div style="font-size:11px;color:var(--text2);">${t.walletLabel} • ${t.date || ''}</div>
+        </div>
+        <div style="font-size:12px;color:${t.type === 'receive' ? 'var(--green)' : 'var(--text2)'};">
+          ${t.type === 'receive' ? '+' : '-'}${parseFloat(t.amount || 0).toFixed(4)} ${t.symbol || ''}
+        </div>
+      </div>`).join('');
+  } else {
+    document.getElementById('txns-section').innerHTML = '<div class="empty-state">No recent transactions</div>';
+  }
+}
+
+// ── Edit page ──
+const chars=[
+  {name:'Asuka',emoji:'🌸',free:true},  {name:'Aria',emoji:'🌙',free:true},
+  {name:'Nova',emoji:'⚡',free:true},   {name:'Ghost',emoji:'👻',free:false},
+  {name:'Lyra',emoji:'🎵',free:false},  {name:'Vex',emoji:'🔮',free:false},
+  {name:'Kira',emoji:'🌺',free:false},  {name:'Zero',emoji:'🤖',free:false},
+  {name:'Echo',emoji:'🌊',free:false},
+]
+document.getElementById('edit-btn').addEventListener('click',()=>{
+  document.getElementById('edit-page').classList.add('open')
+  buildCharRow(); initEditWaifu()
+})
+document.getElementById('back-from-edit').addEventListener('click',()=>document.getElementById('edit-page').classList.remove('open'))
+function buildCharRow() {
+  const row=document.getElementById('char-row')
+  row.innerHTML=chars.map((c,i)=>`<div class="char-card ${!c.free?'locked':''} ${i===0?'active':''}" data-idx="${i}">
+    <div class="char-badge ${c.free?'free':'pro'}">${c.free?'Free':'Pro'}</div>
+    <div class="char-emoji">${c.emoji}</div>
+    <div class="char-name">${c.name}</div>
+  </div>`).join('')
+  row.querySelectorAll('.char-card:not(.locked)').forEach(card=>{
+    card.addEventListener('click',()=>{
+      row.querySelectorAll('.char-card').forEach(c=>c.classList.remove('active')); card.classList.add('active')
+      document.getElementById('edit-char-name').textContent=chars[parseInt(card.dataset.idx)].name
+    })
+  })
+}
+async function initEditWaifu() {
+  if (editApp) return
+  try {
+    const canvas=document.getElementById('edit-canvas')
+    const w=220,h=360; canvas.width=w; canvas.height=h
+    editApp=new PIXI.Application({view:canvas,autoStart:true,transparent:true,backgroundAlpha:0,width:w,height:h})
+    const m=await Live2DModel.from('./assets/model/huohuo.model3.json')
+    editApp.stage.addChild(m); m.x=w/2; m.y=h; m.scale.set(h/8500); m.anchor.set(0.5,1); m.motion('idle')
+  } catch(e){}
+}
+
+// ── Customize ──
+document.getElementById('customize-btn').addEventListener('click',()=>{
+  document.getElementById('edit-page').classList.remove('open')
+  document.getElementById('customize-page').classList.add('open')
+  initCustWaifu(); loadCustSettings()
+})
+document.getElementById('back-from-customize').addEventListener('click',()=>document.getElementById('customize-page').classList.remove('open'))
+
+async function initCustWaifu() {
+  if (custApp) return
+  try {
+    const canvas=document.getElementById('cust-canvas')
+    const w=220,h=360; canvas.width=w; canvas.height=h
+    custApp=new PIXI.Application({view:canvas,autoStart:true,transparent:true,backgroundAlpha:0,width:w,height:h})
+    const m=await Live2DModel.from('./assets/model/huohuo.model3.json')
+    custApp.stage.addChild(m); m.x=w/2; m.y=h; m.scale.set(h/8500); m.anchor.set(0.5,1); m.motion('idle')
+  } catch(e){}
+}
+
+async function loadCustSettings() {
+  if (settings.characterName) document.getElementById('c-name').value=settings.characterName
+  if (memory.wakeName) document.getElementById('c-wake').value=memory.wakeName
+  if (memory.voiceSpeed) { document.getElementById('c-speed').value=memory.voiceSpeed*100; updateSpeedVal() }
+  document.querySelectorAll('[data-personality]').forEach(c=>c.classList.toggle('active',c.dataset.personality===(memory.personality||'chill')))
+  document.querySelectorAll('[data-level]').forEach(c=>c.classList.toggle('active',c.dataset.level===(memory.learningLevel||'intermediate')))
+  document.querySelectorAll('[data-ai]').forEach(c=>c.classList.toggle('active',c.dataset.ai===(settings.aiMode||'balanced')))
+}
+
+document.querySelectorAll('[data-personality]').forEach(c=>c.addEventListener('click',()=>{ document.querySelectorAll('[data-personality]').forEach(x=>x.classList.remove('active')); c.classList.add('active') }))
+document.querySelectorAll('[data-level]').forEach(c=>c.addEventListener('click',()=>{ document.querySelectorAll('[data-level]').forEach(x=>x.classList.remove('active')); c.classList.add('active') }))
+document.querySelectorAll('[data-ai]').forEach(c=>c.addEventListener('click',()=>{ document.querySelectorAll('[data-ai]').forEach(x=>x.classList.remove('active')); c.classList.add('active') }))
+document.querySelectorAll('.swatch').forEach(s=>s.addEventListener('click',()=>{ document.querySelectorAll('.swatch').forEach(x=>x.classList.remove('active')); s.classList.add('active') }))
+document.querySelectorAll('.item-card:not(.locked)').forEach(s=>s.addEventListener('click',()=>{
+  const grp=s.closest('.item-wrap'); grp.querySelectorAll('.item-card').forEach(x=>x.classList.remove('active')); s.classList.add('active')
+}))
+document.getElementById('c-speed').addEventListener('input',updateSpeedVal)
+function updateSpeedVal() { document.getElementById('c-speed-val').textContent=(document.getElementById('c-speed').value/100).toFixed(1)+'×' }
+
+document.getElementById('cust-save').addEventListener('click',async()=>{
+  const name=document.getElementById('c-name').value||'Asuka'
+  const wake=document.getElementById('c-wake').value||'asuka'
+  const speed=parseInt(document.getElementById('c-speed').value)/100
+  const personality=document.querySelector('[data-personality].active')?.dataset.personality||'chill'
+  const level=document.querySelector('[data-level].active')?.dataset.level||'intermediate'
+  const aiMode=document.querySelector('[data-ai].active')?.dataset.ai||'balanced'
+  settings.characterName=name; settings.aiMode=aiMode
+  memory.wakeName=wake; memory.voiceSpeed=speed; memory.personality=personality; memory.learningLevel=level
+  await ipcRenderer.invoke('save-settings',settings)
+  await ipcRenderer.invoke('save-memory',memory)
+  document.getElementById('customize-page').classList.remove('open')
+  document.getElementById('waifu-name').textContent=name
+  document.getElementById('cust-name').textContent=name
+  const msg=`Got it! You can call me ${name} now.`
+  document.getElementById('waifu-speech').textContent=msg
+  await playAudio(await ipcRenderer.invoke('get-voice',msg))
+  document.getElementById('waifu-speech').textContent=''
+})
+
+// ── Settings ──
+document.getElementById('settings-open-btn').addEventListener('click',()=>{
+  document.getElementById('settings-page').classList.add('open')
+  if (settings.coingeckoKey) document.getElementById('s-coingecko').value=settings.coingeckoKey
+  if (settings.moralisKey)   document.getElementById('s-moralis').value=settings.moralisKey
+  if (settings.youtubeKey)   document.getElementById('s-youtube').value=settings.youtubeKey
+  if (settings.etherscanKey) document.getElementById('s-etherscan').value=settings.etherscanKey
+  if (memory.alarmTime)      document.getElementById('s-alarm').value=memory.alarmTime
+  if (memory.sleepHour)      document.getElementById('s-sleep').value=memory.sleepHour
+  if (memory.waterReminderMinutes) document.getElementById('s-water').value=memory.waterReminderMinutes
+})
+document.getElementById('back-from-settings').addEventListener('click',()=>document.getElementById('settings-page').classList.remove('open'))
+document.getElementById('settings-save-btn').addEventListener('click',async()=>{
+  settings.coingeckoKey=document.getElementById('s-coingecko').value
+  settings.moralisKey=document.getElementById('s-moralis').value
+  settings.youtubeKey=document.getElementById('s-youtube').value
+  settings.etherscanKey=document.getElementById('s-etherscan').value
+  settings.binanceKey=document.getElementById('s-binance-key').value
+  settings.bybitKey=document.getElementById('s-bybit-key').value
+  memory.alarmTime=document.getElementById('s-alarm').value
+  memory.sleepHour=parseInt(document.getElementById('s-sleep').value)||null
+  memory.waterReminderMinutes=parseInt(document.getElementById('s-water').value)||null
+  await ipcRenderer.invoke('save-settings',settings)
+  await ipcRenderer.invoke('save-memory',memory)
+  document.getElementById('settings-page').classList.remove('open')
+  const msg='Settings saved!'
+  document.getElementById('waifu-speech').textContent=msg
+  await playAudio(await ipcRenderer.invoke('get-voice',msg))
+  document.getElementById('waifu-speech').textContent=''
+})
+document.getElementById('export-btn').addEventListener('click',()=>ipcRenderer.invoke('export-data'))
+document.getElementById('import-btn').addEventListener('click',()=>{
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='.json'
+  inp.onchange=async e=>{
+    const txt=await e.target.files[0].text()
+    const result=await ipcRenderer.invoke('restore-backup',txt)
+    document.getElementById('waifu-speech').textContent=result
+    await playAudio(await ipcRenderer.invoke('get-voice',result))
+    document.getElementById('waifu-speech').textContent=''
+  }; inp.click()
+})
+
+// ── Close ──
+document.getElementById('close-btn').addEventListener('click',()=>{ ipcRenderer.send('dashboard-closed'); window.close() })
+
+// ── Auto refresh ──
+setInterval(loadPrices,30000)
+
+// ── Init ──
+window.addEventListener('DOMContentLoaded',async()=>{ await loadData(); initWaifu(); initDots() })
+</script>
+</body>
+</html>

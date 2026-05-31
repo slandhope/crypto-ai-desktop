@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.local
+.env.production
+data/
+*.json.bak
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+dist/
+out/
+*.tmp
+*.temp
