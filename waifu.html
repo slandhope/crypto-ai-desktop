@@ -637,7 +637,8 @@
 - Add to watchlist, remove from watchlist → MUST use ask_claude tool
 - Play YouTube, play music, play song → MUST use ask_claude tool
 - Weather, temperature, forecast → MUST use ask_claude tool (returns text, never opens browser)
-- Paper trading, my trades, win rate, trading loss, open positions → MUST use ask_claude tool
+- Paper trading, my trades, win rate, trading loss, open positions, should I close, take profit → MUST use ask_claude tool
+- ANYTHING about the user's specific trades, positions, balance → MUST use ask_claude tool
 - Open website, open app → MUST use ask_claude tool ONLY when user explicitly says "open"
 - Price alerts, set alert → MUST use ask_claude tool
 - Trading journal, log trade → MUST use ask_claude tool
@@ -646,6 +647,7 @@
 - Morning briefing → MUST use ask_claude tool
 - Contract scan → MUST use ask_claude tool
 - NEVER answer market data from memory — ALWAYS use tools
+- NEVER answer questions about the user's trades from memory — ALWAYS use ask_claude
 - NEVER open a website to answer a question — return text answer only
 - NEVER say you can't do something — use ask_claude and it will handle it
 
@@ -938,11 +940,26 @@ VOICE RESPONSE RULES — CRITICAL:
     // ── Send text to Gemini ────────────────────────────────────────────────
     function sendTextToGemini(text) {
       if (!geminiWs || geminiWs.readyState !== WebSocket.OPEN) return
+      
+      // Build parts — include camera frame if active
+      const parts = [{ text: text || 'Say a brief friendly greeting.' }]
+      
+      if (webcamActive) {
+        try {
+          webcamCanvas.width = 320; webcamCanvas.height = 240
+          webcamCanvas.getContext('2d').drawImage(webcamVideo, 0, 0, 320, 240)
+          const frame = webcamCanvas.toDataURL('image/jpeg', 0.6).split(',')[1]
+          if (frame) {
+            parts.unshift({ inlineData: { mimeType: 'image/jpeg', data: frame } })
+          }
+        } catch(e) {}
+      }
+      
       geminiWs.send(JSON.stringify({
         clientContent: {
           turns: [{
             role: 'user',
-            parts: [{ text: text || 'Say a brief friendly greeting.' }]
+            parts
           }],
           turnComplete: true
         }
@@ -1008,7 +1025,15 @@ VOICE RESPONSE RULES — CRITICAL:
         setStatus('Listening...')
 
       } catch(e) {
-        setStatus('Mic error: ' + e.message)
+        console.error('Mic error:', e.message)
+        setStatus('Mic error — retrying...')
+        // Auto retry after 2 seconds
+        setTimeout(() => {
+          if (activePipeline === 'gemini' && !isMicMuted) {
+            console.log('🎤 Retrying mic connection...')
+            startMicStreaming()
+          }
+        }, 2000)
       }
     }
 
@@ -1029,7 +1054,7 @@ VOICE RESPONSE RULES — CRITICAL:
         webcamActive = true
         webcamBtn.classList.add('active'); webcamBtn.textContent = '🎥'
 
-        // Send camera frames to Gemini every 1 second
+        // Send camera frames to Gemini every 3 seconds (if Gemini active)
         cameraInterval = setInterval(() => {
           if (!geminiReady || !geminiWs || geminiWs.readyState !== WebSocket.OPEN) return
           try {
@@ -1042,10 +1067,23 @@ VOICE RESPONSE RULES — CRITICAL:
               }
             }))
           } catch(e) {}
-        }, 3000) // 1 frame per 3 seconds to stay within quota
+        }, 3000)
 
-        setStatus('Camera on — Gemini can see you')
-      } catch(e) { setStatus('Camera error: ' + e.message) }
+        setStatus('Camera on — I can see you! 👀')
+      } catch(e) { 
+        console.error('Camera error:', e.message)
+        setStatus('Camera error: ' + e.message)
+      }
+    }
+
+    // Capture frame from webcam for HTTP pipeline
+    function captureWebcamFrame() {
+      if (!webcamActive || !webcamStream) return null
+      try {
+        webcamCanvas.width = 640; webcamCanvas.height = 480
+        webcamCanvas.getContext('2d').drawImage(webcamVideo, 0, 0, 640, 480)
+        return webcamCanvas.toDataURL('image/jpeg', 0.8).split(',')[1]
+      } catch(e) { return null }
     }
 
     function stopWebcam() {
@@ -1082,9 +1120,9 @@ VOICE RESPONSE RULES — CRITICAL:
       }
 
       // Always use HTTP for typed text — reliable and fast
-      // Gemini is voice only
       setStatus('Thinking...')
-      const result = await ipcRenderer.invoke('process-voice-input-text', text)
+      const cameraFrame = captureWebcamFrame()
+      const result = await ipcRenderer.invoke('process-voice-input-text', text, cameraFrame)
       if (result?.success) {
         addToHistory('asuka', result.reply)
         const sentences = splitIntoSentences(result.reply)

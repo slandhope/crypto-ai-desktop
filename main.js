@@ -2361,10 +2361,39 @@ ipcMain.handle('confirm-news-briefing', async () => {
   return { reply, base64Audio: await getVoiceAudio(reply) };
 });
 
-ipcMain.handle('process-voice-input-text', async (e, text) => {
+ipcMain.handle('process-voice-input-text', async (e, text, cameraFrame) => {
   try {
     console.log('💬 Text:', text);
-    const reply = await routeCommand(text);
+    
+    // If camera frame provided and text is about seeing/looking
+    const lower = text.toLowerCase();
+    const isVisionQuery = lower.includes('see me') || lower.includes('look at me') || 
+                          lower.includes('what do i look') || lower.includes('can you see') ||
+                          lower.includes('see my') || lower.includes('look at my') ||
+                          lower.includes('what am i') || lower.includes('describe me');
+    
+    let reply;
+    if (cameraFrame && isVisionQuery) {
+      console.log('📷 Using camera frame for vision query');
+      const visionRes = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 200,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: cameraFrame } },
+            { type: 'text', text: `You are Asuka, a sweet AI companion. The user asked: "${text}". Describe what you see in 1-2 sentences, warmly and naturally as their companion.` }
+          ]
+        }]
+      });
+      reply = visionRes.content[0].text;
+    } else if (cameraFrame) {
+      // Inject camera context into normal query
+      reply = await routeCommand(text + (webcamActive ? ' [Camera is on, I can see you]' : ''));
+    } else {
+      reply = await routeCommand(text);
+    }
+    
     console.log('🤖 Reply:', reply?.slice(0, 80));
     const audio = await getVoiceAudio(reply);
     console.log('🔊 Audio:', audio ? 'generated' : 'FAILED');
@@ -2551,13 +2580,13 @@ async function scanCoinForTrade(scanCoin) {
 
     const lessonsContext = buildLessonsContext();
 
-    // Ask Claude to analyze this specific coin
-    const prompt = `You are an expert crypto trader. Analyze this market data for ${scanCoin} and decide if there is a trading opportunity.
+    // Step 1 — Claude deep analysis (includes short consideration)
+    const prompt = `You are an expert crypto trader. Analyze this market data for ${scanCoin} and decide if there is a trading opportunity — LONG OR SHORT.
 
 MARKET DATA:
 - ${scanCoin} Price: ${coinPrice}
-- ${scanCoin} Funding Rate: ${funding}
-- Fear & Greed Index: ${fearGreed}
+- ${scanCoin} Funding Rate: ${funding} (positive = longs paying = bearish signal, negative = shorts paying = bullish)
+- Fear & Greed Index: ${fearGreed} (0-25 = extreme fear = potential bottom, 75-100 = extreme greed = potential top)
 - BTC Dominance: ${dominance}
 - Latest News: ${news?.slice(0, 200)}
 
@@ -2568,7 +2597,19 @@ Current overall win rate: ${winRate}%
 
 ${lessonsContext}
 
-Should we open a paper trade on ${scanCoin} right now?
+SHORTING RULES — consider SHORT when:
+- Price dumping more than 2% recently
+- Funding rate very high (overleveraged longs)
+- Fear & Greed above 75 (extreme greed = top)
+- Strong downtrend with no support
+- Bad news hitting the coin
+
+LONGING RULES — consider LONG when:
+- Price dipping but fundamentals strong  
+- Funding rate low or negative
+- Fear & Greed below 25 (extreme fear = bottom)
+- Strong support level holding
+- Good news or whale accumulation
 
 Respond ONLY with JSON:
 {
@@ -2579,10 +2620,13 @@ Respond ONLY with JSON:
   "target": target price number,
   "stopLoss": stop loss price number,
   "confidence": 0-100,
-  "reason": "brief reason under 20 words"
+  "reason": "brief reason under 20 words",
+  "marketBias": "bullish" or "bearish" or "neutral"
 }
 
-Suggest a trade if confidence is above 20%. Be willing to trade even with moderate signals.`;
+Always consider BOTH directions. Short when bearish signals are strong.
+IMPORTANT: If market is clearly bearish (FG < 30, price dumping, high funding) — suggest a SHORT trade, not no trade.
+A bearish market IS a trading opportunity for shorts. Never say shouldTrade=false just because market is bad — bad market = short opportunity.`;
 
     const res = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -2594,7 +2638,8 @@ Suggest a trade if confidence is above 20%. Be willing to trade even with modera
     const clean = text.replace(/```json|```/g, '').trim();
     const analysis = JSON.parse(clean);
 
-    console.log(`🤖 Independent scan result: shouldTrade=${analysis.shouldTrade}, confidence=${analysis.confidence}%, reason="${analysis.reason}"`);
+    console.log(`🤖 Claude analysis: ${analysis.direction?.toUpperCase()} ${scanCoin} — confidence=${analysis.confidence}%, bias=${analysis.marketBias}, reason="${analysis.reason}"`);
+
 
     // Always emit scan result to intel feed
     sendIntelEvent({
@@ -2608,50 +2653,140 @@ Suggest a trade if confidence is above 20%. Be willing to trade even with modera
     if (analysis.shouldTrade && analysis.confidence >= 20) {
       const settings2 = loadSettings();
       let threshold = settings2.paperTradeThreshold || 20;
-      
-      // Auto threshold mode
       if (settings2.autoThreshold) {
-        threshold = await ipcMain.handle('get-auto-threshold') || 50;
+        threshold = 50;
       }
-      
-      if (analysis.confidence < threshold) {
-        console.log(`⏭️ Confidence ${analysis.confidence}% below threshold ${threshold}% — skipping`);
+
+      // ── MiroFish Swarm Validation ──────────────────────────────────────
+      const agentTypes = [
+        'technical analyst', 'sentiment trader', 'whale watcher',
+        'macro analyst', 'contrarian trader', 'momentum trader',
+        'risk manager', 'news trader', 'funding specialist', 'pattern trader'
+      ];
+
+      const marketSummary = `${scanCoin} at ${coinPrice}, Funding: ${funding}, FG: ${fearGreed}. Claude suggests: ${analysis.direction?.toUpperCase()} with ${analysis.confidence}% confidence. Reason: ${analysis.reason}`;
+
+      console.log(`🐟 Running MiroFish with ${agentTypes.length} agents...`);
+
+      const agentResults = await Promise.all(agentTypes.map(async (role) => {
+        try {
+          const agentRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
+            body: JSON.stringify({
+              model: 'llama-3.3-70b-versatile',
+              max_tokens: 80,
+              messages: [{ role: 'user', content: `You are a crypto ${role}. Market: ${marketSummary}. Do you AGREE with this ${analysis.direction?.toUpperCase()} trade? Reply JSON only: {"agree":true/false,"confidence":0-100}` }]
+            })
+          });
+          const data = await agentRes.json();
+          const t = data.choices?.[0]?.message?.content?.trim().replace(/```json|```/g,'').trim();
+          return JSON.parse(t);
+        } catch(e) { return { agree: Math.random() > 0.5, confidence: 50 }; }
+      }));
+
+      const agreeCount = agentResults.filter(a => a.agree).length;
+      const swarmConfidence = Math.round(agentResults.reduce((s, a) => s + (a.confidence || 50), 0) / agentResults.length);
+      const swarmAgreePct = Math.round(agreeCount / agentResults.length * 100);
+      const combinedConfidence = Math.round((analysis.confidence * 0.6) + (swarmConfidence * 0.4));
+
+      console.log(`🐟 MiroFish: ${agreeCount}/${agentTypes.length} agree (${swarmAgreePct}%) | Swarm: ${swarmConfidence}% | Combined: ${combinedConfidence}%`);
+
+      sendIntelEvent({
+        type: 'scan',
+        source: 'MiroFish Swarm',
+        body: `${analysis.direction?.toUpperCase()} ${scanCoin} — ${agreeCount}/${agentTypes.length} agents agree (${swarmAgreePct}%)`,
+        note: `Claude: ${analysis.confidence}% | Swarm: ${swarmAgreePct}% | Combined: ${combinedConfidence}%`,
+        notify: false
+      });
+
+      // Skip if swarm disagrees
+      if (swarmAgreePct < 50) {
+        console.log(`❌ MiroFish disagrees (${swarmAgreePct}%) — skipping ${analysis.direction} ${scanCoin}`);
         return;
       }
+
+      // ── Claude Final Decision (synthesizes Claude + MiroFish) ──────────
+      console.log(`🧠 Claude final decision synthesis...`);
+      const finalRes = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 200,
+        messages: [{ role: 'user', content: `You are the final decision maker for a crypto trade.
+
+CLAUDE INITIAL ANALYSIS:
+- Direction: ${analysis.direction?.toUpperCase()}
+- Confidence: ${analysis.confidence}%
+- Reason: ${analysis.reason}
+- Market bias: ${analysis.marketBias}
+
+MIROFISH SWARM RESULT (${agentTypes.length} AI traders):
+- ${agreeCount} out of ${agentTypes.length} agents agree (${swarmAgreePct}%)
+- Swarm confidence: ${swarmConfidence}%
+
+MARKET: ${scanCoin} at ${coinPrice}, FG: ${fearGreed}, Funding: ${funding}
+
+Based on BOTH the initial analysis AND the swarm debate — make the FINAL trading decision.
+You can change direction or confidence if the swarm revealed something important.
+
+Respond ONLY with JSON:
+{
+  "shouldTrade": true/false,
+  "direction": "long" or "short",
+  "entry": ${analysis.entry},
+  "target": number,
+  "stopLoss": number,
+  "confidence": 0-100,
+  "reason": "final reason under 20 words"
+}` }]
+      });
+
+      const finalText = finalRes.content[0].text.trim().replace(/```json|```/g, '').trim();
+      const finalDecision = JSON.parse(finalText);
+
+      console.log(`🧠 Claude final: ${finalDecision.shouldTrade ? finalDecision.direction?.toUpperCase() : 'NO TRADE'} ${scanCoin} — ${finalDecision.confidence}% — ${finalDecision.reason}`);
+
+      if (!finalDecision.shouldTrade) {
+        console.log(`❌ Claude final rejected the trade`);
+        return;
+      }
+
+      if (finalDecision.confidence < threshold) {
+        console.log(`⏭️ Final confidence ${finalDecision.confidence}% below threshold ${threshold}% — skipping`);
+        return;
+      }
+      // ────────────────────────────────────────────────────────────────────
+
       // Check not already in this coin
-      // Check if already have open trade on same coin
       const existingTrade = pd.trades.find(t => t.status === 'open' && t.coin === analysis.coin);
       if (existingTrade) {
-        if (analysis.confidence > existingTrade.confidence + 15) {
-          // New confidence is significantly higher — close old trade and open new one
-          console.log(`🔄 Higher confidence signal for ${analysis.coin} (${analysis.confidence}% vs ${existingTrade.confidence}%) — replacing trade`);
+        if (combinedConfidence > existingTrade.confidence + 15) {
+          console.log(`🔄 Higher confidence for ${analysis.coin} (${combinedConfidence}% vs ${existingTrade.confidence}%) — replacing trade`);
           closePaperTrade(existingTrade.id, analysis.entry, 'replaced by higher confidence signal');
         } else {
-          console.log(`⏭️ Already have ${analysis.coin} trade at ${existingTrade.confidence}% — new signal at ${analysis.confidence}% not high enough to replace`);
+          console.log(`⏭️ Already have ${analysis.coin} trade at ${existingTrade.confidence}% — skipping`);
           return;
         }
       }
 
       const signal = {
         coin: analysis.coin,
-        direction: analysis.direction,
-        entry: analysis.entry,
-        target: analysis.target,
-        stopLoss: analysis.stopLoss,
-        confidence: analysis.confidence,
+        direction: finalDecision.direction,
+        entry: finalDecision.entry || analysis.entry,
+        target: finalDecision.target,
+        stopLoss: finalDecision.stopLoss,
+        confidence: finalDecision.confidence,
         caller: 'Asuka (Independent)',
-        groupName: 'Self Analysis',
+        groupName: `Claude→MiroFish→Claude | ${swarmAgreePct}% agree`,
         messageId: `scan_${Date.now()}`,
         timestamp: Date.now()
       };
 
       openPaperTrade(signal);
 
-      // Notify user
       if (mainWindow) {
         mainWindow.webContents.send('independent-signal', {
           ...signal,
-          reason: analysis.reason
+          reason: `${finalDecision.reason} | ${agreeCount}/${agentTypes.length} swarm agree`
         });
       }
 
@@ -3334,36 +3469,41 @@ async function readGroupMessages(groupId, limit = 20) {
       };
       // Check for photo
       if (m.photo) {
-        try {
-          const buffer = await tgClient.downloadMedia(m.photo, { 
-            progressCallback: () => {}
-          });
-          if (buffer && buffer.length > 0) {
-            item.hasImage = true;
-            item.imageBuffer = Buffer.from(buffer);
-            console.log(`🖼️ Image downloaded: ${item.imageBuffer.length} bytes from @${item.sender}`);
-          }
-        } catch(e) { 
-          // Try alternative method
+        // Skip if already processed this message
+        if (processedMessageIds.has(m.id)) {
+          item.hasImage = true;
+          item.imageBuffer = null; // Already analyzed
+        } else {
           try {
-            const bytes = await tgClient.downloadFile(
-              new (require('telegram').Api.InputPhotoFileLocation)({
-                id: m.photo.id,
-                accessHash: m.photo.accessHash,
-                fileReference: m.photo.fileReference,
-                thumbSize: 'y'
-              }),
-              { dcId: m.photo.dcId, fileSize: 1024 * 1024 }
-            );
-            if (bytes) {
+            const buffer = await tgClient.downloadMedia(m.photo, { 
+              progressCallback: () => {}
+            });
+            if (buffer && buffer.length > 0) {
               item.hasImage = true;
-              item.imageBuffer = Buffer.from(bytes);
-              console.log(`🖼️ Image downloaded (alt): ${item.imageBuffer.length} bytes`);
+              item.imageBuffer = Buffer.from(buffer);
+              console.log(`🖼️ Image downloaded: ${item.imageBuffer.length} bytes from @${item.sender}`);
             }
-          } catch(e2) {
-            console.log(`🖼️ Image skip: ${e.message}`);
+          } catch(e) { 
+            try {
+              const bytes = await tgClient.downloadFile(
+                new (require('telegram').Api.InputPhotoFileLocation)({
+                  id: m.photo.id,
+                  accessHash: m.photo.accessHash,
+                  fileReference: m.photo.fileReference,
+                  thumbSize: 'y'
+                }),
+                { dcId: m.photo.dcId, fileSize: 1024 * 1024 }
+              );
+              if (bytes) {
+                item.hasImage = true;
+                item.imageBuffer = Buffer.from(bytes);
+              }
+            } catch(e2) {
+              console.log(`🖼️ Image skip: ${e.message}`);
+            }
           }
         }
+        processedMessageIds.add(m.id);
       }
       if (item.text || item.hasImage) result.push(item);
     }
@@ -3433,6 +3573,9 @@ function sendIntelEvent(item) {
     if (intelQueue.length > 200) intelQueue.shift(); // Keep max 200
   }
 }
+
+// Cache of processed message IDs to prevent re-downloading images
+const processedMessageIds = new Set();
 
 // Read past messages from monitored groups on startup
 async function readPastMessages() {
