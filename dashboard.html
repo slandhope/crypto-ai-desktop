@@ -48,7 +48,7 @@
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
     position: relative;
-    z-index: 10;
+    z-index: 1000;
   }
 
   #logo {
@@ -95,6 +95,7 @@
     display: flex;
     flex-direction: row;
     overflow-x: scroll;
+    height: 100%;
     scroll-snap-type: x mandatory;
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
@@ -114,6 +115,21 @@
     overflow: hidden;
     position: relative;
   }
+
+  /* Trading page needs vertical scroll */
+  #trading-page {
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    padding: 12px;
+    gap: 0;
+    height: 100%;
+    max-height: 100%;
+    box-sizing: border-box;
+  }
+
+  #trading-page::-webkit-scrollbar { width: 4px; }
+  #trading-page::-webkit-scrollbar-track { background: transparent; }
+  #trading-page::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
   #page-telegram {
     display: flex;
@@ -137,7 +153,30 @@
     box-sizing: border-box;
   }
 
-  .tg-section {
+  /* Collapsible sections - trading page only */
+#trading-page .tg-section-title.collapsible {
+  cursor: pointer;
+  position: relative;
+  padding-right: 20px;
+}
+#trading-page .tg-section-title.collapsible::after {
+  content: '▾';
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  opacity: 0.6;
+  transition: transform 0.2s;
+}
+#trading-page .tg-section.is-collapsed .tg-section-title.collapsible::after {
+  transform: translateY(-50%) rotate(-90deg);
+}
+#trading-page .tg-section.is-collapsed > *:not(.tg-section-title) {
+  display: none !important;
+}
+
+.tg-section {
     background: var(--bg2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -366,6 +405,24 @@
     top: 2px; left: 2px;
     transition: transform 0.3s;
   }
+  .coin-btn {
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg3);
+    color: var(--text2);
+    transition: all 0.15s;
+  }
+  .coin-btn:hover { color: var(--text); border-color: var(--border2); }
+  .coin-btn.active {
+    background: rgba(0,212,255,0.15);
+    border-color: rgba(0,212,255,0.4);
+    color: var(--accent);
+  }
+
   .leverage-btn {
     padding: 6px 14px;
     border-radius: 8px;
@@ -1286,6 +1343,36 @@
     </div>
   </div>
 
+  <!-- Telegram Bot Connection -->
+  <div class="tg-section">
+    <div class="tg-section-title">🤖 Telegram Bot</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">Control Asuka from Telegram — check trades, prices, close positions from your phone</div>
+    
+    <div id="bot-not-connected">
+      <div style="font-size:12px;margin-bottom:10px;line-height:1.6;">
+        1. Message <b style="color:var(--accent);">@AsukaTrading_bot</b> and send /start<br>
+        2. Enter the 8-character code you receive below
+      </div>
+      <div style="display:flex;gap:8px;">
+        <input class="tg-input" id="bot-auth-code" placeholder="ASK-1234" style="margin:0;flex:1;letter-spacing:2px;font-weight:700;text-transform:uppercase;" maxlength="8">
+        <button class="tg-add-btn" id="bot-connect-btn">Connect</button>
+      </div>
+      <div id="bot-auth-error" style="font-size:11px;color:var(--red);margin-top:6px;display:none;"></div>
+    </div>
+
+    <div id="bot-connected" style="display:none;">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:8px;">
+        <div style="color:var(--green);font-size:16px;">✅</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--green);">Bot Connected</div>
+          <div style="font-size:11px;color:var(--text2);">Message your bot to control Asuka from anywhere</div>
+        </div>
+        <button class="tg-remove-btn" id="bot-disconnect-btn" style="margin-left:auto;">Disconnect</button>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-top:8px;">Commands: /positions /balance /pause /resume /help — or ask anything</div>
+    </div>
+  </div>
+
   <!-- Monitored Groups -->
   <div class="tg-section">
     <div class="tg-section-title">
@@ -1308,7 +1395,7 @@
       👥 Tracked Callers
       <button class="tg-add-btn" id="tg-add-caller-btn">+ Follow Caller</button>
     </div>
-    <div id="tg-callers-list">
+    <div id="tg-tracked-callers-list">
       <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No callers tracked yet</div>
     </div>
     <div id="tg-add-caller-form" style="display:none;margin-top:12px;">
@@ -1373,9 +1460,9 @@
       <div style="font-size:12px;font-weight:600;margin-bottom:6px;">🛑 Max Drawdown Protection</div>
       <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Auto-close trade if loss exceeds this % (0 = disabled)</div>
       <div style="display:flex;align-items:center;gap:8px;">
-        <input class="tg-input" id="max-drawdown-input" placeholder="e.g. 5" type="number" min="0" max="100" style="margin:0;width:80px;">
+        <input class="tg-input" id="tg-max-drawdown-input" placeholder="e.g. 5" type="number" min="0" max="100" style="margin:0;width:80px;">
         <span style="font-size:12px;color:var(--text2);">%</span>
-        <button class="tg-add-btn" id="save-drawdown-btn">Save</button>
+        <button class="tg-add-btn" id="tg-save-drawdown-btn">Save</button>
         <button class="tg-add-btn" style="background:transparent;color:var(--text2)" id="disable-drawdown-btn">Disable</button>
       </div>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;" id="drawdown-hint">Disabled — trades close only at SL or target</div>
@@ -1417,7 +1504,7 @@
         <div class="toggle-label">Auto-analyze chart images</div>
         <div class="caller-stats">Claude Vision analyzes every chart image posted by tracked callers</div>
       </div>
-      <div class="toggle-switch" id="chart-analysis-toggle"></div>
+      <div class="toggle-switch" id="tg-chart-analysis-toggle"></div>
     </div>
   </div>
 
@@ -1425,160 +1512,735 @@
 </div>
 
 <!-- PAGE 3 — PAPER TRADING -->
-<div class="page" id="page-3">
-<div id="page-trading">
+<!-- PAGE 3 — PAPER TRADING -->
+<div class="page" id="trading-page">
 
-  <!-- Auto Trading Toggle -->
-  <div class="auto-trade-toggle">
+  <!-- Binance Testnet Status -->
+  <div id="binance-status-bar" style="display:none;background:rgba(240,185,11,0.1);border:1px solid rgba(240,185,11,0.3);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;display:flex;justify-content:space-between;align-items:center;">
+    <span>🔗 Binance Testnet</span>
+    <span>Balance: <b id="binance-balance">--</b> | Positions: <b id="binance-positions">0</b></span>
+  </div>
+
+  <!-- ━━━ DAILY TRADE BOT ━━━ -->
+  <div class="tg-section">
+    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">📅 Daily Trade Bot</div>
+
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Fires once at 00:05 UTC using Daily RSI — like your friend's bot</div>
+
+    <div class="auto-trade-toggle" style="margin-bottom:10px;">
+      <div><div class="toggle-label">Enable Daily Trade Bot</div><div class="caller-stats">Opens 1 trade per day at RSI extremes</div></div>
+      <div class="toggle-switch" id="daily-trade-toggle"></div>
+    </div>
+
+    <div class="auto-trade-toggle" style="margin-bottom:12px;">
+      <div><div class="toggle-label">Power Signals Only</div><div class="caller-stats">Only trade RSI extremes (more accurate)</div></div>
+      <div class="toggle-switch on" id="daily-power-only-toggle"></div>
+    </div>
+
+    <!-- RSI Period -->
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">RSI Period</div>
+      <div style="display:flex;gap:6px;">
+        <button class="leverage-btn daily-period-btn" data-val="7">7</button>
+        <button class="leverage-btn daily-period-btn active" data-val="14">14</button>
+        <button class="leverage-btn daily-period-btn" data-val="21">21</button>
+      </div>
+    </div>
+
+    <!-- RSI Thresholds -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div>
+        <div style="font-size:11px;color:var(--green);margin-bottom:4px;">Power Buy RSI ≤</div>
+        <div style="display:flex;gap:4px;">
+          <button class="leverage-btn daily-pbuy-btn" data-val="15">15</button>
+          <button class="leverage-btn daily-pbuy-btn active" data-val="20">20</button>
+          <button class="leverage-btn daily-pbuy-btn" data-val="25">25</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--green);margin-bottom:4px;">Buy RSI ≤</div>
+        <div style="display:flex;gap:4px;">
+          <button class="leverage-btn daily-buy-btn" data-val="25">25</button>
+          <button class="leverage-btn daily-buy-btn active" data-val="30">30</button>
+          <button class="leverage-btn daily-buy-btn" data-val="35">35</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--red);margin-bottom:4px;">Sell RSI ≥</div>
+        <div style="display:flex;gap:4px;">
+          <button class="leverage-btn daily-sell-btn" data-val="65">65</button>
+          <button class="leverage-btn daily-sell-btn active" data-val="70">70</button>
+          <button class="leverage-btn daily-sell-btn" data-val="75">75</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--red);margin-bottom:4px;">Power Sell RSI ≥</div>
+        <div style="display:flex;gap:4px;">
+          <button class="leverage-btn daily-psell-btn" data-val="75">75</button>
+          <button class="leverage-btn daily-psell-btn active" data-val="80">80</button>
+          <button class="leverage-btn daily-psell-btn" data-val="85">85</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Leverage + Size -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Leverage</div>
+        <div style="display:flex;gap:4px;">
+          <button class="leverage-btn daily-lev-btn" data-val="1">1x</button>
+          <button class="leverage-btn daily-lev-btn" data-val="2">2x</button>
+          <button class="leverage-btn daily-lev-btn active" data-val="3">3x</button>
+          <button class="leverage-btn daily-lev-btn" data-val="5">5x</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Max Open Trades</div>
+        <div style="display:flex;gap:4px;">
+          <button class="leverage-btn daily-max-btn active" data-val="1">1</button>
+          <button class="leverage-btn daily-max-btn" data-val="2">2</button>
+          <button class="leverage-btn daily-max-btn" data-val="3">3</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Position Size ($)</div>
+      <div style="display:flex;gap:8px;">
+        <input class="tg-input" id="daily-size-input" placeholder="e.g. 1000" type="number" style="margin:0;flex:1;">
+        <button class="tg-add-btn" id="save-daily-size-btn">Save</button>
+      </div>
+    </div>
+
+    <!-- Today's signals display -->
+    <div style="border-top:1px solid var(--border2);padding-top:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:600;">Today's Daily RSI Signals</div>
+        <button class="tg-add-btn" id="refresh-daily-signals-btn" style="font-size:11px;padding:4px 10px;">Scan Now</button>
+      </div>
+      <div id="daily-signals-list" style="font-size:12px;color:var(--text2);">Loading...</div>
+    </div>
+  </div>
+
+  <!-- ━━━ TRADING ENGINE ━━━ -->
+  <div class="tg-section">
+    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">🤖 Trading Engine</div>
+
+    <div class="auto-trade-toggle" style="margin-bottom:10px;">
+      <div><div class="toggle-label">Auto Trading</div><div class="caller-stats">She opens/closes trades automatically</div></div>
+      <div class="toggle-switch" id="auto-trade-toggle"></div>
+    </div>
+
+    <div class="auto-trade-toggle" style="margin-bottom:10px;">
+      <div><div class="toggle-label">Independent Scanner</div><div class="caller-stats">Scans market every interval</div></div>
+      <div class="toggle-switch" id="independent-scanner-toggle"></div>
+    </div>
+
+    <div style="margin-bottom:10px;">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Scan Interval</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="leverage-btn interval-btn" data-min="15">15m</button>
+        <button class="leverage-btn interval-btn active" data-min="30">30m</button>
+        <button class="leverage-btn interval-btn" data-min="60">1hr</button>
+        <button class="leverage-btn interval-btn" data-min="120">2hr</button>
+        <button class="leverage-btn interval-btn" data-min="240">4hr</button>
+      </div>
+    </div>
+
     <div>
-      <div class="toggle-label">Auto Paper Trading</div>
-      <div class="caller-stats">Automatically paper trade when confidence exceeds threshold</div>
+      <div style="font-size:11px;display:flex;justify-content:space-between;color:var(--text2);margin-bottom:6px;">
+        <span>🪙 Coins to Trade</span>
+        <span id="coin-counter" style="color:var(--text2);">0 coins</span>
+      </div>
+      <div id="coin-selector" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+        <button class="coin-btn" data-coin="BTC">₿ BTC</button>
+        <button class="coin-btn" data-coin="ETH">Ξ ETH</button>
+        <button class="coin-btn" data-coin="SOL">◎ SOL</button>
+        <button class="coin-btn" data-coin="BNB">⬡ BNB</button>
+        <button class="coin-btn" data-coin="XRP">✕ XRP</button>
+        <button class="coin-btn" data-coin="DOGE">Ð DOGE</button>
+        <button class="coin-btn" data-coin="AVAX">▲ AVAX</button>
+        <button class="coin-btn" data-coin="LINK">⬡ LINK</button>
+        <button class="coin-btn" data-coin="ARB">◆ ARB</button>
+        <button class="coin-btn" data-coin="PEPE">🐸 PEPE</button>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <input class="tg-input" id="custom-coin-input" placeholder="Add custom coin..." style="margin:0;flex:1;">
+        <button class="tg-add-btn" id="add-custom-coin-btn">Add</button>
+      </div>
+      <div id="custom-coins-list" style="margin-top:6px;"></div>
     </div>
-    <div class="toggle-switch" id="auto-trade-toggle"></div>
   </div>
 
-  <!-- Independent Scanner Toggle -->
-  <div class="auto-trade-toggle" style="position:relative;">
+  <!-- ━━━ MAIN TRADE SETTINGS ━━━ -->
+  <div class="tg-section">
+    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">📈 Main Trade Settings</div>
+
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Leverage</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="leverage-btn lev-btn" data-lev="1">1x</button>
+        <button class="leverage-btn lev-btn" data-lev="3">3x</button>
+        <button class="leverage-btn lev-btn active" data-lev="5">5x</button>
+        <button class="leverage-btn lev-btn" data-lev="10">10x</button>
+        <button class="leverage-btn lev-btn" data-lev="20">20x</button>
+        <button class="leverage-btn lev-btn" data-lev="50">50x</button>
+        <button class="leverage-btn lev-btn" data-lev="100">100x</button>
+      </div>
+      <div id="lev-warning" style="font-size:10px;color:var(--red);margin-top:4px;"></div>
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Position Size ($)</div>
+      <div style="display:flex;gap:8px;">
+        <input class="tg-input" id="trade-size-input" placeholder="e.g. 500" type="number" style="margin:0;flex:1;">
+        <button class="tg-add-btn" id="save-size-btn">Save</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Max Drawdown (%)</div>
+      <div style="display:flex;gap:8px;">
+        <input class="tg-input" id="max-drawdown-input" placeholder="e.g. 5" type="number" min="0" max="100" style="margin:0;width:80px;">
+        <button class="tg-add-btn" id="save-drawdown-btn">Save</button>
+        <span id="drawdown-display" style="font-size:11px;color:var(--text2);align-self:center;"></span>
+      </div>
+    </div>
+
+    <div style="margin-bottom:8px;">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Confidence Threshold</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+        <div style="display:flex;gap:6px;">
+          <button class="leverage-btn active" id="conf-manual-btn">Manual</button>
+          <button class="leverage-btn" id="conf-auto-btn">Auto</button>
+        </div>
+        <div style="font-size:20px;font-weight:700;color:var(--accent);" id="conf-threshold-val">60%</div>
+      </div>
+      <div class="trust-dots" data-key="tradeThreshold" data-val="6" style="gap:6px;"></div>
+    </div>
+
     <div>
-      <div class="toggle-label" style="display:flex;align-items:center;gap:6px;">
-        Independent Market Scanner
-        <span class="tooltip-icon" data-tip="Asuka scans the market every hour on her own — analyzing price action, funding rates, fear & greed, whale activity and news. She makes trade decisions without needing any Telegram signal. Like having her own trading brain running 24/7.">ⓘ</span>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">TP/SL Mode</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <button class="leverage-btn active" id="tpsl-auto-btn">⚡ Auto</button>
+        <button class="leverage-btn" id="tpsl-ratio-btn">📊 Ratio</button>
+        <button class="leverage-btn" id="tpsl-manual-btn">✏️ Manual</button>
       </div>
-      <div class="caller-stats">She analyzes market every hour independently</div>
-    </div>
-    <div class="toggle-switch" id="independent-scanner-toggle"></div>
-  </div>
-
-  <!-- Coins to Trade -->
-  <div class="tg-section">
-    <div class="tg-section-title">🪙 Coins to Trade</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-      <button class="leverage-btn active" data-coin="BTC">₿ BTC</button>
-      <button class="leverage-btn active" data-coin="ETH">Ξ ETH</button>
-      <button class="leverage-btn active" data-coin="SOL">◎ SOL</button>
-      <button class="leverage-btn active" data-coin="BNB">⬡ BNB</button>
-      <button class="leverage-btn" data-coin="XRP">✕ XRP</button>
-      <button class="leverage-btn" data-coin="DOGE">Ð DOGE</button>
-      <button class="leverage-btn" data-coin="AVAX">▲ AVAX</button>
-      <button class="leverage-btn" data-coin="LINK">⬡ LINK</button>
-      <button class="leverage-btn" data-coin="ARB">◆ ARB</button>
-      <div id="custom-coin-buttons"></div>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <input class="tg-input" id="custom-coin-input" placeholder="Add coin e.g. PEPE, WIF, MEME" style="margin:0;flex:1;text-transform:uppercase;">
-      <button class="tg-add-btn" id="add-custom-coin-btn">+ Add</button>
-    </div>
-    <div style="font-size:11px;color:var(--text2);margin-top:8px;">Active coins scanned every 30 minutes</div>
-  </div>
-
-  <!-- Leverage Selector -->
-  <div class="tg-section">
-    <div class="tg-section-title">⚡ Leverage & Position Size</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-      <button class="leverage-btn active" data-lev="1">1x Spot</button>
-      <button class="leverage-btn" data-lev="2">2x</button>
-      <button class="leverage-btn" data-lev="5">5x</button>
-      <button class="leverage-btn" data-lev="10">10x</button>
-      <button class="leverage-btn" data-lev="20">20x</button>
-      <button class="leverage-btn" data-lev="50">50x</button>
-      <button class="leverage-btn" data-lev="100">100x</button>
-      <button class="leverage-btn" data-lev="150">150x 🔥</button>
-    </div>
-    <div style="font-size:11px;color:var(--text2);margin-bottom:12px;" id="lev-warning">1x — Spot trading, no liquidation risk</div>
-    <div style="display:flex;align-items:center;gap:10px;">
-      <div style="font-size:12px;color:var(--text2);">Position Size $</div>
-      <input class="tg-input" id="trade-size-input" placeholder="Auto (5% of balance)" type="number" style="margin:0;flex:1;max-width:200px;">
-      <button class="tg-add-btn" id="save-size-btn">Save</button>
-      <button class="tg-add-btn" style="background:transparent;color:var(--text2)" id="reset-size-btn">Auto</button>
-    </div>
-    <div style="font-size:11px;color:var(--text2);margin-top:6px;" id="size-hint">Auto mode uses 5% of paper balance per trade</div>
-  </div>
-
-  <!-- Confidence Threshold -->
-  <div class="tg-section">
-    <div class="tg-section-title" style="justify-content:space-between;">
-      🎯 Trade Confidence Threshold
-      <span class="tooltip-icon" data-tip="She only opens trades when her confidence meets or exceeds this threshold. Lower = trades more often but riskier. Higher = trades rarely but more selective. Auto mode lets her decide based on market conditions.">ⓘ</span>
-    </div>
-    
-    <!-- Auto/Manual toggle -->
-    <div style="display:flex;gap:8px;margin-bottom:14px;">
-      <button class="leverage-btn active" id="conf-manual-btn">Manual</button>
-      <button class="leverage-btn" id="conf-auto-btn">🤖 Auto</button>
-    </div>
-
-    <!-- Manual threshold dots -->
-    <div id="conf-manual-section">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-        <div class="trust-dots" data-key="tradeThreshold" data-val="2" style="gap:6px;"></div>
-        <div style="font-size:20px;font-weight:700;color:var(--accent);" id="conf-threshold-val">20%</div>
+      <div id="tpsl-auto-panel" style="font-size:11px;color:var(--text2);">Market-based TP/SL. Min 1:1 ratio enforced.</div>
+      <div id="tpsl-ratio-panel" style="display:none;">
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">
+          <button class="leverage-btn ratio-btn" data-ratio="1">1:1</button>
+          <button class="leverage-btn ratio-btn active" data-ratio="1.5">1:1.5</button>
+          <button class="leverage-btn ratio-btn" data-ratio="2">1:2</button>
+          <button class="leverage-btn ratio-btn" data-ratio="2.5">1:2.5</button>
+          <button class="leverage-btn ratio-btn" data-ratio="3">1:3</button>
+        </div>
+        <div id="ratio-preview" style="font-size:11px;color:var(--text2);">Example: SL 1% → TP 1.5%</div>
       </div>
-      <div id="conf-warning" style="font-size:11px;padding:6px 10px;border-radius:6px;display:none;"></div>
-    </div>
-
-    <!-- Auto section -->
-    <div id="conf-auto-section" style="display:none;">
-      <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">She automatically adjusts threshold based on:</div>
-      <div style="font-size:12px;color:var(--text2);line-height:1.8;">
-        • Fear & Greed index<br>
-        • Recent win rate<br>
-        • Market volatility<br>
-        • Funding rate extremes
+      <div id="tpsl-manual-panel" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <div style="font-size:10px;color:var(--green);margin-bottom:4px;">Take Profit %</div>
+            <input class="tg-input" id="custom-tp-input" placeholder="e.g. 2" type="number" step="0.1" style="margin:0;">
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--red);margin-bottom:4px;">Stop Loss %</div>
+            <input class="tg-input" id="custom-sl-input" placeholder="e.g. 1" type="number" step="0.1" style="margin:0;">
+          </div>
+        </div>
+        <button class="tg-add-btn" id="save-tpsl-btn" style="width:100%;">Save TP/SL</button>
+        <div id="tpsl-hint" style="font-size:11px;color:var(--text2);margin-top:4px;">TP must be ≥ SL</div>
       </div>
-      <div style="margin-top:10px;font-size:13px;color:var(--accent);" id="auto-threshold-display">Current auto threshold: calculating...</div>
     </div>
   </div>
+
+  <!-- ━━━ SCALP SETTINGS ━━━ -->
+  <div class="tg-section">
+    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">⚡ Scalp Trading</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Quick trades using Haiku Scout → 5 Agents → Sonnet pipeline</div>
+
+    <div class="auto-trade-toggle" style="margin-bottom:10px;">
+      <div><div class="toggle-label">Enable Scalp Trades</div><div class="caller-stats">Runs every 2 min independently</div></div>
+      <div class="toggle-switch" id="scalp-toggle"></div>
+    </div>
+
+    <div id="scalp-settings-panel" style="display:none;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Scalp Leverage</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button class="leverage-btn scalp-lev-btn" data-lev="5">5x</button>
+            <button class="leverage-btn scalp-lev-btn" data-lev="10">10x</button>
+            <button class="leverage-btn scalp-lev-btn active" data-lev="20">20x</button>
+            <button class="leverage-btn scalp-lev-btn" data-lev="50">50x</button>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Auto-close After</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button class="leverage-btn scalp-dur-btn" data-min="15">15m</button>
+            <button class="leverage-btn scalp-dur-btn active" data-min="30">30m</button>
+            <button class="leverage-btn scalp-dur-btn" data-min="60">1hr</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Scalp Size ($)</div>
+          <div style="display:flex;gap:6px;">
+            <input class="tg-input" id="scalp-size-input" placeholder="e.g. 50" type="number" style="margin:0;flex:1;">
+            <button class="tg-add-btn" id="save-scalp-btn">Save</button>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Max Open Scalps</div>
+          <div style="display:flex;gap:4px;">
+            <button class="leverage-btn scalp-max-btn active" data-val="3">3</button>
+            <button class="leverage-btn scalp-max-btn" data-val="5">5</button>
+            <button class="leverage-btn scalp-max-btn" data-val="10">10</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:8px;">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Scalp Confidence Threshold</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="trust-dots" data-key="scalpThreshold" data-val="5" style="gap:6px;"></div>
+          <div style="font-size:18px;font-weight:700;color:#fbbf24;" id="scalp-threshold-val">50%</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border2);padding-top:10px;margin-top:4px;">
+        <div style="font-size:11px;font-weight:600;margin-bottom:8px;">Scalp Indicators (15m)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
+            <div><div style="font-size:11px;font-weight:600;">RSI 15m</div></div>
+            <div class="toggle-switch on" id="scalp-rsi-toggle"></div>
+          </div>
+          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
+            <div><div style="font-size:11px;font-weight:600;">Bollinger Bands</div></div>
+            <div class="toggle-switch on" id="scalp-bb-toggle"></div>
+          </div>
+          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
+            <div><div style="font-size:11px;font-weight:600;">Support/Resist</div></div>
+            <div class="toggle-switch on" id="scalp-sr-toggle"></div>
+          </div>
+          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
+            <div><div style="font-size:11px;font-weight:600;">Order Book</div></div>
+            <div class="toggle-switch on" id="scalp-ob-toggle"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ━━━ INTELLIGENCE ━━━ -->
+  <div class="tg-section is-collapsed">
+    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">🧠 Intelligence Settings</div>
+
+    <!-- Chart Analysis -->
+    <div class="auto-trade-toggle" style="margin-bottom:12px;">
+      <div><div class="toggle-label">Chart Analysis</div><div class="caller-stats">Analyze chart images from TG</div></div>
+      <div class="toggle-switch" id="chart-analysis-toggle"></div>
+    </div>
+
+    <!-- MAIN TRADE INDICATORS -->
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text);">📈 Main Trade Indicators</div>
+    <div id="main-indicators-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;">
+
+      <!-- Each indicator: toggle + advanced btn -->
+      ${[
+        {id:'ta-rsi-toggle', label:'RSI', desc:'Overbought/oversold', advId:'adv-rsi'},
+        {id:'ta-ma-toggle', label:'Moving Avg', desc:'EMA9/SMA20/200', advId:'adv-ma'},
+        {id:'ta-macd-toggle', label:'MACD', desc:'Momentum shifts', advId:'adv-macd'},
+        {id:'ta-bb-toggle', label:'Bollinger Bands', desc:'Volatility squeezes', advId:'adv-bb'},
+        {id:'ta-sr-toggle', label:'Support/Resist', desc:'Key price levels', advId:'adv-sr'},
+        {id:'ta-ob-toggle', label:'Order Book', desc:'Buy/sell walls', advId:'adv-ob'},
+        {id:'ta-ichimoku-toggle', label:'Ichimoku Cloud', desc:'Trend + momentum', advId:'adv-ichi'},
+        {id:'ta-atr-toggle', label:'ATR', desc:'Smart TP/SL sizing', advId:'adv-atr'},
+        {id:'ta-vwap-toggle', label:'VWAP', desc:'Intraday bias', advId:'adv-vwap'},
+        {id:'ta-stochrsi-toggle', label:'Stoch RSI', desc:'Precise turn detection', advId:'adv-stochrsi'},
+        {id:'ta-emacross-toggle', label:'EMA Cross', desc:'Momentum crossovers', advId:'adv-emacross'},
+        {id:'ta-fundingextreme-toggle', label:'Funding Extremes', desc:'Squeeze risk detection', advId:'adv-funding'},
+        {id:'ta-pivots-toggle', label:'Pivot Points', desc:'Daily key levels', advId:'adv-pivots'},
+        {id:'ta-corr-toggle', label:'Correlation', desc:'BTC lag for alts', advId:'adv-corr'},
+        {id:'ta-time-toggle', label:'Time Filter', desc:'Best trading hours', advId:'adv-time'},
+      ].map(i => ``).join('')}
+
+    </div>
+
+    <!-- Built via JS below -->
+    <div id="main-indicators-built"></div>
+
+    <!-- SCALP INDICATORS -->
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text);border-top:1px solid var(--border2);padding-top:12px;">⚡ Scalp Indicators (15m)</div>
+    <div id="scalp-indicators-built"></div>
+
+    <!-- Advanced Settings Panel (hidden by default) -->
+    <div id="advanced-settings-panel" style="display:none;margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;border:1px solid var(--border2);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:600;" id="adv-panel-title">Advanced Settings</div>
+        <button onclick="document.getElementById('advanced-settings-panel').style.display='none'" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:16px;">✕</button>
+      </div>
+      <div id="adv-panel-content"></div>
+    </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
+            <div><div style="font-size:11px;font-weight:600;">RSI</div><div style="font-size:10px;color:var(--text2);">1h + 4h</div></div>
+            <div class="toggle-switch on" id="ta-rsi-toggle"></div>
+          </div>
+          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
+            <div><div style="font-size:11px;font-weight:600;">Moving Avg</div><div style="font-size:10px;color:var(--text2);">EMA9/SMA20/200</div></div>
+            <div class="toggle-switch on" id="ta-ma-toggle"></div>
+          </div>
+          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
+            <div><div style="font-size:11px;font-weight:600;">MACD</div><div style="font-size:10px;color:var(--text2);">Momentum</div></div>
+            <div class="toggle-switch on" id="ta-macd-toggle"></div>
+          </div>
+          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
+            <div><div style="font-size:11px;font-weight:600;">Bollinger Bands</div><div style="font-size:10px;color:var(--text2);">Squeezes</div></div>
+            <div class="toggle-switch on" id="ta-bb-toggle"></div>
+          </div>
+          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
+            <div><div style="font-size:11px;font-weight:600;">Support/Resist</div><div style="font-size:10px;color:var(--text2);">Key levels</div></div>
+            <div class="toggle-switch on" id="ta-sr-toggle"></div>
+          </div>
+          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
+            <div><div style="font-size:11px;font-weight:600;">Order Book</div><div style="font-size:10px;color:var(--text2);">Buy/sell walls</div></div>
+            <div class="toggle-switch on" id="ta-ob-toggle"></div>
+          </div>
+          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
+            <div><div style="font-size:11px;font-weight:600;">Ichimoku Cloud</div><div style="font-size:10px;color:var(--text2);">Trend + momentum</div></div>
+            <div class="toggle-switch on" id="ta-ichimoku-toggle"></div>
+          </div>
+          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
+            <div><div style="font-size:11px;font-weight:600;">ATR</div><div style="font-size:10px;color:var(--text2);">Smart TP/SL sizing</div></div>
+            <div class="toggle-switch on" id="ta-atr-toggle"></div>
+  </div>
+
+  <!-- ━━━ PROTECTION ━━━ -->
+  <div class="tg-section is-collapsed">
+    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">🛡️ Protection</div>
+
+    <!-- Daily Loss Limit -->
+    <div style="margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:6px;">🛑 Daily Loss Limit</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;">
+        <button class="leverage-btn daily-loss-btn active" data-val="0">Off</button>
+        <button class="leverage-btn daily-loss-btn" data-val="100">$100</button>
+        <button class="leverage-btn daily-loss-btn" data-val="250">$250</button>
+        <button class="leverage-btn daily-loss-btn" data-val="500">$500</button>
+        <button class="leverage-btn daily-loss-btn" data-val="1000">$1000</button>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <input class="tg-input" id="custom-loss-limit" placeholder="Custom $" type="number" style="margin:0;flex:1;">
+        <button class="tg-add-btn" id="save-loss-limit-btn">Set</button>
+      </div>
+      <div style="font-size:10px;color:var(--text2);margin-top:4px;">Auto stops ALL trading if daily loss exceeds limit</div>
+    </div>
+
+    <!-- Max Concurrent Positions -->
+    <div style="margin-bottom:12px;border-top:1px solid var(--border2);padding-top:10px;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:6px;">📊 Max Open Positions</div>
+      <div style="display:flex;gap:6px;">
+        <button class="leverage-btn max-pos-btn active" data-val="0">Unlimited</button>
+        <button class="leverage-btn max-pos-btn" data-val="3">3</button>
+        <button class="leverage-btn max-pos-btn" data-val="5">5</button>
+        <button class="leverage-btn max-pos-btn" data-val="10">10</button>
+        <button class="leverage-btn max-pos-btn" data-val="20">20</button>
+      </div>
+      <div style="font-size:10px;color:var(--text2);margin-top:4px;">Total open trades across all types</div>
+    </div>
+
+    <!-- Trading Status -->
+    <div style="margin-bottom:12px;border-top:1px solid var(--border2);padding-top:10px;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:6px;">⏸️ Trading Control</div>
+      <div id="trading-status" style="font-size:12px;color:var(--green);margin-bottom:8px;">✅ Trading Active</div>
+      <div style="display:flex;gap:8px;">
+        <button class="tg-add-btn" style="background:rgba(239,68,68,0.2);color:var(--red);flex:1;" id="pause-trading-btn">⏸️ Pause 1hr</button>
+        <button class="tg-add-btn" style="background:rgba(52,211,153,0.2);color:var(--green);flex:1;" id="resume-trading-btn">▶️ Resume</button>
+      </div>
+    </div>
+
+    <!-- Rage Trade Lock -->
+    <div style="border-top:1px solid var(--border2);padding-top:10px;margin-bottom:10px;">
+      <div class="auto-trade-toggle" style="margin-bottom:10px;">
+        <div><div class="toggle-label">Rage Trade Lock</div><div class="caller-stats">Auto-lock after consecutive losses</div></div>
+        <div class="toggle-switch" id="rage-lock-toggle"></div>
+      </div>
+      <div id="rage-lock-settings" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Lock After X Losses</div>
+            <div style="display:flex;gap:4px;">
+              <button class="leverage-btn rage-thresh-btn" data-val="2">2</button>
+              <button class="leverage-btn rage-thresh-btn active" data-val="3">3</button>
+              <button class="leverage-btn rage-thresh-btn" data-val="5">5</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Lock Duration</div>
+            <div style="display:flex;gap:4px;">
+              <button class="leverage-btn rage-dur-btn" data-min="15">15m</button>
+              <button class="leverage-btn rage-dur-btn active" data-min="30">30m</button>
+              <button class="leverage-btn rage-dur-btn" data-min="60">1hr</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="tg-add-btn" style="background:rgba(239,68,68,0.2);color:var(--red);flex:1;" id="manual-lock-btn">🔒 Lock Now</button>
+        <button class="tg-add-btn" style="background:rgba(52,211,153,0.2);color:var(--green);flex:1;" id="manual-unlock-btn">🔓 Unlock</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ━━━ DCA & ALERTS ━━━ -->
+  <div class="tg-section is-collapsed">
+    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">🤖 DCA & Price Alerts</div>
+
+    <!-- DCA Plans -->
+    <div style="margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">💰 DCA Automation</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Auto-buy at set intervals</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+        <div>
+          <div style="font-size:10px;color:var(--text2);margin-bottom:3px;">Coin</div>
+          <select id="dca-coin" class="tg-input" style="margin:0;">
+            <option value="BTC">BTC</option><option value="ETH">ETH</option>
+            <option value="SOL">SOL</option><option value="BNB">BNB</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text2);margin-bottom:3px;">Amount ($)</div>
+          <input class="tg-input" id="dca-amount" placeholder="e.g. 50" type="number" style="margin:0;">
+        </div>
+      </div>
+      <div style="margin-bottom:8px;">
+        <div style="font-size:10px;color:var(--text2);margin-bottom:4px;">Interval</div>
+        <div style="display:flex;gap:4px;">
+          <button class="leverage-btn dca-interval-btn" data-val="daily">Daily</button>
+          <button class="leverage-btn dca-interval-btn active" data-val="weekly">Weekly</button>
+          <button class="leverage-btn dca-interval-btn" data-val="biweekly">2 Weeks</button>
+          <button class="leverage-btn dca-interval-btn" data-val="monthly">Monthly</button>
+        </div>
+      </div>
+      <button class="tg-add-btn" id="add-dca-btn" style="width:100%;margin-bottom:8px;">Add DCA Plan</button>
+      <div id="dca-plans-list" style="font-size:12px;"></div>
+    </div>
+
+    <!-- Smart Price Alerts -->
+    <div style="border-top:1px solid var(--border2);padding-top:12px;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">🎯 Smart Price Alerts</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Alert with AI market context when price hits level</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+        <div>
+          <div style="font-size:10px;color:var(--text2);margin-bottom:3px;">Coin</div>
+          <select id="alert-coin" class="tg-input" style="margin:0;">
+            <option value="BTC">BTC</option><option value="ETH">ETH</option>
+            <option value="SOL">SOL</option><option value="BNB">BNB</option>
+            <option value="DOGE">DOGE</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text2);margin-bottom:3px;">Price ($)</div>
+          <input class="tg-input" id="alert-price" placeholder="e.g. 60000" type="number" style="margin:0;">
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <button class="leverage-btn alert-dir-btn active" data-val="above">Above</button>
+        <button class="leverage-btn alert-dir-btn" data-val="below">Below</button>
+      </div>
+      <button class="tg-add-btn" id="add-alert-btn" style="width:100%;margin-bottom:8px;">Set Alert</button>
+      <div id="alerts-list" style="font-size:12px;"></div>
+    </div>
+  </div>
+
+  <!-- ━━━ INSIGHTS ━━━ -->
+  <div class="tg-section is-collapsed">
+    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">💡 Insights & Tools</div>
+
+    <!-- Psychology Score -->
+    <div style="margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">🧠 Trading Psychology</div>
+      <div id="psych-score-display" style="text-align:center;padding:12px 0;">
+        <div style="font-size:42px;font-weight:800;" id="psych-score-num">--</div>
+        <div style="font-size:12px;color:var(--text2);">Score / 100</div>
+        <div style="font-size:16px;font-weight:700;margin-top:4px;" id="psych-grade">-</div>
+      </div>
+      <div id="psych-issues" style="font-size:11px;"></div>
+      <button class="tg-add-btn" style="width:100%;margin-top:6px;" id="refresh-psych-btn">Refresh Score</button>
+    </div>
+
+    <!-- Market Regime -->
+    <div style="border-top:1px solid var(--border2);padding-top:12px;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:600;">🌍 Market Regime</div>
+        <button class="tg-add-btn" id="refresh-regime-btn" style="font-size:11px;padding:4px 10px;">Refresh</button>
+      </div>
+      <div id="regime-display" style="font-size:12px;color:var(--text2);padding:8px;background:var(--bg3);border-radius:6px;">Loading...</div>
+    </div>
+
+    <!-- Trade Analytics -->
+    <div style="border-top:1px solid var(--border2);padding-top:12px;margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">📊 Performance Analytics</div>
+      <div id="analytics-display" style="font-size:12px;color:var(--text2);">Loading...</div>
+    </div>
+
+    <!-- Advanced Settings -->
+    <div style="border-top:1px solid var(--border2);padding-top:12px;margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">⚙️ Advanced Trading</div>
+
+      <div class="auto-trade-toggle" style="margin-bottom:8px;">
+        <div><div class="toggle-label">Kelly Criterion Sizing</div><div class="caller-stats">Auto-sizes based on win rate</div></div>
+        <div class="toggle-switch" id="kelly-toggle"></div>
+      </div>
+
+      <div style="margin-bottom:8px;">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Loss Cooldown (min per coin)</div>
+        <div style="display:flex;gap:6px;">
+          <button class="leverage-btn cooldown-btn active" data-val="0">Off</button>
+          <button class="leverage-btn cooldown-btn" data-val="15">15m</button>
+          <button class="leverage-btn cooldown-btn" data-val="30">30m</button>
+          <button class="leverage-btn cooldown-btn" data-val="60">1hr</button>
+        </div>
+        <div style="font-size:10px;color:var(--text2);margin-top:3px;">Pause trading after loss on specific coin</div>
+      </div>
+
+      <div style="margin-bottom:8px;">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Multi-Timeframe Confirmation</div>
+        <div style="display:flex;gap:6px;">
+          <button class="leverage-btn mtf-btn active" data-val="off">Off</button>
+          <button class="leverage-btn mtf-btn" data-val="soft">Soft (inject)</button>
+          <button class="leverage-btn mtf-btn" data-val="hard">Hard (require)</button>
+        </div>
+        <div style="font-size:10px;color:var(--text2);margin-top:3px;">Require 1h+4h+1d to agree before trading</div>
+      </div>
+    </div>
+
+    <!-- Second Brain -->
+    <div style="border-top:1px solid var(--border2);padding-top:12px;margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">🧠 Second Brain</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <input class="tg-input" id="memory-input" placeholder="Remember anything..." style="margin:0;flex:1;">
+        <button class="tg-add-btn" id="save-memory-btn">Save</button>
+      </div>
+      <div id="memories-list" style="font-size:11px;"></div>
+    </div>
+
+    <!-- Morning Briefing -->
+    <div style="border-top:1px solid var(--border2);padding-top:12px;">
+      <div class="auto-trade-toggle">
+        <div><div class="toggle-label">🌅 Morning Briefing</div><div class="caller-stats">Daily 8am market summary</div></div>
+        <div class="toggle-switch" id="morning-briefing-toggle"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ━━━ PERFORMANCE ━━━ -->
   <div class="trading-hero">
-    <div>
-      <div class="trading-stat-val" id="pt-winrate">0%</div>
+    <div class="trading-stat">
       <div class="trading-stat-label">Win Rate</div>
+      <div class="trading-stat-val" id="pt-winrate">0%</div>
     </div>
-    <div>
-      <div class="trading-stat-val" id="pt-pnl">$0</div>
+    <div class="trading-stat">
       <div class="trading-stat-label">Total P&L</div>
+      <div class="trading-stat-val" id="pt-pnl">$0</div>
     </div>
-    <div>
-      <div class="trading-stat-val" id="pt-total">0</div>
+    <div class="trading-stat">
       <div class="trading-stat-label">Trades</div>
+      <div class="trading-stat-val" id="pt-total">0</div>
     </div>
   </div>
-  <div style="text-align:center;font-size:12px;color:var(--text2);margin-top:-8px;">Paper Balance: <span id="pt-balance" style="color:var(--accent);font-weight:600;">$10,000</span></div>
+  <div style="text-align:center;font-size:12px;color:var(--text2);margin-top:-8px;margin-bottom:12px;">
+    Balance: <span id="pt-balance" style="color:var(--accent);font-weight:600;">$100,000</span>
+    <span style="color:#f0b90b;font-size:10px;"> • Binance only</span>
+  </div>
+
+  <!-- Spot Trading -->
+  <div class="tg-section is-collapsed">
+    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">🟢 Spot Trading</div>
+    <div style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:12px;font-weight:600;">Wallet Holdings</div>
+        <button class="tg-add-btn" id="refresh-spot-btn" style="padding:4px 10px;font-size:11px;">Refresh</button>
+      </div>
+      <div id="spot-balances-list" style="font-size:12px;color:var(--text2);">Loading...</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+      <div>
+        <div style="font-size:11px;color:var(--green);margin-bottom:4px;">Market Buy</div>
+        <div style="display:flex;gap:4px;">
+          <select id="spot-buy-coin" class="tg-input" style="margin:0;flex:1;">
+            <option value="BTC">BTC</option><option value="ETH">ETH</option>
+            <option value="BNB">BNB</option><option value="SOL">SOL</option>
+            <option value="XRP">XRP</option><option value="DOGE">DOGE</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:4px;">
+          <input class="tg-input" id="spot-buy-amount" placeholder="Amount $" type="number" style="margin:0;flex:1;">
+          <button class="tg-add-btn" id="spot-buy-btn" style="background:rgba(52,211,153,0.2);color:var(--green);">Buy</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--red);margin-bottom:4px;">Market Sell</div>
+        <div style="display:flex;gap:4px;">
+          <select id="spot-sell-coin" class="tg-input" style="margin:0;flex:1;">
+            <option value="BTC">BTC</option><option value="ETH">ETH</option>
+            <option value="BNB">BNB</option><option value="SOL">SOL</option>
+            <option value="XRP">XRP</option><option value="DOGE">DOGE</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;">
+          <button class="leverage-btn spot-sell-pct-btn active" data-pct="25" style="padding:3px 6px;font-size:10px;">25%</button>
+          <button class="leverage-btn spot-sell-pct-btn" data-pct="50" style="padding:3px 6px;font-size:10px;">50%</button>
+          <button class="leverage-btn spot-sell-pct-btn" data-pct="100" style="padding:3px 6px;font-size:10px;">All</button>
+          <button class="tg-add-btn" id="spot-sell-btn" style="background:rgba(239,68,68,0.2);color:var(--red);padding:4px 8px;">Sell</button>
+        </div>
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--border2);padding-top:8px;">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Limit Order</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <select id="spot-limit-coin" class="tg-input" style="margin:0;width:70px;">
+          <option value="BTC">BTC</option><option value="ETH">ETH</option><option value="BNB">BNB</option><option value="SOL">SOL</option>
+        </select>
+        <input class="tg-input" id="spot-limit-price" placeholder="Price $" type="number" style="margin:0;flex:1;">
+        <input class="tg-input" id="spot-limit-amount" placeholder="Amount $" type="number" style="margin:0;flex:1;">
+        <button class="tg-add-btn" id="spot-limit-buy-btn" style="background:rgba(52,211,153,0.15);color:var(--green);font-size:11px;">Limit Buy</button>
+      </div>
+      <div id="open-limit-orders-list" style="font-size:11px;color:var(--text2);margin-top:8px;">No limit orders</div>
+    </div>
+    <div id="spot-status" style="font-size:11px;margin-top:8px;"></div>
+  </div>
 
   <!-- Open Positions -->
   <div class="tg-section">
-    <div class="tg-section-title">🟡 Open Positions</div>
-    <div id="pt-open-list">
-      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No open positions</div>
-    </div>
+    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">🟡 Open Positions</div>
+    <div id="pt-open-list"><div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No open positions</div></div>
   </div>
 
   <!-- Trade History -->
-  <div class="tg-section">
-    <div class="tg-section-title">📋 Trade History</div>
-    <div id="pt-history-list">
-      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No trades yet</div>
-    </div>
+  <div class="tg-section is-collapsed">
+    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">📋 Trade History</div>
+    <div id="pt-history-list"></div>
   </div>
 
-  <!-- Lessons Learned -->
-  <div class="tg-section">
-    <div class="tg-section-title">🧠 What She's Learned</div>
-    <div id="lessons-list">
-      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">Lessons appear after first trades close</div>
-    </div>
+  <!-- Lessons -->
+  <div class="tg-section is-collapsed">
+    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">🧠 What She Learned</div>
+    <div id="pt-lessons-list"></div>
   </div>
 
-  <!-- Caller Leaderboard -->
-  <div class="tg-section">
-    <div class="tg-section-title">🏆 Caller Leaderboard</div>
-    <div id="pt-leaderboard">
-      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No data yet</div>
-    </div>
+  <!-- Leaderboard -->
+  <div class="tg-section is-collapsed">
+    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">🏆 Caller Leaderboard</div>
+    <div id="tg-callers-list"></div>
   </div>
 
-</div>
-</div>
-
+</div><!-- end page 3 -->
 </div><!-- end pages-wrapper -->
 
 <!-- EDIT PAGE -->
@@ -1773,6 +2435,17 @@
 <script src="./node_modules/pixi.js/dist/browser/pixi.min.js"></script>
 <script src="./node_modules/pixi-live2d-display/dist/cubism4.min.js"></script>
 <script>
+const levWarnings = {
+  1: '1x — Spot trading, no liquidation risk',
+  2: '2x — Low leverage, safe for beginners',
+  5: '5x — Moderate leverage, manageable risk',
+  10: '10x — High leverage, significant risk',
+  20: '20x — Very high leverage, expert only',
+  50: '50x — Extreme leverage, liquidation likely on small moves',
+  100: '100x — Maximum risk, 1% move = liquidation',
+  150: '150x — EXTREME — 0.67% move = liquidation'
+}
+
 const { ipcRenderer } = require('electron')
 const { Live2DModel } = PIXI.live2d
 
@@ -1809,10 +2482,18 @@ async function playAudio(b64) {
 // ── Waifu ──
 async function initWaifu() {
   try {
+    // Wait for layout to be ready
+    await new Promise(r => setTimeout(r, 200));
     const canvas = document.getElementById('waifu-canvas')
     const wrap   = document.getElementById('waifu-wrap')
+    if (!canvas || !wrap) { console.error('Waifu elements not found'); return; }
     const w = wrap.clientWidth || 200
     const h = wrap.clientHeight || 420
+    if (w === 0 || h === 0) {
+      // Retry after layout
+      setTimeout(initWaifu, 500);
+      return;
+    }
     canvas.width=w; canvas.height=h
     const app = new PIXI.Application({view:canvas,autoStart:true,transparent:true,backgroundAlpha:0,width:w,height:h})
     waifuModel = await Live2DModel.from('./assets/model/huohuo.model3.json')
@@ -2107,6 +2788,7 @@ async function loadTelegramUI() {
     renderTgGroups(stats.groups)
     renderTgCallers(stats.callers, stats.stats)
     renderIntelFeed()
+    loadBotStatus()
 
     // Restore notification toggles
     if (settings?.tradeNotifications) document.getElementById('trade-notify-toggle').classList.add('on')
@@ -2133,7 +2815,7 @@ function renderTgGroups(groups) {
 }
 
 function renderTgCallers(callers, stats) {
-  const list = document.getElementById('tg-callers-list')
+  const list = document.getElementById('tg-tracked-callers-list') || document.getElementById('tg-callers-list')
   if (!callers?.length) { list.innerHTML = '<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No callers tracked yet</div>'; return }
   list.innerHTML = callers.map(c => {
     const s = stats?.[c] || { winRate: 0, total: 0 }
@@ -2240,6 +2922,43 @@ document.getElementById('tg-verify-btn').addEventListener('click', async () => {
   }, 4000)
 })
 
+// Telegram Bot Authentication
+async function loadBotStatus() {
+  const settings = await ipcRenderer.invoke('get-settings')
+  if (settings?.telegramBotChatId) {
+    document.getElementById('bot-not-connected').style.display = 'none'
+    document.getElementById('bot-connected').style.display = 'block'
+  }
+}
+
+document.getElementById('bot-connect-btn').addEventListener('click', async () => {
+  const code = document.getElementById('bot-auth-code').value.trim().toUpperCase()
+  if (!code || code.length < 8) {
+    document.getElementById('bot-auth-error').textContent = 'Enter the full code (e.g. ASK-1234)'
+    document.getElementById('bot-auth-error').style.display = 'block'
+    return
+  }
+  
+  const result = await ipcRenderer.invoke('authenticate-bot', code)
+  if (result.success) {
+    document.getElementById('bot-not-connected').style.display = 'none'
+    document.getElementById('bot-connected').style.display = 'block'
+    document.getElementById('bot-auth-error').style.display = 'none'
+  } else {
+    document.getElementById('bot-auth-error').textContent = result.error || 'Invalid code — try again'
+    document.getElementById('bot-auth-error').style.display = 'block'
+  }
+})
+
+document.getElementById('bot-disconnect-btn').addEventListener('click', async () => {
+  const settings = await ipcRenderer.invoke('get-settings')
+  settings.telegramBotChatId = null
+  await ipcRenderer.invoke('save-settings', settings)
+  document.getElementById('bot-connected').style.display = 'none'
+  document.getElementById('bot-not-connected').style.display = 'block'
+  document.getElementById('bot-auth-code').value = ''
+})
+
 // Change notification contact
 document.getElementById('tg-change-contact').addEventListener('click', () => {
   const form = document.getElementById('tg-contact-form')
@@ -2336,6 +3055,10 @@ document.querySelector('.trust-dots[data-key="tradeThreshold"]')?.addEventListen
   document.getElementById('conf-threshold-val').textContent = `${pct}%`
   ipcRenderer.send('set-setting', 'paperTradeThreshold', pct)
   ipcRenderer.send('set-setting', 'independentScanThreshold', pct)
+  
+  // Update display
+  const mainDisp = document.getElementById('main-threshold-display')
+  if (mainDisp) mainDisp.textContent = `${pct}%`
 
   const warning = confWarnings[idx]
   const warningEl = document.getElementById('conf-warning')
@@ -2372,18 +3095,469 @@ document.getElementById('conf-auto-btn').addEventListener('click', async () => {
 async function restoreConfidenceSettings() {
   const settings = await ipcRenderer.invoke('get-settings')
   if (settings?.autoThreshold) {
-    document.getElementById('conf-auto-btn').click()
+    document.getElementById('conf-auto-btn')?.click()
   } else {
-    const threshold = settings?.paperTradeThreshold || 20
+    const threshold = settings?.paperTradeThreshold || 60
     const dotVal = Math.round(threshold / 10)
     const container = document.querySelector('.trust-dots[data-key="tradeThreshold"]')
     if (container) {
       container.dataset.val = dotVal
       container.querySelectorAll('.trust-dot').forEach((d, i) => d.classList.toggle('filled', i < dotVal))
-      document.getElementById('conf-threshold-val').textContent = `${threshold}%`
+      if (document.getElementById('conf-threshold-val')) document.getElementById('conf-threshold-val').textContent = `${threshold}%`
     }
   }
+
+  // Restore TP/SL settings
+  if (settings?.tpSlMode) {
+    showTpSlPanel(settings.tpSlMode)
+  }
+
+  // Restore main leverage buttons
+  if (settings?.paperLeverage) {
+    document.querySelectorAll('.lev-btn').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.lev) === settings.paperLeverage)
+    })
+    const warn = document.getElementById('lev-warning')
+    if (warn) warn.textContent = levWarnings[settings.paperLeverage] || ''
+  }
+
+  // Restore scalp indicators
+  const scalpInds = settings?.scalpIndicators || {}
+  Object.entries({ 'scalp-rsi-toggle': 'rsi', 'scalp-bb-toggle': 'bb', 'scalp-sr-toggle': 'sr', 'scalp-ob-toggle': 'ob' }).forEach(([id, key]) => {
+    const el = document.getElementById(id)
+    if (!el) return
+    if (scalpInds[key] === false) el.classList.remove('on')
+    else el.classList.add('on')
+  })
+
+  // Restore TA indicators
+  const taInds = settings?.enabledIndicators || {}
+  Object.entries({ 'ta-rsi-toggle': 'rsi', 'ta-ma-toggle': 'ma', 'ta-macd-toggle': 'macd', 'ta-bb-toggle': 'bb', 'ta-sr-toggle': 'sr', 'ta-ob-toggle': 'ob', 'ta-corr-toggle': 'corr', 'ta-time-toggle': 'time', 'ta-ichimoku-toggle': 'ichimoku', 'ta-atr-toggle': 'atr', 'ta-vwap-toggle': 'vwap', 'ta-stochrsi-toggle': 'stochRsi', 'ta-emacross-toggle': 'emaCross', 'ta-fundingextreme-toggle': 'fundingExtreme', 'ta-pivots-toggle': 'pivots' }).forEach(([id, key]) => {
+    const el = document.getElementById(id)
+    if (!el) return
+    if (taInds[key] === false) el.classList.remove('on')
+    else el.classList.add('on')
+  })
+  if (settings?.taMode === 'manual') {
+    document.getElementById('ta-manual-btn')?.classList.add('active')
+    document.getElementById('ta-auto-btn')?.classList.remove('active')
+    document.getElementById('ta-manual-panel').style.display = 'block'
+  }
+  if (settings?.tpSlRatio) {
+  // Restore RSI period
+  if (settings?.rsiPeriod) {
+    document.querySelectorAll('.rsi-period-btn').forEach(b =>
+      b.classList.toggle('active', parseInt(b.dataset.val) === settings.rsiPeriod)
+    )
+  }
+  // Restore Ichimoku settings
+  if (settings?.ichimokuTenkan) document.querySelectorAll('.ichi-tenkan-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.val) === settings.ichimokuTenkan))
+  if (settings?.ichimokuKijun) document.querySelectorAll('.ichi-kijun-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.val) === settings.ichimokuKijun))
+  if (settings?.ichimokuSenkouB) document.querySelectorAll('.ichi-senkou-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.val) === settings.ichimokuSenkouB))
+    document.querySelectorAll('.ratio-btn').forEach(b => {
+      b.classList.toggle('active', parseFloat(b.dataset.ratio) === settings.tpSlRatio)
+    })
+    document.getElementById('ratio-preview').textContent = `Example: SL 1% → TP ${settings.tpSlRatio}%`
+  }
+  if (settings?.customTpPct) document.getElementById('custom-tp-input').value = settings.customTpPct
+  if (settings?.customSlPct) document.getElementById('custom-sl-input').value = settings.customSlPct
+
+  if (settings?.maxScalpTrades) {
+    document.querySelectorAll('.scalp-max-btn').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.val) === settings.maxScalpTrades)
+    })
+  }
+
+  // Restore scalp threshold
+  const scalpThreshold = settings?.scalpThreshold || 45
+  const scalpDotVal = Math.round(scalpThreshold / 10)
+  const scalpContainer = document.querySelector('.trust-dots[data-key="scalpThreshold"]')
+  if (scalpContainer) {
+    scalpContainer.dataset.val = scalpDotVal
+    scalpContainer.querySelectorAll('.trust-dot').forEach((d, i) => d.classList.toggle('filled', i < scalpDotVal))
+    if (document.getElementById('scalp-threshold-val')) document.getElementById('scalp-threshold-val').textContent = `${scalpThreshold}%`
+  }
+
+  // Update displays
+  const mainDisp = document.getElementById('main-threshold-display')
+  const scalpDisp = document.getElementById('scalp-threshold-display')
+  const mainThreshold = settings?.paperTradeThreshold || 60
+  if (mainDisp) mainDisp.textContent = `${mainThreshold}%`
+  if (scalpDisp) scalpDisp.textContent = `${scalpThreshold}%`
 }
+
+// ── Daily Loss Limit ─────────────────────────────────────────────────────
+document.querySelectorAll('.daily-loss-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.daily-loss-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    ipcRenderer.send('set-setting', 'dailyLossLimit', parseFloat(this.dataset.val))
+  })
+})
+document.getElementById('save-loss-limit-btn')?.addEventListener('click', () => {
+  const val = parseFloat(document.getElementById('custom-loss-limit').value)
+  if (val > 0) {
+    document.querySelectorAll('.daily-loss-btn').forEach(b => b.classList.remove('active'))
+    ipcRenderer.send('set-setting', 'dailyLossLimit', val)
+    document.getElementById('custom-loss-limit').style.borderColor = 'var(--green)'
+    setTimeout(() => document.getElementById('custom-loss-limit').style.borderColor = '', 1000)
+  }
+})
+
+// ── Max Positions ────────────────────────────────────────────────────────
+document.querySelectorAll('.max-pos-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.max-pos-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    ipcRenderer.send('set-setting', 'maxOpenPositions', parseInt(this.dataset.val))
+  })
+})
+
+// ── Trading Control ──────────────────────────────────────────────────────
+document.getElementById('pause-trading-btn')?.addEventListener('click', async () => {
+  ipcRenderer.send('pause-trading', 60)
+  document.getElementById('trading-status').textContent = '⏸️ Trading Paused (1 hour)'
+  document.getElementById('trading-status').style.color = 'var(--red)'
+})
+document.getElementById('resume-trading-btn')?.addEventListener('click', () => {
+  ipcRenderer.send('resume-trading')
+  document.getElementById('trading-status').textContent = '✅ Trading Active'
+  document.getElementById('trading-status').style.color = 'var(--green)'
+})
+
+// ── DCA Plans ────────────────────────────────────────────────────────────
+let dcaInterval = 'weekly'
+document.querySelectorAll('.dca-interval-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.dca-interval-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    dcaInterval = this.dataset.val
+  })
+})
+
+document.getElementById('add-dca-btn')?.addEventListener('click', async () => {
+  const coin = document.getElementById('dca-coin').value
+  const amount = parseFloat(document.getElementById('dca-amount').value)
+  if (!amount || amount <= 0) return
+  ipcRenderer.send('save-dca-plan', { coin, amount, interval: dcaInterval, enabled: true })
+  document.getElementById('dca-amount').value = ''
+  setTimeout(loadDCAPlans, 500)
+})
+
+async function loadDCAPlans() {
+  const list = document.getElementById('dca-plans-list')
+  if (!list) return
+  const data = await ipcRenderer.invoke('get-dca-plans').catch(() => ({ plans: [] }))
+  if (!data.plans?.length) { list.innerHTML = '<div style="color:var(--text2);font-size:11px;">No DCA plans yet</div>'; return }
+  list.innerHTML = data.plans.map(p => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--bg3);border-radius:6px;margin-bottom:4px;">
+      <div>
+        <span style="font-weight:600;">${p.coin}</span>
+        <span style="color:var(--text2);font-size:11px;"> $${p.amount} ${p.interval}</span>
+        ${p.lastRun ? `<div style="font-size:10px;color:var(--text2);">Last: ${new Date(p.lastRun).toLocaleDateString()}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <div class="toggle-switch ${p.enabled ? 'on' : ''}" onclick="toggleDCA(${p.id})"></div>
+        <button onclick="deleteDCA(${p.id})" style="background:none;border:none;color:var(--red);cursor:pointer;">✕</button>
+      </div>
+    </div>`).join('')
+}
+
+function toggleDCA(id) {
+  ipcRenderer.invoke('get-dca-plans').then(data => {
+    const plan = data.plans.find(p => p.id === id)
+    if (plan) { plan.enabled = !plan.enabled; ipcRenderer.send('save-dca-plan', plan); setTimeout(loadDCAPlans, 300) }
+  })
+}
+function deleteDCA(id) { ipcRenderer.send('delete-dca-plan', id); setTimeout(loadDCAPlans, 300) }
+
+// ── Price Alerts ─────────────────────────────────────────────────────────
+let alertDirection = 'above'
+document.querySelectorAll('.alert-dir-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.alert-dir-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    alertDirection = this.dataset.val
+  })
+})
+
+document.getElementById('add-alert-btn')?.addEventListener('click', async () => {
+  const coin = document.getElementById('alert-coin').value
+  const price = parseFloat(document.getElementById('alert-price').value)
+  if (!price || price <= 0) return
+  ipcRenderer.send('set-price-alert', { coin, price, direction: alertDirection })
+  document.getElementById('alert-price').value = ''
+  setTimeout(loadAlerts, 300)
+})
+
+async function loadAlerts() {
+  const list = document.getElementById('alerts-list')
+  if (!list) return
+  const alerts = await ipcRenderer.invoke('get-price-alerts').catch(() => [])
+  if (!alerts?.length) { list.innerHTML = '<div style="color:var(--text2);font-size:11px;">No alerts set</div>'; return }
+  list.innerHTML = alerts.map((a, i) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--bg3);border-radius:6px;margin-bottom:4px;">
+      <div style="font-size:12px;">
+        <span style="font-weight:600;">${a.coin}</span>
+        <span style="color:var(--text2);"> ${a.direction} $${a.price.toLocaleString()}</span>
+      </div>
+      <button onclick="removeAlert(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;">✕</button>
+    </div>`).join('')
+}
+
+function removeAlert(idx) { ipcRenderer.send('remove-price-alert', idx); setTimeout(loadAlerts, 300) }
+
+// Load DCA and alerts when trading page opens
+const _origApplySettings = applySettingsToUI
+async function applySettingsToUI(settings) {
+  await _origApplySettings(settings)
+  loadDCAPlans()
+  loadAlerts()
+
+  // Restore daily loss limit
+  if (settings?.dailyLossLimit) {
+    const matchBtn = [...document.querySelectorAll('.daily-loss-btn')].find(b => parseFloat(b.dataset.val) === settings.dailyLossLimit)
+    if (matchBtn) { document.querySelectorAll('.daily-loss-btn').forEach(b => b.classList.remove('active')); matchBtn.classList.add('active') }
+    else document.getElementById('custom-loss-limit').value = settings.dailyLossLimit
+  }
+  if (settings?.maxOpenPositions !== undefined) {
+    document.querySelectorAll('.max-pos-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.val) === settings.maxOpenPositions))
+  }
+}
+
+// ── Analytics + Regime + Advanced Settings ───────────────────────────────
+
+async function loadMarketRegime() {
+  const el = document.getElementById('regime-display')
+  if (!el) return
+  try {
+    const regime = await ipcRenderer.invoke('get-market-regime')
+    if (!regime) { el.textContent = 'Unable to detect'; return }
+    const colors = { bull: 'var(--green)', bear: 'var(--red)', sideways: '#fbbf24', unknown: 'var(--text2)' }
+    el.innerHTML = `
+      <div style="color:${colors[regime.regime]};font-weight:700;font-size:14px;">${regime.regime?.toUpperCase()} MARKET (${regime.strength})</div>
+      <div style="margin-top:4px;color:var(--text2);font-size:11px;">Bias: ${regime.bias?.toUpperCase()} | 30d change: ${regime.priceChange30d}% | RSI: ${regime.rsi?.toFixed(0)} | FG: ${regime.fgNum}</div>`
+  } catch(e) { el.textContent = 'Error loading regime' }
+}
+
+async function loadTradeAnalytics() {
+  const el = document.getElementById('analytics-display')
+  if (!el) return
+  try {
+    const analytics = await ipcRenderer.invoke('get-trade-analytics')
+    if (!analytics) { el.textContent = 'Not enough trades yet (need 5+)'; return }
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+        <div style="padding:6px;background:var(--bg3);border-radius:6px;">
+          <div style="font-size:10px;color:var(--text2);">Best Coin</div>
+          <div style="font-size:13px;font-weight:700;color:var(--green);">${analytics.bestCoin?.coin || '-'}</div>
+          <div style="font-size:10px;color:var(--text2);">$${analytics.bestCoin?.pnl?.toFixed(0) || 0} P&L</div>
+        </div>
+        <div style="padding:6px;background:var(--bg3);border-radius:6px;">
+          <div style="font-size:10px;color:var(--text2);">Worst Coin</div>
+          <div style="font-size:13px;font-weight:700;color:var(--red);">${analytics.worstCoin?.coin || '-'}</div>
+          <div style="font-size:10px;color:var(--text2);">$${analytics.worstCoin?.pnl?.toFixed(0) || 0} P&L</div>
+        </div>
+        <div style="padding:6px;background:var(--bg3);border-radius:6px;">
+          <div style="font-size:10px;color:var(--text2);">Best Hour (UTC)</div>
+          <div style="font-size:13px;font-weight:700;">${analytics.bestHour !== null ? analytics.bestHour?.hour + ':00' : '-'}</div>
+          <div style="font-size:10px;color:var(--text2);">$${analytics.bestHour?.pnl?.toFixed(0) || 0} P&L</div>
+        </div>
+        <div style="padding:6px;background:var(--bg3);border-radius:6px;">
+          <div style="font-size:10px;color:var(--text2);">Avg Hold Time</div>
+          <div style="font-size:13px;font-weight:700;">${analytics.avgHoldMin}m</div>
+          <div style="font-size:10px;color:var(--text2);">${analytics.totalTrades} total trades</div>
+        </div>
+      </div>`
+  } catch(e) { el.textContent = 'Error loading analytics' }
+}
+
+document.getElementById('refresh-regime-btn')?.addEventListener('click', loadMarketRegime)
+
+document.getElementById('kelly-toggle')?.addEventListener('click', function() {
+  this.classList.toggle('on')
+  ipcRenderer.send('set-setting', 'useKellyCriterion', this.classList.contains('on'))
+})
+
+document.querySelectorAll('.cooldown-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.cooldown-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    ipcRenderer.send('set-setting', 'lossCooldownMinutes', parseInt(this.dataset.val))
+  })
+})
+
+document.querySelectorAll('.mtf-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.mtf-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    ipcRenderer.send('set-setting', 'mtfMode', this.dataset.val)
+  })
+})
+
+// Load analytics when trading tab opens
+const _origLoadTradingUI = loadTradingUI
+async function loadTradingUI() {
+  await _origLoadTradingUI()
+  setTimeout(loadMarketRegime, 1000)
+  setTimeout(loadTradeAnalytics, 1500)
+}
+
+// ── Analytics + Regime restore ────────────────────────────────────────────
+function restoreAdvancedSettings(settings) {
+  if (!settings) return
+  if (settings.useKellyCriterion) document.getElementById('kelly-toggle')?.classList.add('on')
+  if (settings.lossCooldownMinutes !== undefined) {
+    document.querySelectorAll('.cooldown-btn').forEach(b =>
+      b.classList.toggle('active', parseInt(b.dataset.val) === settings.lossCooldownMinutes)
+    )
+  }
+  if (settings.mtfMode) {
+    document.querySelectorAll('.mtf-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.val === settings.mtfMode)
+    )
+  }
+}
+
+// ── Technical Indicators ──────────────────────────────────────────────────
+document.getElementById('ta-auto-btn').addEventListener('click', () => {
+  document.getElementById('ta-auto-btn').classList.add('active')
+  document.getElementById('ta-manual-btn').classList.remove('active')
+  document.getElementById('ta-manual-panel').style.display = 'none'
+  ipcRenderer.send('set-setting', 'taMode', 'auto')
+  // Enable all indicators
+  const all = { rsi: true, ma: true, macd: true, bb: true, sr: true, ob: true, corr: true, time: true }
+  ipcRenderer.send('set-setting', 'enabledIndicators', all)
+})
+
+document.getElementById('ta-manual-btn').addEventListener('click', () => {
+  document.getElementById('ta-manual-btn').classList.add('active')
+  document.getElementById('ta-auto-btn').classList.remove('active')
+  document.getElementById('ta-manual-panel').style.display = 'block'
+  ipcRenderer.send('set-setting', 'taMode', 'manual')
+})
+
+// Individual indicator toggles
+const taToggles = {
+  'ta-rsi-toggle': 'rsi',
+  'ta-ma-toggle': 'ma',
+  'ta-macd-toggle': 'macd',
+  'ta-bb-toggle': 'bb',
+  'ta-sr-toggle': 'sr',
+  'ta-ob-toggle': 'ob',
+  'ta-corr-toggle': 'corr',
+  'ta-time-toggle': 'time'
+}
+
+Object.entries(taToggles).forEach(([id, key]) => {
+  const el = document.getElementById(id)
+  if (!el) return
+  el.addEventListener('click', async function() {
+    this.classList.toggle('on')
+    const settings = await ipcRenderer.invoke('get-settings')
+    const indicators = settings?.enabledIndicators || {}
+    indicators[key] = this.classList.contains('on')
+    ipcRenderer.send('set-setting', 'enabledIndicators', indicators)
+  })
+})
+
+// Scalp indicator toggles
+const scalpToggles = {
+  'scalp-rsi-toggle': 'rsi',
+  'scalp-bb-toggle': 'bb',
+  'scalp-sr-toggle': 'sr',
+  'scalp-ob-toggle': 'ob'
+}
+
+Object.entries(scalpToggles).forEach(([id, key]) => {
+  const el = document.getElementById(id)
+  if (!el) return
+  el.addEventListener('click', async function() {
+    this.classList.toggle('on')
+    const settings = await ipcRenderer.invoke('get-settings')
+    const indicators = settings?.scalpIndicators || {}
+    indicators[key] = this.classList.contains('on')
+    ipcRenderer.send('set-setting', 'scalpIndicators', indicators)
+  })
+})
+
+// ── TP/SL Settings ───────────────────────────────────────────────────────
+let currentTpSlMode = 'auto'
+
+function showTpSlPanel(mode) {
+  currentTpSlMode = mode
+  document.getElementById('tpsl-auto-panel').style.display = mode === 'auto' ? 'block' : 'none'
+  document.getElementById('tpsl-ratio-panel').style.display = mode === 'ratio' ? 'block' : 'none'
+  document.getElementById('tpsl-manual-panel').style.display = mode === 'manual' ? 'block' : 'none'
+  document.getElementById('tpsl-auto-btn').classList.toggle('active', mode === 'auto')
+  document.getElementById('tpsl-ratio-btn').classList.toggle('active', mode === 'ratio')
+  document.getElementById('tpsl-manual-btn').classList.toggle('active', mode === 'manual')
+  ipcRenderer.send('set-setting', 'tpSlMode', mode)
+}
+
+document.getElementById('tpsl-auto-btn').addEventListener('click', () => showTpSlPanel('auto'))
+document.getElementById('tpsl-ratio-btn').addEventListener('click', () => showTpSlPanel('ratio'))
+document.getElementById('tpsl-manual-btn').addEventListener('click', () => showTpSlPanel('manual'))
+
+// Ratio buttons
+document.querySelectorAll('.ratio-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.ratio-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    const ratio = parseFloat(this.dataset.ratio)
+    ipcRenderer.send('set-setting', 'tpSlRatio', ratio)
+    document.getElementById('ratio-preview').textContent = `Example: SL 1% → TP ${ratio}%`
+  })
+})
+
+// Manual save
+document.getElementById('save-tpsl-btn').addEventListener('click', () => {
+  const tp = parseFloat(document.getElementById('custom-tp-input').value)
+  const sl = parseFloat(document.getElementById('custom-sl-input').value)
+  const hint = document.getElementById('tpsl-hint')
+  if (!tp || !sl || tp <= 0 || sl <= 0) {
+    hint.textContent = 'Enter valid TP and SL values'
+    hint.style.color = 'var(--red)'
+    return
+  }
+  if (tp < sl) {
+    hint.textContent = `⚠️ TP (${tp}%) is less than SL (${sl}%) — ratio would be below 1:1`
+    hint.style.color = 'var(--red)'
+    return
+  }
+  ipcRenderer.send('set-setting', 'customTpPct', tp)
+  ipcRenderer.send('set-setting', 'customSlPct', sl)
+  hint.textContent = `✅ Saved: TP ${tp}% | SL ${sl}% | Ratio 1:${(tp/sl).toFixed(1)}`
+  hint.style.color = 'var(--green)'
+})
+
+// Collapsible sections handled via CSS classes
+
+// Max scalp limit
+document.querySelectorAll('.scalp-max-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.scalp-max-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    ipcRenderer.send('set-max-scalps', parseInt(this.dataset.val))
+  })
+})
+
+// scalp-max handled above
+
+// Scalp threshold dots
+document.querySelector('.trust-dots[data-key="scalpThreshold"]')?.addEventListener('click', (e) => {
+  if (!e.target.classList.contains('trust-dot')) return
+  const container = e.target.closest('.trust-dots')
+  const dots = container.querySelectorAll('.trust-dot')
+  const idx = Array.from(dots).indexOf(e.target) + 1
+  dots.forEach((d, i) => d.classList.toggle('filled', i < idx))
+  container.dataset.val = idx
+  const pct = idx * 10
+  if (document.getElementById('scalp-threshold-val')) document.getElementById('scalp-threshold-val').textContent = `${pct}%`
+  const scalpDisp = document.getElementById('scalp-threshold-display')
+  if (scalpDisp) scalpDisp.textContent = `${pct}%`
+  ipcRenderer.send('set-setting', 'scalpThreshold', pct)
+})
 
 // Coin selector
 let selectedCoins = ['BTC', 'ETH', 'SOL', 'BNB']
@@ -2392,7 +3566,7 @@ let customCoins = []
 function renderCustomCoins() {
   const container = document.getElementById('custom-coin-buttons')
   container.innerHTML = customCoins.map(coin => `
-    <button class="leverage-btn ${selectedCoins.includes(coin) ? 'active' : ''}" data-coin="${coin}" data-custom="true">
+    <button class="coin-btn ${selectedCoins.includes(coin) ? 'active' : ''}" data-coin="${coin}" data-custom="true">
       ${coin} <span style="margin-left:4px;opacity:0.6;font-size:10px;" onclick="removeCustomCoin('${coin}');event.stopPropagation()">✕</span>
     </button>
   `).join('')
@@ -2402,15 +3576,64 @@ function renderCustomCoins() {
   })
 }
 
+const FREE_COIN_LIMIT = 999 // Remove limit during development;
+
+function showCoinLimitModal() {
+  // Show upgrade prompt
+  const existing = document.getElementById('coin-limit-modal');
+  if (existing) existing.remove();
+  
+  const modal = document.createElement('div');
+  modal.id = 'coin-limit-modal';
+  modal.style.cssText = `
+    position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+    background:var(--bg2);border:1px solid var(--border);border-radius:12px;
+    padding:24px;z-index:9999;width:280px;text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,0.5);
+  `;
+  modal.innerHTML = `
+    <div style="font-size:24px;margin-bottom:8px;">🔒</div>
+    <div style="font-size:15px;font-weight:700;margin-bottom:8px;">3 Coin Limit</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px;line-height:1.5;">
+      Free plan includes 3 coins.<br>
+      Add more coins for <b style="color:var(--accent)">$5/month each</b>.
+    </div>
+    <button onclick="document.getElementById('coin-limit-modal').remove()" 
+      style="background:var(--accent);color:#000;border:none;padding:10px 20px;border-radius:8px;font-weight:700;cursor:pointer;width:100%;margin-bottom:8px;">
+      Upgrade — Coming Soon
+    </button>
+    <button onclick="document.getElementById('coin-limit-modal').remove()" 
+      style="background:transparent;color:var(--text2);border:1px solid var(--border);padding:8px 20px;border-radius:8px;cursor:pointer;width:100%;">
+      Cancel
+    </button>
+  `;
+  document.body.appendChild(modal);
+}
+
 function toggleCoin(coin, btn) {
   if (selectedCoins.includes(coin)) {
+    if (selectedCoins.length <= 1) return // Keep at least 1 coin
     selectedCoins = selectedCoins.filter(c => c !== coin)
     btn.classList.remove('active')
   } else {
+    // Check 3 coin limit
+    if (selectedCoins.length >= FREE_COIN_LIMIT) {
+      showCoinLimitModal();
+      return;
+    }
     selectedCoins.push(coin)
     btn.classList.add('active')
   }
   ipcRenderer.send('set-setting', 'tradingCoins', selectedCoins)
+  updateCoinCounter()
+}
+
+function updateCoinCounter() {
+  const counter = document.getElementById('coin-counter');
+  if (counter) {
+    counter.textContent = `${selectedCoins.length}/${FREE_COIN_LIMIT} free coins used`;
+    counter.style.color = selectedCoins.length >= FREE_COIN_LIMIT ? 'var(--red)' : 'var(--text2)';
+  }
 }
 
 function removeCustomCoin(coin) {
@@ -2421,7 +3644,7 @@ function removeCustomCoin(coin) {
   renderCustomCoins()
 }
 
-document.querySelectorAll('.leverage-btn[data-coin]').forEach(btn => {
+document.querySelectorAll('.coin-btn[data-coin]').forEach(btn => {
   btn.addEventListener('click', () => toggleCoin(btn.dataset.coin, btn))
 })
 
@@ -2429,12 +3652,21 @@ document.getElementById('add-custom-coin-btn').addEventListener('click', () => {
   const input = document.getElementById('custom-coin-input')
   const coin = input.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
   if (!coin) return
+  
+  // Check limit
+  if (selectedCoins.length >= FREE_COIN_LIMIT && !selectedCoins.includes(coin)) {
+    showCoinLimitModal();
+    input.value = '';
+    return;
+  }
+  
   if (!customCoins.includes(coin)) {
     customCoins.push(coin)
     selectedCoins.push(coin)
     ipcRenderer.send('set-setting', 'tradingCoins', selectedCoins)
     ipcRenderer.send('set-setting', 'customCoins', customCoins)
     renderCustomCoins()
+    updateCoinCounter()
   }
   input.value = ''
 })
@@ -2445,12 +3677,696 @@ document.getElementById('custom-coin-input').addEventListener('keydown', e => {
 
 // Restore coin selections
 async function restoreCoinSelections(settings) {
-  if (settings?.tradingCoins) selectedCoins = settings.tradingCoins
-  if (settings?.customCoins) { customCoins = settings.customCoins; renderCustomCoins() }
+  // Use saved coins or default to BTC/ETH/SOL/BNB
+  if (settings?.tradingCoins && settings.tradingCoins.length > 0) {
+    selectedCoins = settings.tradingCoins
+  } else {
+    selectedCoins = ['BTC', 'ETH', 'SOL']
+    ipcRenderer.send('set-setting', 'tradingCoins', selectedCoins)
+  }
+  
+  if (settings?.customCoins) {
+    customCoins = settings.customCoins
+    renderCustomCoins()
+  }
+
+  updateCoinCounter()
+  
+  // Update all coin buttons
   document.querySelectorAll('.leverage-btn[data-coin]:not([data-custom])').forEach(btn => {
     btn.classList.toggle('active', selectedCoins.includes(btn.dataset.coin))
   })
 }
+
+// Scalp toggle
+document.getElementById('scalp-toggle').addEventListener('click', function() {
+  this.classList.toggle('on')
+  const on = this.classList.contains('on')
+  ipcRenderer.send('set-setting', 'scalpTrading', on)
+  document.getElementById('scalp-settings-panel').style.display = on ? 'block' : 'none'
+  if (on) {
+    ipcRenderer.send('trigger-scalp-scan') // Run immediately
+  }
+})
+
+// Scalp leverage
+// ── Intelligence Settings Builder ─────────────────────────────────────────
+
+// Advanced settings config per indicator
+const indicatorAdvanced = {
+  rsi: {
+    label: 'RSI',
+    settings: [
+      { key: 'rsiPeriod', label: 'Period', type: 'buttons', options: [7,14,21], default: 14 },
+      { key: 'rsiOversold', label: 'Oversold threshold', type: 'buttons', options: [20,25,30,35], default: 30 },
+      { key: 'rsiOverbought', label: 'Overbought threshold', type: 'buttons', options: [65,70,75,80], default: 70 },
+    ]
+  },
+  bb: {
+    label: 'Bollinger Bands',
+    settings: [
+      { key: 'bbPeriod', label: 'Period', type: 'buttons', options: [14,20,25], default: 20 },
+      { key: 'bbMultiplier', label: 'Std Dev multiplier', type: 'buttons', options: [1.5,2,2.5], default: 2 },
+    ]
+  },
+  ichimoku: {
+    label: 'Ichimoku Cloud',
+    settings: [
+      { key: 'ichimokuTenkan', label: 'Tenkan (fast)', type: 'buttons', options: [7,9,10], default: 9 },
+      { key: 'ichimokuKijun', label: 'Kijun (base)', type: 'buttons', options: [20,26,30], default: 26 },
+      { key: 'ichimokuSenkouB', label: 'Senkou B (slow)', type: 'buttons', options: [44,52,60], default: 52 },
+    ]
+  },
+  atr: {
+    label: 'ATR',
+    settings: [
+      { key: 'atrPeriod', label: 'Period', type: 'buttons', options: [7,14,21], default: 14 },
+      { key: 'atrTpMultiplier', label: 'TP multiplier', type: 'buttons', options: [1.5,2,2.5,3], default: 2 },
+      { key: 'atrSlMultiplier', label: 'SL multiplier', type: 'buttons', options: [0.5,1,1.5], default: 1 },
+    ]
+  },
+  stochRsi: {
+    label: 'Stochastic RSI',
+    settings: [
+      { key: 'stochRsiOversold', label: 'Oversold', type: 'buttons', options: [15,20,25], default: 20 },
+      { key: 'stochRsiOverbought', label: 'Overbought', type: 'buttons', options: [75,80,85], default: 80 },
+      { key: 'stochKPeriod', label: 'K period', type: 'buttons', options: [2,3,5], default: 3 },
+    ]
+  },
+  emaCross: {
+    label: 'EMA Cross',
+    settings: [
+      { key: 'emaFastPeriod', label: 'Fast EMA', type: 'buttons', options: [5,9,12], default: 9 },
+      { key: 'emaSlowPeriod', label: 'Slow EMA', type: 'buttons', options: [21,26,50], default: 21 },
+    ]
+  },
+  fundingExtreme: {
+    label: 'Funding Extremes',
+    settings: [
+      { key: 'fundingHighThreshold', label: 'High threshold %', type: 'buttons', options: [0.05,0.1,0.15], default: 0.1 },
+      { key: 'fundingLowThreshold', label: 'Low threshold %', type: 'buttons', options: [-0.05,-0.1,-0.15], default: -0.1 },
+    ]
+  },
+  pivots: {
+    label: 'Pivot Points',
+    settings: [
+      { key: 'pivotType', label: 'Type', type: 'buttons', options: ['Standard','Fibonacci'], default: 'Standard' },
+      { key: 'pivotTimeframe', label: 'Timeframe', type: 'buttons', options: ['Daily','Weekly'], default: 'Daily' },
+    ]
+  },
+  vwap: {
+    label: 'VWAP',
+    settings: [
+      { key: 'vwapTimeframe', label: 'Timeframe', type: 'buttons', options: ['1h','4h','1d'], default: '1h' },
+    ]
+  },
+}
+
+// Main trade indicators
+const mainIndicators = [
+  { key: 'rsi', id: 'ta-rsi-toggle', label: 'RSI', desc: 'Overbought/oversold (1h+4h)', hasAdv: true },
+  { key: 'ma', id: 'ta-ma-toggle', label: 'Moving Averages', desc: 'EMA9/SMA20/50/200', hasAdv: false },
+  { key: 'macd', id: 'ta-macd-toggle', label: 'MACD', desc: 'Momentum direction', hasAdv: false },
+  { key: 'bb', id: 'ta-bb-toggle', label: 'Bollinger Bands', desc: 'Volatility & squeezes', hasAdv: true },
+  { key: 'sr', id: 'ta-sr-toggle', label: 'Support/Resistance', desc: 'Key price levels', hasAdv: false },
+  { key: 'ob', id: 'ta-ob-toggle', label: 'Order Book', desc: 'Buy/sell walls', hasAdv: false },
+  { key: 'ichimoku', id: 'ta-ichimoku-toggle', label: 'Ichimoku Cloud', desc: 'Trend + momentum', hasAdv: true },
+  { key: 'atr', id: 'ta-atr-toggle', label: 'ATR', desc: 'Smart TP/SL sizing', hasAdv: true },
+  { key: 'vwap', id: 'ta-vwap-toggle', label: 'VWAP', desc: 'Intraday bias level', hasAdv: true },
+  { key: 'stochRsi', id: 'ta-stochrsi-toggle', label: 'Stoch RSI', desc: 'Precise turn detection', hasAdv: true },
+  { key: 'emaCross', id: 'ta-emacross-toggle', label: 'EMA Cross', desc: 'Momentum crossovers', hasAdv: true },
+  { key: 'fundingExtreme', id: 'ta-fundingextreme-toggle', label: 'Funding Extremes', desc: 'Squeeze risk', hasAdv: true },
+  { key: 'pivots', id: 'ta-pivots-toggle', label: 'Pivot Points', desc: 'Daily PP/R1/R2/S1/S2', hasAdv: true },
+  { key: 'corr', id: 'ta-corr-toggle', label: 'Correlation', desc: 'BTC lag for alts', hasAdv: false },
+  { key: 'time', id: 'ta-time-toggle', label: 'Time Filter', desc: 'Best trading hours', hasAdv: false },
+]
+
+// Scalp indicators
+const scalpIndicatorsList = [
+  { key: 'rsi', id: 'scalp-rsi-toggle', label: 'RSI 15m', desc: 'Fast oversold/overbought', hasAdv: true },
+  { key: 'bb', id: 'scalp-bb-toggle', label: 'Bollinger Bands 15m', desc: 'Band touch entries', hasAdv: true },
+  { key: 'sr', id: 'scalp-sr-toggle', label: 'Support/Resistance', desc: 'Nearby key levels', hasAdv: false },
+  { key: 'ob', id: 'scalp-ob-toggle', label: 'Order Book', desc: 'Buy/sell walls', hasAdv: false },
+  { key: 'vwap', id: 'scalp-vwap-toggle', label: 'VWAP', desc: 'Intraday bias', hasAdv: false },
+  { key: 'stochRsi', id: 'scalp-stochrsi-toggle', label: 'Stoch RSI 15m', desc: 'Precise timing', hasAdv: true },
+  { key: 'emaCross', id: 'scalp-emacross-toggle', label: 'EMA Cross 15m', desc: 'Quick momentum shift', hasAdv: true },
+  { key: 'ichimoku', id: 'scalp-ichimoku-toggle', label: 'Ichimoku 1h', desc: 'Trend confirmation', hasAdv: false },
+  { key: 'atr', id: 'scalp-atr-toggle', label: 'ATR 15m', desc: 'Volatility sizing', hasAdv: false },
+  { key: 'fundingExtreme', id: 'scalp-fundingextreme-toggle', label: 'Funding Extremes', desc: 'Squeeze risk', hasAdv: false },
+  { key: 'pivots', id: 'scalp-pivots-toggle', label: 'Pivot Points', desc: 'Key targets', hasAdv: false },
+]
+
+function buildIndicatorRow(ind, settingsObj, settingsKey) {
+  const enabled = settingsObj?.[ind.key] !== false
+  const row = document.createElement('div')
+  row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg3);border-radius:8px;margin-bottom:4px;'
+  row.innerHTML = `
+    <div style="flex:1;">
+      <div style="font-size:12px;font-weight:600;color:var(--text);">${ind.label}</div>
+      <div style="font-size:10px;color:var(--text2);">${ind.desc}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      ${ind.hasAdv ? `<button class="adv-btn" data-key="${ind.key}" style="font-size:10px;padding:2px 8px;border:1px solid var(--border);background:transparent;color:var(--text2);border-radius:4px;cursor:pointer;">⚙️ Edit</button>` : ''}
+      <div class="toggle-switch ${enabled ? 'on' : ''}" id="${ind.id}"></div>
+    </div>`
+
+  // Toggle handler
+  const toggle = row.querySelector(`#${ind.id}`)
+  toggle?.addEventListener('click', function() {
+    this.classList.toggle('on')
+    const s = {}
+    s[ind.key] = this.classList.contains('on')
+    const existing = window._cachedSettings?.[settingsKey] || {}
+    ipcRenderer.send('set-setting', settingsKey, { ...existing, ...s })
+    if (window._cachedSettings) {
+      if (!window._cachedSettings[settingsKey]) window._cachedSettings[settingsKey] = {}
+      window._cachedSettings[settingsKey][ind.key] = this.classList.contains('on')
+    }
+  })
+
+  // Advanced button handler
+  const advBtn = row.querySelector('.adv-btn')
+  advBtn?.addEventListener('click', () => showAdvancedPanel(ind.key))
+
+  return row
+}
+
+function showAdvancedPanel(key) {
+  const config = indicatorAdvanced[key]
+  if (!config) return
+  const panel = document.getElementById('advanced-settings-panel')
+  const title = document.getElementById('adv-panel-title')
+  const content = document.getElementById('adv-panel-content')
+  if (!panel || !title || !content) return
+
+  title.textContent = `⚙️ ${config.label} — Advanced Settings`
+  content.innerHTML = ''
+
+  config.settings.forEach(setting => {
+    const settingDiv = document.createElement('div')
+    settingDiv.style.marginBottom = '10px'
+
+    const currentVal = window._cachedSettings?.[setting.key] ?? setting.default
+
+    settingDiv.innerHTML = `
+      <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">${setting.label}</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;">
+        ${setting.options.map(opt => `
+          <button class="leverage-btn adv-opt-btn ${currentVal == opt ? 'active' : ''}"
+            data-key="${setting.key}" data-val="${opt}"
+            style="font-size:11px;">
+            ${opt}
+          </button>`).join('')}
+      </div>`
+
+    settingDiv.querySelectorAll('.adv-opt-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        settingDiv.querySelectorAll('.adv-opt-btn').forEach(b => b.classList.remove('active'))
+        this.classList.add('active')
+        const val = isNaN(this.dataset.val) ? this.dataset.val : parseFloat(this.dataset.val)
+        ipcRenderer.send('set-setting', this.dataset.key, val)
+        if (window._cachedSettings) window._cachedSettings[this.dataset.key] = val
+      })
+    })
+
+    content.appendChild(settingDiv)
+  })
+
+  panel.style.display = 'block'
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+
+function buildIndicatorSections(settings) {
+  const mainContainer = document.getElementById('main-indicators-built')
+  const scalpContainer = document.getElementById('scalp-indicators-built')
+  if (!mainContainer || !scalpContainer) return
+
+  mainContainer.innerHTML = ''
+  scalpContainer.innerHTML = ''
+
+  const enabledIndicators = settings?.enabledIndicators || {}
+  const scalpIndicators = settings?.scalpIndicators || {}
+
+  mainIndicators.forEach(ind => {
+    mainContainer.appendChild(buildIndicatorRow(ind, enabledIndicators, 'enabledIndicators'))
+  })
+
+  scalpIndicatorsList.forEach(ind => {
+    scalpContainer.appendChild(buildIndicatorRow(ind, scalpIndicators, 'scalpIndicators'))
+  })
+}
+
+// ── RSI Period + Ichimoku Settings ───────────────────────────────────────
+document.querySelectorAll('.rsi-period-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.rsi-period-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    ipcRenderer.send('set-setting', 'rsiPeriod', parseInt(this.dataset.val))
+  })
+})
+
+document.querySelectorAll('.ichi-tenkan-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.ichi-tenkan-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    ipcRenderer.send('set-setting', 'ichimokuTenkan', parseInt(this.dataset.val))
+  })
+})
+
+document.querySelectorAll('.ichi-kijun-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.ichi-kijun-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    ipcRenderer.send('set-setting', 'ichimokuKijun', parseInt(this.dataset.val))
+  })
+})
+
+document.querySelectorAll('.ichi-senkou-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.ichi-senkou-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    ipcRenderer.send('set-setting', 'ichimokuSenkouB', parseInt(this.dataset.val))
+  })
+})
+
+// ── Daily Trade Bot ───────────────────────────────────────────────────────
+
+function setupDailyBtnGroup(selector, settingKey) {
+  document.querySelectorAll(selector).forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll(selector).forEach(b => b.classList.remove('active'))
+      this.classList.add('active')
+      ipcRenderer.send('set-daily-setting', settingKey, parseFloat(this.dataset.val))
+    })
+  })
+}
+
+setupDailyBtnGroup('.daily-period-btn', 'dailyRSIPeriod')
+setupDailyBtnGroup('.daily-pbuy-btn', 'dailyPowerBuyRSI')
+setupDailyBtnGroup('.daily-buy-btn', 'dailyBuyRSI')
+setupDailyBtnGroup('.daily-sell-btn', 'dailySellRSI')
+setupDailyBtnGroup('.daily-psell-btn', 'dailyPowerSellRSI')
+setupDailyBtnGroup('.daily-lev-btn', 'dailyLeverage')
+setupDailyBtnGroup('.daily-max-btn', 'dailyMaxTrades')
+
+document.getElementById('daily-trade-toggle').addEventListener('click', function() {
+  this.classList.toggle('on')
+  ipcRenderer.send('set-daily-setting', 'dailyTradeEnabled', this.classList.contains('on'))
+})
+
+document.getElementById('daily-power-only-toggle').addEventListener('click', function() {
+  this.classList.toggle('on')
+  ipcRenderer.send('set-daily-setting', 'dailyPowerOnly', this.classList.contains('on'))
+})
+
+document.getElementById('save-daily-size-btn').addEventListener('click', () => {
+  const val = parseFloat(document.getElementById('daily-size-input').value)
+  if (val > 0) {
+    ipcRenderer.send('set-daily-setting', 'dailyTradeSize', val)
+    document.getElementById('daily-size-input').style.borderColor = 'var(--green)'
+    setTimeout(() => document.getElementById('daily-size-input').style.borderColor = '', 1000)
+  }
+})
+
+document.getElementById('refresh-daily-signals-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('refresh-daily-signals-btn')
+  btn.textContent = 'Scanning...'
+  btn.disabled = true
+  await ipcRenderer.invoke('trigger-daily-scan-wait').catch(() => 
+    ipcRenderer.send('trigger-daily-scan')
+  )
+  setTimeout(async () => {
+    await loadDailySignals()
+    btn.textContent = 'Scan Now'
+    btn.disabled = false
+  }, 5000)
+})
+
+async function loadDailySignals() {
+  const list = document.getElementById('daily-signals-list')
+  if (!list) return
+  try {
+    const data = await ipcRenderer.invoke('get-daily-signals')
+    if (!data?.signals || !Object.keys(data.signals).length) {
+      list.innerHTML = '<div style="color:var(--text2);text-align:center;padding:8px;">No signals today — market neutral or not scanned yet</div>'
+      return
+    }
+
+    const tierColors = {
+      'Power Buy': '#34d399',
+      'Buy': '#86efac',
+      'Neutral': 'var(--text2)',
+      'Sell': '#fca5a5',
+      'Power Sell': '#ef4444'
+    }
+    const tierEmoji = {
+      'Power Buy': '🔥🟢',
+      'Buy': '🟢',
+      'Neutral': '⚪',
+      'Sell': '🔴',
+      'Power Sell': '🔥🔴'
+    }
+
+    list.innerHTML = Object.entries(data.signals).map(([coin, s]) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2);">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-weight:700;color:var(--text);">${coin}</span>
+          <span style="font-size:11px;color:${tierColors[s.tier] || 'var(--text2)'};">${tierEmoji[s.tier] || ''} ${s.tier}</span>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:13px;font-weight:700;color:${tierColors[s.tier]};">RSI ${s.rsi}</div>
+          <div style="font-size:10px;color:var(--text2);">${s.direction?.toUpperCase() || 'SKIP'}</div>
+        </div>
+      </div>`).join('') +
+      `<div style="font-size:10px;color:var(--text2);margin-top:6px;text-align:right;">Updated: ${data.date || 'Today'}</div>`
+  } catch(e) {
+    list.innerHTML = '<div style="color:var(--text2);font-size:11px;">Error loading signals</div>'
+  }
+}
+
+// Restore daily settings
+async function restoreDailySettings(settings) {
+  if (!settings) return
+  if (settings.dailyTradeEnabled) document.getElementById('daily-trade-toggle')?.classList.add('on')
+  if (settings.dailyPowerOnly !== false) document.getElementById('daily-power-only-toggle')?.classList.add('on')
+  if (settings.dailyRSIPeriod) document.querySelectorAll('.daily-period-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.val) === settings.dailyRSIPeriod))
+  if (settings.dailyPowerBuyRSI) document.querySelectorAll('.daily-pbuy-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.val) === settings.dailyPowerBuyRSI))
+  if (settings.dailyBuyRSI) document.querySelectorAll('.daily-buy-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.val) === settings.dailyBuyRSI))
+  if (settings.dailySellRSI) document.querySelectorAll('.daily-sell-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.val) === settings.dailySellRSI))
+  if (settings.dailyPowerSellRSI) document.querySelectorAll('.daily-psell-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.val) === settings.dailyPowerSellRSI))
+  if (settings.dailyLeverage) document.querySelectorAll('.daily-lev-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.val) === settings.dailyLeverage))
+  if (settings.dailyMaxTrades) document.querySelectorAll('.daily-max-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.val) === settings.dailyMaxTrades))
+  if (settings.dailyTradeSize) { const el = document.getElementById('daily-size-input'); if(el) el.value = settings.dailyTradeSize }
+  await loadDailySignals()
+}
+
+// ── Main Leverage Buttons ─────────────────────────────────────────────────
+document.querySelectorAll('.lev-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.lev-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    const lev = parseInt(this.dataset.lev)
+    ipcRenderer.send('set-setting', 'paperLeverage', lev)
+    const warn = document.getElementById('lev-warning')
+    if (warn) warn.textContent = levWarnings[lev] || `${lev}x leverage`
+  })
+})
+
+// ── Scalp Leverage Buttons ────────────────────────────────────────────────
+document.querySelectorAll('.scalp-lev-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.scalp-lev-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    ipcRenderer.send('set-setting', 'scalpLeverage', parseInt(this.dataset.lev))
+  })
+})
+
+// Scalp duration
+document.querySelectorAll('.scalp-dur-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.scalp-dur-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    ipcRenderer.send('set-setting', 'scalpDuration', parseInt(this.dataset.min))
+  })
+})
+
+// Scalp size
+document.getElementById('save-scalp-btn').addEventListener('click', () => {
+  const size = parseFloat(document.getElementById('scalp-size-input').value)
+  if (!size || size <= 0) return
+  ipcRenderer.send('set-setting', 'scalpSize', size)
+  document.getElementById('scalp-hint').textContent = `Scalp size: $${size} per trade`
+  document.getElementById('scalp-hint').style.color = 'var(--green)'
+})
+
+// ── New Features Setup ──────────────────────────────────────────────────
+try {
+
+// ── Rage Lock ────────────────────────────────────────────────────────────
+document.getElementById('rage-lock-toggle').addEventListener('click', function() {
+  this.classList.toggle('on')
+  const on = this.classList.contains('on')
+  ipcRenderer.send('set-setting', 'rageLockEnabled', on)
+  document.getElementById('rage-lock-settings').style.display = on ? 'block' : 'none'
+})
+
+document.querySelectorAll('.rage-thresh-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.rage-thresh-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    ipcRenderer.send('set-setting', 'rageLockThreshold', parseInt(this.dataset.val))
+  })
+})
+
+document.querySelectorAll('.rage-dur-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.rage-dur-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    ipcRenderer.send('set-setting', 'rageLockMinutes', parseInt(this.dataset.min))
+  })
+})
+
+document.getElementById('manual-lock-btn').addEventListener('click', () => {
+  ipcRenderer.send('manual-rage-lock', 30)
+  document.getElementById('rage-lock-status').style.display = 'block'
+  document.getElementById('rage-lock-reason').textContent = 'Manually locked — take a break!'
+})
+
+document.getElementById('manual-unlock-btn').addEventListener('click', () => {
+  ipcRenderer.send('unlock-rage-lock')
+  document.getElementById('rage-lock-status').style.display = 'none'
+})
+
+ipcRenderer.on('rage-lock-activated', (e, data) => {
+  document.getElementById('rage-lock-status').style.display = 'block'
+  document.getElementById('rage-lock-reason').textContent = `${data.reason} — locked for ${data.minutes} min`
+})
+
+ipcRenderer.on('rage-lock-deactivated', () => {
+  document.getElementById('rage-lock-status').style.display = 'none'
+})
+
+// ── Psychology Score ────────────────────────────────────────────────────
+async function loadPsychScore() {
+  const score = await ipcRenderer.invoke('get-psychology-score')
+  if (!score) return
+  const numEl = document.getElementById('psych-score-num')
+  const gradeEl = document.getElementById('psych-grade')
+  const issuesEl = document.getElementById('psych-issues')
+  numEl.textContent = score.score
+  numEl.style.color = score.score >= 80 ? 'var(--green)' : score.score >= 60 ? 'var(--gold)' : 'var(--red)'
+  gradeEl.textContent = `Grade: ${score.grade}`
+  gradeEl.style.color = numEl.style.color
+  issuesEl.innerHTML = [
+    ...score.issues.map(i => `<div style="color:var(--red);margin-bottom:4px;">⚠️ ${i}</div>`),
+    ...score.wins.map(w => `<div style="color:var(--green);margin-bottom:4px;">✅ ${w}</div>`)
+  ].join('')
+}
+
+document.getElementById('refresh-psych-btn').addEventListener('click', loadPsychScore)
+
+// ── Second Brain ─────────────────────────────────────────────────────────
+async function loadMemories() {
+  const memories = await ipcRenderer.invoke('get-memories')
+  const list = document.getElementById('memories-list')
+  if (!memories?.length) {
+    list.innerHTML = '<div style="color:var(--text2);">No memories saved yet</div>'
+    return
+  }
+  list.innerHTML = memories.slice(-5).reverse().map(m => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2);">
+      <div>
+        <div style="font-size:12px;">${m.text}</div>
+        <div style="font-size:10px;color:var(--text2);">${m.date}</div>
+      </div>
+      <button onclick="deleteMemory(${m.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;">×</button>
+    </div>
+  `).join('')
+}
+
+async function deleteMemory(id) {
+  await ipcRenderer.invoke('delete-memory', id)
+  loadMemories()
+}
+
+document.getElementById('save-memory-btn').addEventListener('click', async () => {
+  const input = document.getElementById('memory-input')
+  const text = input.value.trim()
+  if (!text) return
+  await ipcRenderer.invoke('add-memory-ipc', text)
+  input.value = ''
+  loadMemories()
+})
+
+// ── Morning Briefing ─────────────────────────────────────────────────────
+document.getElementById('morning-briefing-toggle').addEventListener('click', function() {
+  this.classList.toggle('on')
+  ipcRenderer.send('set-setting', 'morningBriefing', this.classList.contains('on'))
+})
+
+// Restore all new settings
+async function restoreNewSettings() {
+  try {
+    const settings = await ipcRenderer.invoke('get-settings')
+    if (settings?.rageLockEnabled) {
+      const rlt = document.getElementById('rage-lock-toggle')
+      const rls = document.getElementById('rage-lock-settings')
+      if (rlt) rlt.classList.add('on')
+      if (rls) rls.style.display = 'block'
+    }
+    const mbt = document.getElementById('morning-briefing-toggle')
+    if (settings?.morningBriefing && mbt) mbt.classList.add('on')
+    loadMemories()
+    loadPsychScore()
+  } catch(e) { console.error('restoreNewSettings error:', e) }
+}
+
+async function toggleTrustedCaller(caller) {
+  ipcRenderer.send('toggle-trusted-caller', caller)
+  // Refresh after toggle
+  setTimeout(async () => {
+    const tgStats = await ipcRenderer.invoke('telegram-get-stats')
+    renderLeaderboard(tgStats?.stats || {})
+  }, 300)
+}
+
+} catch(eNewFeatures) { console.error('New features setup error:', eNewFeatures) }
+
+// ── Spot Trading ──────────────────────────────────────────────────────────
+let spotSellPct = 25
+
+async function loadSpotBalances() {
+  const list = document.getElementById('spot-balances-list')
+  if (!list) return
+  list.innerHTML = '<span style="color:var(--text2)">Loading...</span>'
+  try {
+    const balances = await ipcRenderer.invoke('get-spot-balances')
+    if (!balances?.length) {
+      list.innerHTML = '<span style="color:var(--text2)">No holdings — buy some coins!</span>'
+      return
+    }
+    list.innerHTML = balances.map(b => {
+      const val = b.coin === 'USDT' ? `$${b.total.toFixed(2)}` : `${b.total.toFixed(4)} ${b.coin}`
+      return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border2);">
+        <span>${b.coin}</span>
+        <span style="color:var(--text)">${val}</span>
+      </div>`
+    }).join('')
+  } catch(e) {
+    list.innerHTML = '<span style="color:var(--red)">Error loading balances</span>'
+  }
+}
+
+// Sell percentage buttons
+document.querySelectorAll('.spot-sell-pct-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.spot-sell-pct-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    spotSellPct = parseInt(this.dataset.pct)
+  })
+})
+
+// Refresh balances
+document.getElementById('refresh-spot-btn').addEventListener('click', loadSpotBalances)
+
+// Market Buy
+document.getElementById('spot-buy-btn').addEventListener('click', async () => {
+  const coin = document.getElementById('spot-buy-coin').value
+  const amount = parseFloat(document.getElementById('spot-buy-amount').value)
+  const status = document.getElementById('spot-status')
+  if (!amount || amount <= 0) { status.textContent = 'Enter amount'; status.style.color = 'var(--red)'; return }
+  status.textContent = `Buying $${amount} of ${coin}...`
+  status.style.color = 'var(--text2)'
+  try {
+    const order = await ipcRenderer.invoke('spot-buy', { coin, amount })
+    if (order) {
+      status.textContent = `✅ Bought ${order.quantity} ${coin} at ~$${parseFloat(order.price||0).toLocaleString()}`
+      status.style.color = 'var(--green)'
+      document.getElementById('spot-buy-amount').value = ''
+      setTimeout(loadSpotBalances, 1000)
+    } else {
+      status.textContent = '❌ Buy failed — check balance'
+      status.style.color = 'var(--red)'
+    }
+  } catch(e) {
+    status.textContent = `❌ Error: ${e.message?.slice(0,40)}`
+    status.style.color = 'var(--red)'
+  }
+})
+
+// Market Sell
+document.getElementById('spot-sell-btn').addEventListener('click', async () => {
+  const coin = document.getElementById('spot-sell-coin').value
+  const status = document.getElementById('spot-status')
+  status.textContent = `Selling ${spotSellPct}% of ${coin}...`
+  status.style.color = 'var(--text2)'
+  try {
+    const order = await ipcRenderer.invoke('spot-sell', { coin, percent: spotSellPct })
+    if (order) {
+      status.textContent = `✅ Sold ${order.quantity} ${coin} at ~$${parseFloat(order.price||0).toLocaleString()}`
+      status.style.color = 'var(--green)'
+      setTimeout(loadSpotBalances, 1000)
+    } else {
+      status.textContent = `❌ Sell failed — no ${coin} balance?`
+      status.style.color = 'var(--red)'
+    }
+  } catch(e) {
+    status.textContent = `❌ Error: ${e.message?.slice(0,40)}`
+    status.style.color = 'var(--red)'
+  }
+})
+
+// Limit Buy
+document.getElementById('spot-limit-buy-btn').addEventListener('click', async () => {
+  const coin = document.getElementById('spot-limit-coin').value
+  const price = parseFloat(document.getElementById('spot-limit-price').value)
+  const amount = parseFloat(document.getElementById('spot-limit-amount').value)
+  const status = document.getElementById('spot-status')
+  if (!price || !amount) { status.textContent = 'Enter price and amount'; status.style.color = 'var(--red)'; return }
+  const order = await ipcRenderer.invoke('spot-limit-buy', { coin, amount, price })
+  if (order) {
+    status.textContent = `✅ Limit buy set: ${order.quantity} ${coin} at $${price.toLocaleString()}`
+    status.style.color = 'var(--green)'
+    document.getElementById('spot-limit-price').value = ''
+    document.getElementById('spot-limit-amount').value = ''
+    loadOpenLimitOrders()
+  } else {
+    status.textContent = '❌ Limit order failed'
+    status.style.color = 'var(--red)'
+  }
+})
+
+async function loadOpenLimitOrders() {
+  const list = document.getElementById('open-limit-orders-list')
+  if (!list) return
+  try {
+    const orders = await ipcRenderer.invoke('get-open-spot-orders')
+    if (!orders?.length) { list.innerHTML = 'None'; return }
+    list.innerHTML = orders.map(o => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border2);">
+        <span>${o.side} ${o.symbol} × ${o.origQty} @ $${parseFloat(o.price).toLocaleString()}</span>
+        <button onclick="cancelLimitOrder('${o.symbol}', ${o.orderId})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;">✕</button>
+      </div>
+    `).join('')
+  } catch(e) { list.innerHTML = 'Error loading orders' }
+}
+
+async function cancelLimitOrder(symbol, orderId) {
+  const cancelled = await ipcRenderer.invoke('cancel-spot-order', { symbol, orderId })
+  if (cancelled) {
+    document.getElementById('spot-status').textContent = '✅ Order cancelled'
+    document.getElementById('spot-status').style.color = 'var(--green)'
+    loadOpenLimitOrders()
+  }
+}
+
+// Load spot data when trading page opens
+ipcRenderer.on('page-changed', (e, page) => {
+  if (page === 3) {
+    loadSpotBalances()
+    loadOpenLimitOrders()
+  }
+})
 
 // Max drawdown protection
 document.getElementById('save-drawdown-btn').addEventListener('click', () => {
@@ -2468,18 +4384,34 @@ document.getElementById('disable-drawdown-btn').addEventListener('click', () => 
 })
 
 // Custom position size
+function loadSettings() {
+  return window._cachedSettings || {}
+}
+
 document.getElementById('save-size-btn').addEventListener('click', () => {
   const size = parseFloat(document.getElementById('trade-size-input').value)
   if (!size || size <= 0) return
+  
+  // Validate against leverage
+  const leverage = loadSettings()?.paperLeverage || 1
+  const position = size * leverage
+  const hintEl = document.getElementById('size-hint')
+  
   ipcRenderer.send('set-setting', 'paperTradeSize', size)
-  document.getElementById('size-hint').textContent = `Fixed size: $${size} per trade`
+  
+  if (position > 10000) {
+    hintEl.textContent = `⚠️ $${size} × ${leverage}x = $${position.toLocaleString()} position — may exceed Binance testnet limits. Try reducing size or leverage.`
+    hintEl.style.color = 'var(--red)'
+  } else if (position > 5000) {
+    hintEl.textContent = `⚡ $${size} × ${leverage}x = $${position.toLocaleString()} position — borderline for testnet`
+    hintEl.style.color = 'var(--gold)'
+  } else {
+    hintEl.textContent = `✅ $${size} × ${leverage}x = $${position.toLocaleString()} position — good for testnet`
+    hintEl.style.color = 'var(--green)'
+  }
 })
 
-document.getElementById('reset-size-btn').addEventListener('click', () => {
-  document.getElementById('trade-size-input').value = ''
-  ipcRenderer.send('set-setting', 'paperTradeSize', null)
-  document.getElementById('size-hint').textContent = 'Auto mode uses 5% of paper balance per trade'
-})
+// reset-size-btn removed - not in HTML
 
 // Auto refresh trading page when trade opens/closes
 ipcRenderer.on('trade-opened', () => {
@@ -2494,31 +4426,32 @@ setInterval(() => {
 }, 30000)
 
 // Leverage selector
-const levWarnings = {
-  1: '1x — Spot trading, no liquidation risk',
-  2: '2x — Low leverage, safe for beginners',
-  5: '5x — Moderate leverage, manageable risk',
-  10: '10x — High leverage, significant risk',
-  20: '20x — Very high leverage, expert only',
-  50: '50x — Extreme leverage, liquidation likely on small moves',
-  100: '100x — Maximum risk, 1% move = liquidation',
-  150: '150x — 🔥 EXTREME — 0.67% move = liquidation'
-}
 
-document.querySelectorAll('.leverage-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.leverage-btn').forEach(b => b.classList.remove('active'))
-    btn.classList.add('active')
-    const lev = parseInt(btn.dataset.lev)
-    document.getElementById('lev-warning').textContent = levWarnings[lev] || `${lev}x leverage`
-    ipcRenderer.send('set-setting', 'paperLeverage', lev)
-  })
-})
+
+// removed bad global leverage-btn handler
 
 // Toggles
 document.getElementById('auto-trade-toggle').addEventListener('click', function() {
   this.classList.toggle('on')
   ipcRenderer.send('set-setting', 'autoPaperTrade', this.classList.contains('on'))
+})
+
+// Scan interval buttons
+document.querySelectorAll('.interval-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const minutes = parseInt(this.dataset.min)
+    document.querySelectorAll('.interval-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    ipcRenderer.send('set-setting', 'scanIntervalMinutes', minutes)
+    ipcRenderer.send('restart-scanner')
+
+    // Cost estimate
+    const scansPerDay = 1440 / minutes
+    const coinsCount = document.querySelectorAll('.coin-btn[data-coin].active').length || 4
+    const dailyCost = (scansPerDay * coinsCount * 0.3 * 0.006).toFixed(2)
+    document.getElementById('scan-interval-hint').textContent = `Every ${minutes} min — ${scansPerDay} scans/day`
+    document.getElementById('scan-cost-hint').textContent = `Est. cost: ~$${dailyCost}/day (~$${(dailyCost * 30).toFixed(0)}/month)`
+  })
 })
 
 document.getElementById('independent-scanner-toggle').addEventListener('click', function() {
@@ -2529,46 +4462,345 @@ document.getElementById('independent-scanner-toggle').addEventListener('click', 
 })
 
 // ── Trading UI ──
-function renderLeaderboard(stats) {
+async function renderLeaderboard(stats) {
   const list = document.getElementById('pt-leaderboard')
   if (!stats || !Object.keys(stats).length) { list.innerHTML = '<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No data yet</div>'; return }
   const sorted = Object.entries(stats).sort((a, b) => b[1].winRate - a[1].winRate)
+  const trustedCallers = await ipcRenderer.invoke('get-trusted-callers')
   list.innerHTML = sorted.map(([caller, s], i) => {
     const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`
     const rateClass = s.winRate >= 65 ? 'win-rate-good' : s.winRate >= 45 ? 'win-rate-ok' : 'win-rate-bad'
+    const isTrusted = trustedCallers.includes(caller)
     return `
     <div class="caller-item">
       <div style="font-size:16px;width:24px">${medal}</div>
       <div style="flex:1">
         <div class="caller-name">${caller}</div>
         <div class="caller-stats">${s.total} calls • ${s.wins}W/${s.losses}L</div>
+        ${isTrusted ? '<div style="font-size:10px;color:#fbbf24;font-weight:700;">⭐ AUTO-COPY ON</div>' : ''}
       </div>
-      <div class="caller-stats ${rateClass}" style="font-size:16px;font-weight:700">${s.winRate}%</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="caller-stats ${rateClass}" style="font-size:16px;font-weight:700">${s.winRate}%</div>
+        <button onclick="toggleTrustedCaller('${caller}')" style="background:${isTrusted ? 'rgba(251,191,36,0.2)' : 'var(--bg3)'};color:${isTrusted ? '#fbbf24' : 'var(--text2)'};border:1px solid ${isTrusted ? 'rgba(251,191,36,0.4)' : 'var(--border)'};border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700;">
+          ${isTrusted ? '⭐ Trusted' : 'Trust?'}
+        </button>
+      </div>
     </div>`
   }).join('')
 }
 
+
+function renderOpenPositions(stats) {
+  const openList = document.getElementById('pt-open-list')
+  if (!openList) return
+  const openTrades = stats.trades.filter(t => t.status === 'open' && t.useBinance)
+  if (!openTrades.length) {
+    openList.innerHTML = '<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No open positions</div>'
+    return
+  }
+  openList.innerHTML = openTrades.map(t => {
+    const pnlClass = (t.unrealizedPnl || 0) >= 0 ? 'trade-pnl-pos' : 'trade-pnl-neg'
+    const pnlStr = t.unrealizedPnl !== undefined ? `${t.unrealizedPnl >= 0 ? '+' : ''}$${t.unrealizedPnl} (${t.unrealizedPct >= 0 ? '+' : ''}${t.unrealizedPct}%)` : 'Live...'
+    const conf = t.confidence || 0
+    const confClass = conf >= 65 ? 'high' : conf >= 40 ? 'med' : 'low'
+    const scalpBadge = t.isScalp ? `<span style="background:rgba(251,191,36,0.2);color:#fbbf24;border:1px solid rgba(251,191,36,0.4);border-radius:4px;font-size:10px;padding:1px 6px;font-weight:700;">⚡ SCALP</span>` : ''
+    const remaining = t.isScalp && t.scalpExpiry ? Math.max(0, t.scalpExpiry - Date.now()) : 0
+    const countdown = remaining > 0 ? `<div class="trade-info" style="color:#fbbf24;">Auto-closes in ${Math.floor(remaining/60000)}m ${Math.floor((remaining%60000)/1000)}s</div>` : ''
+    return `<div class="trade-item" style="flex-direction:column;gap:6px;align-items:flex-start;${t.isScalp ? 'border-left:2px solid #fbbf24;' : ''}">
+      <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="trade-coin">${t.coin} ${t.direction?.toUpperCase()} ${t.leverage > 1 ? t.leverage+'x' : ''}</div>
+          <span class="conf-badge conf-badge-${confClass}">${conf}%</span>${scalpBadge}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="${pnlClass}" style="font-size:15px;">${pnlStr}</div>
+          <button class="tg-remove-btn" onclick="closeTrade(${t.id},${t.currentPrice||t.entry})">Close</button>
+        </div>
+      </div>
+      <div class="conf-meter"><div class="conf-meter-fill conf-${confClass}" style="width:${conf}%"></div></div>
+      <div class="trade-info">Entry: $${t.entry} | Target: $${t.target} | SL: $${t.stopLoss}</div>
+      <div class="trade-info">Size: $${t.size} | Liq: $${t.liquidationPrice} | ${new Date(t.openTime).toLocaleTimeString()}</div>
+      ${countdown}
+    </div>`
+  }).join('')
+
+  // Update stats
+  const closed = stats.trades.filter(t => t.status !== 'open' && t.useBinance)
+  const wins = closed.filter(t => t.pnl > 0).length
+  const total = closed.length
+  const winRate = total > 0 ? Math.round(wins/total*100) : 0
+  const pnl = closed.reduce((s,t) => s+(t.pnl||0), 0)
+  const unrealized = openTrades.reduce((s,t) => s+(t.unrealizedPnl||0), 0)
+
+  const wrEl = document.getElementById('pt-winrate')
+  const pnlEl = document.getElementById('pt-pnl')
+  const totalEl = document.getElementById('pt-total')
+  const balEl = document.getElementById('pt-balance')
+  if (wrEl) { wrEl.textContent = `${winRate}%`; wrEl.style.color = winRate>=60?'var(--green)':winRate>=40?'var(--text)':'var(--red)' }
+  if (pnlEl) { const d = pnl+unrealized; pnlEl.textContent = `${d>=0?'+':''}$${d.toFixed(2)}`; pnlEl.style.color = d>=0?'var(--green)':'var(--red)' }
+  if (totalEl) totalEl.textContent = total
+  if (balEl) balEl.textContent = `$${Number(stats.balance||100000).toLocaleString()}`
+}
+
+async function renderTradeHistory(stats) {
+  const histList = document.getElementById('pt-history-list')
+  if (!histList) return
+  const closed = stats.trades.filter(t => t.status !== 'open' && t.useBinance).slice(-50).reverse()
+  histList.innerHTML = closed.length ? closed.map(t => {
+    const conf = t.confidence || 0
+    const confClass = conf >= 65 ? 'high' : conf >= 40 ? 'med' : 'low'
+    return `<div class="trade-item">
+      <div class="trade-left">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="trade-coin">${t.coin} ${t.direction?.toUpperCase()} ${t.leverage>1?t.leverage+'x':''}</div>
+          <span class="conf-badge conf-badge-${confClass}">${conf}%</span>
+        </div>
+        <div class="trade-info">$${t.entry} → $${t.closePrice||'?'} • ${t.closeReason||''}</div>
+        <div class="trade-info">${new Date(t.closeTime||t.openTime).toLocaleDateString()}</div>
+      </div>
+      <div class="${t.status==='win'?'trade-pnl-pos':'trade-pnl-neg'}">${t.pnl>=0?'+':''}$${t.pnl}</div>
+    </div>`
+  }).join('')
+  : '<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No trades yet</div>'
+
+  // Render lessons
+  const lessonsList = document.getElementById('pt-lessons-list')
+  if (lessonsList) {
+    const lessons = await ipcRenderer.invoke('get-lessons').catch(() => [])
+    if (lessons.length) {
+      lessonsList.innerHTML = lessons.slice(-10).reverse().map(l => `
+        <div style="padding:8px 0;border-bottom:1px solid var(--border2);font-size:12px;">
+          <div style="color:var(--accent);margin-bottom:3px;">📋 ${l.rule||l.lesson||''}</div>
+          <div style="color:var(--text2);font-size:11px;">${new Date(l.timestamp||Date.now()).toLocaleDateString()}</div>
+        </div>`).join('')
+    } else {
+      lessonsList.innerHTML = '<div style="color:var(--text2);font-size:12px;text-align:center;padding:16px;">No lessons yet — still learning</div>'
+    }
+  }
+}
+
 async function loadTradingUI() {
-  const stats = await ipcRenderer.invoke('get-paper-stats')
-  const tgStats = await ipcRenderer.invoke('telegram-get-stats')
-  const settings = await ipcRenderer.invoke('get-settings')
+  // Load settings immediately - never times out
+  const settings = await ipcRenderer.invoke('get-settings').catch(() => ({}))
+  window._cachedSettings = settings
 
-  // Restore toggle states
-  if (settings?.autoPaperTrade) document.getElementById('auto-trade-toggle').classList.add('on')
-  else document.getElementById('auto-trade-toggle').classList.remove('on')
-  
-  if (settings?.independentScanner) document.getElementById('independent-scanner-toggle').classList.add('on')
-  else document.getElementById('independent-scanner-toggle').classList.remove('on')
+  // Restore UI from settings right away (no waiting for trades)
+  applySettingsToUI(settings)
 
-  if (settings?.chartAnalysis) document.getElementById('chart-analysis-toggle').classList.add('on')
-  else document.getElementById('chart-analysis-toggle').classList.remove('on')
+  // Load trades separately in background
+  loadOpenPositions()
+  loadTradeHistory()
 
-  // Restore leverage
+  // Load TG stats
+  let tgStats = { stats: {} }
+  try { tgStats = await ipcRenderer.invoke('telegram-get-stats') } catch(e) {}
+
+  // Update stats display
+  try {
+    const stats = await Promise.race([
+      ipcRenderer.invoke('get-paper-stats'),
+      new Promise(r => setTimeout(() => r(null), 5000))
+    ])
+    if (stats) updateStatsDisplay(stats, tgStats)
+  } catch(e) {}
+}
+
+async function loadOpenPositions() {
+  const list = document.getElementById('pt-open-list')
+  if (!list) return
+  try {
+    const trades = await Promise.race([
+      ipcRenderer.invoke('get-paper-trades'),
+      new Promise(r => setTimeout(() => r(null), 5000))
+    ])
+    if (!trades) {
+      list.innerHTML = '<div style="color:var(--text2);text-align:center;padding:16px;font-size:12px;">No open positions</div>'
+      return
+    }
+    renderOpenPositions(trades)
+    renderTradeHistory(trades)
+  } catch(e) {
+    list.innerHTML = '<div style="color:var(--text2);text-align:center;padding:16px;font-size:12px;">No open positions</div>'
+  }
+}
+
+async function loadTradeHistory() {
+  const list = document.getElementById('pt-history-list')
+  if (!list) return
+  try {
+    const trades = await ipcRenderer.invoke('get-paper-trades').catch(() => null)
+    if (trades) renderTradeHistory(trades)
+  } catch(e) {}
+}
+
+function applySettingsToUI(settings) {
+  if (!settings) return
+  try {
+    // Toggles
+    const autoEl = document.getElementById('auto-trade-toggle')
+    const scanEl = document.getElementById('independent-scanner-toggle')
+    const chartEl = document.getElementById('chart-analysis-toggle')
+    const scalpEl = document.getElementById('scalp-toggle')
+    if (autoEl) autoEl.classList.toggle('on', !!settings.autoPaperTrade)
+    if (scanEl) scanEl.classList.toggle('on', !!settings.independentScanner)
+    if (chartEl) chartEl.classList.toggle('on', !!settings.chartAnalysis)
+    if (scalpEl) scalpEl.classList.toggle('on', !!settings.scalpTrading)
+
+    // Main leverage - ONLY .lev-btn
+    if (settings.paperLeverage) {
+      document.querySelectorAll('.lev-btn').forEach(b =>
+        b.classList.toggle('active', parseInt(b.dataset.lev) === settings.paperLeverage)
+      )
+      const warn = document.getElementById('lev-warning')
+      if (warn) warn.textContent = levWarnings[settings.paperLeverage] || ''
+    }
+
+    // Scalp leverage
+    if (settings.scalpLeverage) {
+      document.querySelectorAll('.scalp-lev-btn').forEach(b =>
+        b.classList.toggle('active', parseInt(b.dataset.lev) === settings.scalpLeverage)
+      )
+    }
+
+    // Scalp duration
+    if (settings.scalpDuration) {
+      document.querySelectorAll('.scalp-dur-btn').forEach(b =>
+        b.classList.toggle('active', parseInt(b.dataset.min) === settings.scalpDuration)
+      )
+    }
+
+    // Scan interval
+    if (settings.scanInterval) {
+      document.querySelectorAll('.interval-btn').forEach(b =>
+        b.classList.toggle('active', parseInt(b.dataset.min) === settings.scanInterval)
+      )
+    }
+
+    // Max scalps
+    if (settings.maxScalpTrades) {
+      document.querySelectorAll('.scalp-max-btn').forEach(b =>
+        b.classList.toggle('active', parseInt(b.dataset.val) === settings.maxScalpTrades)
+      )
+    }
+
+    // Trade size
+    const sizeEl = document.getElementById('trade-size-input')
+    if (sizeEl && settings.paperTradeSize) sizeEl.value = settings.paperTradeSize
+
+    // Scalp size
+    const scalpSizeEl = document.getElementById('scalp-size-input')
+    if (scalpSizeEl && settings.scalpSize) scalpSizeEl.value = settings.scalpSize
+
+    // Drawdown
+    const ddEl = document.getElementById('max-drawdown-input')
+    if (ddEl && settings.maxDrawdown) ddEl.value = settings.maxDrawdown
+
+    // TP/SL mode
+    if (settings.tpSlMode) showTpSlPanel(settings.tpSlMode)
+    if (settings.tpSlRatio) {
+      document.querySelectorAll('.ratio-btn').forEach(b =>
+        b.classList.toggle('active', parseFloat(b.dataset.ratio) === settings.tpSlRatio)
+      )
+    }
+    if (settings.customTpPct) { const el = document.getElementById('custom-tp-input'); if(el) el.value = settings.customTpPct }
+    if (settings.customSlPct) { const el = document.getElementById('custom-sl-input'); if(el) el.value = settings.customSlPct }
+
+    // TA mode
+    if (settings.taMode === 'manual') {
+      document.getElementById('ta-manual-btn')?.classList.add('active')
+      document.getElementById('ta-auto-btn')?.classList.remove('active')
+      const panel = document.getElementById('ta-manual-panel')
+      if (panel) panel.style.display = 'block'
+    }
+
+    // Indicators
+    const taInds = settings.enabledIndicators || {}
+    Object.entries({'ta-rsi-toggle':'rsi','ta-ma-toggle':'ma','ta-macd-toggle':'macd','ta-bb-toggle':'bb','ta-sr-toggle':'sr','ta-ob-toggle':'ob','ta-corr-toggle':'corr','ta-time-toggle':'time','ta-ichimoku-toggle':'ichimoku','ta-atr-toggle':'atr','ta-vwap-toggle':'vwap','ta-stochrsi-toggle':'stochRsi','ta-emacross-toggle':'emaCross','ta-fundingextreme-toggle':'fundingExtreme','ta-pivots-toggle':'pivots'}).forEach(([id,key]) => {
+      const el = document.getElementById(id)
+      if (el) el.classList.toggle('on', taInds[key] !== false)
+    })
+
+    const scalpInds = settings.scalpIndicators || {}
+    Object.entries({'scalp-rsi-toggle':'rsi','scalp-bb-toggle':'bb','scalp-sr-toggle':'sr','scalp-ob-toggle':'ob'}).forEach(([id,key]) => {
+      const el = document.getElementById(id)
+      if (el) el.classList.toggle('on', scalpInds[key] !== false)
+    })
+
+    // Coin selection
+    restoreCoinSelections(settings)
+
+    // Build indicator sections with toggle + advanced
+    buildIndicatorSections(settings)
+
+    // Advanced trading settings
+    restoreAdvancedSettings(settings)
+
+    // Daily trade bot settings
+    restoreDailySettings(settings)
+
+    // Confidence thresholds
+    restoreConfidenceSettings()
+
+    // Scalp panel visibility
+    const scalpPanel = document.getElementById('scalp-settings-panel')
+    if (scalpPanel) scalpPanel.style.display = settings.scalpTrading ? 'block' : 'none'
+
+    // Rage lock settings
+    if (settings.rageLockThreshold) {
+      document.querySelectorAll('.rage-thresh-btn').forEach(b =>
+        b.classList.toggle('active', parseInt(b.dataset.val) === settings.rageLockThreshold)
+      )
+    }
+
+  } catch(e) { console.error('applySettingsToUI error:', e) }
+}
+
+function updateStatsDisplay(stats, tgStats) {
+  try {
+    const wins = stats.stats?.wins || 0
+    const losses = stats.stats?.losses || 0
+    const total = wins + losses
+    const winRate = total > 0 ? Math.round(wins/total*100) : 0
+    const pnl = stats.stats?.totalPnl || 0
+    const balance = stats.balance || 100000
+
+    const wrEl = document.getElementById('pt-winrate')
+    const pnlEl = document.getElementById('pt-pnl')
+    const totalEl = document.getElementById('pt-total')
+    const balEl = document.getElementById('pt-balance')
+
+    if (wrEl) { wrEl.textContent = `${winRate}%`; wrEl.style.color = winRate >= 60 ? 'var(--green)' : winRate >= 40 ? 'var(--text)' : 'var(--red)' }
+    if (pnlEl) { pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(2)}`; pnlEl.style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)' }
+    if (totalEl) totalEl.textContent = total
+    if (balEl) balEl.textContent = `$${balance.toLocaleString()}`
+  } catch(e) {}
+}
+
+async function _loadTradingUI_old() {
+  // kept for reference - replaced by loadTradingUI above
+}
+
+async function _old_stats_block() {
+
+  // Restore confidence settings first (safe — always exists)
+  restoreConfidenceSettings()
+
+  // Restore all toggles
+  try {
+    const autoEl = document.getElementById('auto-trade-toggle')
+    const scanEl = document.getElementById('independent-scanner-toggle')
+    const chartEl = document.getElementById('chart-analysis-toggle')
+    if (autoEl) autoEl.classList.toggle('on', !!settings?.autoPaperTrade)
+    if (scanEl) scanEl.classList.toggle('on', !!settings?.independentScanner)
+    if (chartEl) chartEl.classList.toggle('on', !!settings?.chartAnalysis)
+  } catch(e) { console.error('Toggle restore error:', e) }
+
+  // Restore leverage - ONLY target .lev-btn not all .leverage-btn
   if (settings?.paperLeverage) {
-    document.querySelectorAll('.leverage-btn').forEach(b => {
+    document.querySelectorAll('.lev-btn').forEach(b => {
       b.classList.toggle('active', parseInt(b.dataset.lev) === settings.paperLeverage)
     })
-    document.getElementById('lev-warning').textContent = levWarnings[settings.paperLeverage] || `${settings.paperLeverage}x leverage`
+    if(document.getElementById('lev-warning')) document.getElementById('lev-warning').textContent = levWarnings[settings.paperLeverage] || `${settings.paperLeverage}x leverage`
   }
 
   // Restore trade size
@@ -2577,8 +4809,36 @@ async function loadTradingUI() {
     document.getElementById('size-hint').textContent = `Fixed size: $${settings.paperTradeSize} per trade`
   }
 
+  // Restore scan interval
+  const intervalMin = settings?.scanIntervalMinutes || 30
+  document.querySelectorAll('.interval-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.min) === intervalMin)
+  })
+  const scansPerDay = Math.round(1440 / intervalMin)
+  document.getElementById('scan-interval-hint').textContent = `Every ${intervalMin} min — ${scansPerDay} scans/day`
+
   // Restore coin selections
   restoreCoinSelections(settings)
+
+  // Restore scalp settings
+  if (settings?.scalpTrading) {
+    document.getElementById('scalp-toggle').classList.add('on')
+    document.getElementById('scalp-settings-panel').style.display = 'block'
+  }
+  if (settings?.scalpLeverage) {
+    document.querySelectorAll('.scalp-lev-btn').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.lev) === settings.scalpLeverage)
+    })
+  }
+  if (settings?.scalpDuration) {
+    document.querySelectorAll('.scalp-dur-btn').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.min) === settings.scalpDuration)
+    })
+  }
+  if (settings?.scalpSize) {
+    document.getElementById('scalp-size-input').value = settings.scalpSize
+    document.getElementById('scalp-hint').textContent = `Scalp size: $${settings.scalpSize} per trade`
+  }
 
   // Restore max drawdown
   if (settings?.maxDrawdown) {
@@ -2587,20 +4847,35 @@ async function loadTradingUI() {
     document.getElementById('drawdown-hint').style.color = 'var(--red)'
   }
 
-  // Restore confidence settings
-  restoreConfidenceSettings()
+  // Hero stats — Binance trades only
+  const binanceTrades = stats.trades.filter(t => t.useBinance)
+  const binanceClosed = binanceTrades.filter(t => t.status !== 'open')
+  const binanceWins = binanceClosed.filter(t => t.pnl > 0).length
+  const binanceLosses = binanceClosed.filter(t => t.pnl <= 0).length
+  const binanceWinRate = binanceClosed.length > 0 ? Math.round(binanceWins / binanceClosed.length * 100) : 0
+  const binancePnl = binanceClosed.reduce((s, t) => s + (t.pnl || 0), 0)
 
-  // Hero stats
-  document.getElementById('pt-winrate').textContent = `${stats.winRate}%`
-  document.getElementById('pt-total').textContent = stats.totalTrades
-  document.getElementById('pt-balance').textContent = `$${stats.balance?.toFixed(0) || '10,000'}`
+  document.getElementById('pt-winrate').textContent = `${binanceWinRate}%`
+  document.getElementById('pt-total').textContent = binanceClosed.length
+  document.getElementById('pt-balance').textContent = `$${Number(stats.balance || 100000).toLocaleString('en-US', {maximumFractionDigits:2})}`
+  
+  // Show Binance testnet indicator
+  const binanceBar = document.getElementById('binance-status-bar')
+  if (stats.source === 'binance') {
+    binanceBar.style.display = 'flex'
+    document.getElementById('binance-balance').textContent = `$${Number(stats.balance).toFixed(2)}`
+    document.getElementById('binance-positions').textContent = stats.openTrades
+  }
+
   const pnlEl = document.getElementById('pt-pnl')
-  pnlEl.textContent = `${stats.totalPnl >= 0 ? '+' : ''}$${stats.totalPnl}`
-  pnlEl.style.webkitTextFillColor = stats.totalPnl >= 0 ? 'var(--green)' : 'var(--red)'
+  const unrealized = openTrades.reduce((s, t) => s + (t.unrealizedPnl || 0), 0)
+  const totalDisplay = binancePnl + unrealized
+  pnlEl.textContent = `${totalDisplay >= 0 ? '+' : ''}$${totalDisplay.toFixed(2)}`
+  pnlEl.style.webkitTextFillColor = totalDisplay >= 0 ? 'var(--green)' : 'var(--red)'
 
   // Open positions
   const openList = document.getElementById('pt-open-list')
-  const openTrades = stats.trades.filter(t => t.status === 'open')
+  const openTrades = stats.trades.filter(t => t.status === 'open' && t.useBinance)
   openList.innerHTML = openTrades.length ? openTrades.map(t => {
     const pnlClass = (t.unrealizedPnl || 0) >= 0 ? 'trade-pnl-pos' : 'trade-pnl-neg'
     const pnlStr = t.unrealizedPnl !== undefined ? `${t.unrealizedPnl >= 0 ? '+' : ''}$${t.unrealizedPnl} (${t.unrealizedPct >= 0 ? '+' : ''}${t.unrealizedPct}%)` : 'Loading...'
@@ -2609,12 +4884,23 @@ async function loadTradingUI() {
     const confClass = conf >= 65 ? 'high' : conf >= 40 ? 'med' : 'low'
     const badgeClass = `conf-badge-${confClass}`
     const fillClass = `conf-${confClass}`
+    
+    // Scalp badge + countdown
+    const scalpBadge = t.isScalp ? `<span style="background:rgba(251,191,36,0.2);color:#fbbf24;border:1px solid rgba(251,191,36,0.4);border-radius:4px;font-size:10px;padding:1px 6px;font-weight:700;">⚡ SCALP</span>` : ''
+    const scalpCountdown = t.isScalp && t.scalpExpiry ? (() => {
+      const remaining = Math.max(0, t.scalpExpiry - Date.now());
+      const mins = Math.floor(remaining / 60000);
+      const secs = Math.floor((remaining % 60000) / 1000);
+      return `<span style="font-size:10px;color:#fbbf24;">Auto-closes in ${mins}m ${secs}s</span>`
+    })() : ''
+
     return `
-    <div class="trade-item" style="flex-direction:column;gap:6px;align-items:flex-start;">
+    <div class="trade-item" style="flex-direction:column;gap:6px;align-items:flex-start;${t.isScalp ? 'border-left:2px solid #fbbf24;' : ''}">
       <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
         <div style="display:flex;align-items:center;gap:8px;">
           <div class="trade-coin">${t.coin} ${t.direction?.toUpperCase()} ${t.leverage > 1 ? `${t.leverage}x` : ''}</div>
           <span class="conf-badge ${badgeClass}">${conf}%</span>
+          ${scalpBadge}
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <div class="${pnlClass}" style="font-size:15px;">${pnlStr}</div>
@@ -2625,13 +4911,14 @@ async function loadTradingUI() {
       <div class="trade-info">Entry: $${t.entry} → Current: ${currentStr} | Target: $${t.target} | SL: $${t.stopLoss}</div>
       <div class="trade-info">Liq: $${t.liquidationPrice} | Size: $${t.size} | Opened: ${new Date(t.openTime).toLocaleTimeString()}</div>
       <div class="trade-info" style="color:var(--accent);">@${t.caller} • ${t.groupName}</div>
+      ${scalpCountdown ? `<div class="trade-info">${scalpCountdown}</div>` : ''}
     </div>`
   }).join('')
   : '<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No open positions</div>'
 
   // History
   const histList = document.getElementById('pt-history-list')
-  const closed = stats.trades.filter(t => t.status !== 'open')
+  const closed = stats.trades.filter(t => t.status !== 'open' && t.useBinance)
   histList.innerHTML = closed.length ? closed.map(t => {
     const conf = t.confidence || 0
     const confClass = conf >= 65 ? 'high' : conf >= 40 ? 'med' : 'low'
@@ -2677,6 +4964,9 @@ async function loadTradingUI() {
   }
 
   renderLeaderboard(tgStats.stats)
+
+  // Restore new feature settings at end (safe — all elements loaded)
+  try { restoreNewSettings() } catch(e) { console.error('restoreNewSettings:', e) }
 }
 
 document.getElementById('chart-analysis-toggle').addEventListener('click', function() {
@@ -3046,10 +5336,31 @@ document.getElementById('import-btn').addEventListener('click',()=>{
 document.getElementById('close-btn').addEventListener('click',()=>{ ipcRenderer.send('dashboard-closed'); window.close() })
 
 // ── Auto refresh ──
-setInterval(loadPrices,30000)
+setInterval(loadPrices, 30000)
 
 // ── Init ──
-window.addEventListener('DOMContentLoaded',async()=>{ await loadData(); initWaifu(); initDots() })
+window.addEventListener('DOMContentLoaded', async () => {
+  try { await loadData() } catch(e) { console.error('loadData error:', e) }
+  try { initWaifu() } catch(e) { console.error('initWaifu error:', e) }
+  try { initDots() } catch(e) { console.error('initDots error:', e) }
+  
+  // Make sure tabs work — re-bind after all JS loads
+  document.querySelectorAll('.page-tab').forEach(tab => {
+    tab.onclick = () => {
+      document.querySelectorAll('.page-tab').forEach(t => t.classList.remove('active'))
+      tab.classList.add('active')
+      const pageNum = parseInt(tab.dataset.page)
+      const pw = document.getElementById('pages-wrapper')
+      if (pw) pw.scrollTo({ left: (pageNum - 1) * pw.offsetWidth, behavior: 'smooth' })
+      if (pageNum === 2) setTimeout(() => { try { loadTelegramUI() } catch(e) { console.error(e) } }, 300)
+      if (pageNum === 3) {
+        setTimeout(() => { try { loadTradingUI() } catch(e) { console.error(e) } }, 300)
+        setTimeout(() => { try { loadSpotBalances(); loadOpenLimitOrders() } catch(e) {} }, 500)
+
+      }
+    }
+  })
+})
 </script>
 </body>
 </html>

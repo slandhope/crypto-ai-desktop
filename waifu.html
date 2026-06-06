@@ -1054,7 +1054,16 @@ VOICE RESPONSE RULES — CRITICAL:
         webcamActive = true
         webcamBtn.classList.add('active'); webcamBtn.textContent = '🎥'
 
-        // Send camera frames to Gemini every 3 seconds (if Gemini active)
+        // Monitor stream health — restart if track dies
+        webcamStream.getVideoTracks()[0]?.addEventListener('ended', () => {
+          console.log('📷 Camera stream ended — restarting...')
+          webcamActive = false
+          webcamStream = null
+          if (cameraInterval) { clearInterval(cameraInterval); cameraInterval = null }
+          setTimeout(startWebcam, 1000)
+        })
+
+        // Send camera frames to Gemini every 3 seconds
         cameraInterval = setInterval(() => {
           if (!geminiReady || !geminiWs || geminiWs.readyState !== WebSocket.OPEN) return
           try {
@@ -1062,9 +1071,7 @@ VOICE RESPONSE RULES — CRITICAL:
             webcamCanvas.getContext('2d').drawImage(webcamVideo, 0, 0, 320, 240)
             const frame = webcamCanvas.toDataURL('image/jpeg', 0.6).split(',')[1]
             geminiWs.send(JSON.stringify({
-              realtimeInput: {
-                video: { data: frame, mimeType: 'image/jpeg' }
-              }
+              realtimeInput: { video: { data: frame, mimeType: 'image/jpeg' } }
             }))
           } catch(e) {}
         }, 3000)
@@ -1177,7 +1184,14 @@ VOICE RESPONSE RULES — CRITICAL:
     })
     ipcRenderer.on('stop-webcam',    () => stopWebcam())
     ipcRenderer.on('stop-recording', () => { isMicMuted = true; stopMicStreaming() })
-    ipcRenderer.on('start-recording',() => { isMicMuted = false; startMicStreaming() })
+    let lastStartRecording = 0
+    ipcRenderer.on('start-recording', () => { 
+      const now = Date.now()
+      if (now - lastStartRecording < 3000) return // Debounce 3 seconds
+      lastStartRecording = now
+      isMicMuted = false
+      startMicStreaming()
+    })
     ipcRenderer.on('ask-morning-briefing', () => showConfirm('morning', 'Want your morning market briefing?'))
     ipcRenderer.on('ask-news-briefing',    () => showConfirm('news', 'Want the latest crypto news?'))
 

@@ -325,6 +325,31 @@ async function getCryptoPrice(query) {
     if (lower.includes(k)) { coinId = v; break; }
   }
   if (!coinId) return null;
+
+  // Known price ranges for sanity checks
+  const PRICE_RANGES = {
+    'bitcoin': [10000, 200000],
+    'ethereum': [500, 20000],
+    'solana': [10, 1000],
+    'binancecoin': [100, 5000],
+    'avalanche-2': [5, 500],
+    'ripple': [0.1, 50],
+    'dogecoin': [0.05, 5],
+    'pepe': [0.000001, 0.001],
+    'chainlink': [5, 200],
+  };
+
+  async function validatePrice(price, coinId) {
+    if (!price || price <= 0) return false;
+    const range = PRICE_RANGES[coinId];
+    if (range && (price < range[0] || price > range[1])) {
+      console.log(`⚠️ Price validation failed for ${coinId}: $${price} outside range [$${range[0]}, $${range[1]}]`);
+      return false;
+    }
+    return true;
+  }
+
+  // Try CoinGecko first
   try {
     const settings = loadSettings();
     const key = settings.coingeckoKey || process.env.COINGECKO_API_KEY || '';
@@ -335,26 +360,37 @@ async function getCryptoPrice(query) {
     );
     const data = await res.json();
     const coin = data[coinId];
-    if (!coin) return null;
-    const price  = coin.usd >= 1 ? coin.usd.toLocaleString() : coin.usd.toFixed(8);
-    const change = coin.usd_24h_change?.toFixed(2);
-    const dir    = change > 0 ? 'up' : 'down';
-    return `${coinId} is at $${price}, ${dir} ${Math.abs(change)}% in 24h ${change > 0 ? '📈' : '📉'}`;
-  } catch(e) {
-    // Fallback to Binance for BTC/ETH/BNB
-    try {
-      const binanceMap = { bitcoin: 'BTCUSDT', ethereum: 'ETHUSDT', solana: 'SOLUSDT', binancecoin: 'BNBUSDT' };
-      const symbol = binanceMap[coinId];
-      if (symbol) {
-        const res = await fetchT(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`);
-        const data = await res.json();
-        const price = parseFloat(data.lastPrice);
+    if (coin?.usd && await validatePrice(coin.usd, coinId)) {
+      const price = coin.usd >= 1 ? coin.usd.toLocaleString() : coin.usd.toFixed(8);
+      const change = coin.usd_24h_change?.toFixed(2);
+      const dir = change > 0 ? 'up' : 'down';
+      return `${coinId} is at $${price}, ${dir} ${Math.abs(change)}% in 24h ${change > 0 ? '📈' : '📉'}`;
+    }
+  } catch(e) {}
+
+  // Fallback to Binance
+  try {
+    const binanceMap = {
+      bitcoin: 'BTCUSDT', ethereum: 'ETHUSDT', solana: 'SOLUSDT',
+      binancecoin: 'BNBUSDT', 'avalanche-2': 'AVAXUSDT', ripple: 'XRPUSDT',
+      dogecoin: 'DOGEUSDT', chainlink: 'LINKUSDT', 'matic-network': 'MATICUSDT',
+      cardano: 'ADAUSDT', arbitrum: 'ARBUSDT', pepe: 'PEPEUSDT',
+      'shiba-inu': 'SHIBUSDT', litecoin: 'LTCUSDT', tron: 'TRXUSDT'
+    };
+    const symbol = binanceMap[coinId];
+    if (symbol) {
+      const res = await fetchT(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`);
+      const data = await res.json();
+      const price = parseFloat(data.lastPrice);
+      if (await validatePrice(price, coinId)) {
         const change = parseFloat(data.priceChangePercent).toFixed(2);
-        return `${coinId} is at $${price.toLocaleString()}, ${change > 0 ? 'up' : 'down'} ${Math.abs(change)}% in 24h ${change > 0 ? '📈' : '📉'}`;
+        const formatted = price >= 1 ? price.toLocaleString() : price.toFixed(8);
+        return `${coinId} is at $${formatted}, ${change > 0 ? 'up' : 'down'} ${Math.abs(change)}% in 24h ${change > 0 ? '📈' : '📉'}`;
       }
-    } catch(e2) {}
-    return null;
-  }
+    }
+  } catch(e) {}
+
+  return null;
 }
 
 async function getFearGreed() {
@@ -366,6 +402,922 @@ async function getFearGreed() {
     return `Fear & Greed index: ${val} — ${label}`;
   } catch(e) { return 'Could not fetch Fear & Greed right now.'; }
 }
+
+// ── Open Interest ──────────────────────────────────────────────────────────
+async function getOpenInterest(coin = 'BTC') {
+  try {
+    const symbol = `${coin}USDT`;
+    const [current, history] = await Promise.all([
+      fetchT(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${symbol}`),
+      fetchT(`https://fapi.binance.com/futures/data/openInterestHist?symbol=${symbol}&period=1h&limit=2`)
+    ]);
+    const currentData = await current.json();
+    const histData = await history.json();
+
+    const currentOI = parseFloat(currentData.openInterest);
+    const prevOI = histData?.length >= 2 ? parseFloat(histData[0].sumOpenInterest) : currentOI;
+    const oiChange = ((currentOI - prevOI) / prevOI * 100).toFixed(2);
+    const oiUsd = (currentOI * parseFloat(currentData.time ? 1 : 1)).toFixed(0);
+
+    const trend = parseFloat(oiChange) > 1 ? 'RISING ⬆️ (new money entering)' 
+      : parseFloat(oiChange) < -1 ? 'FALLING ⬇️ (positions closing)'
+      : 'STABLE ➡️';
+
+    return `${coin} Open Interest: ${parseFloat(currentOI).toLocaleString()} (${oiChange}% 1h) — ${trend}`;
+  } catch(e) { return null; }
+}
+
+// ── Long/Short Ratio ───────────────────────────────────────────────────────
+async function getLongShortRatio(coin = 'BTC') {
+  try {
+    const symbol = `${coin}USDT`;
+    const res = await fetchT(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${symbol}&period=1h&limit=1`);
+    const data = await res.json();
+    if (!data?.length) return null;
+
+    const longPct = (parseFloat(data[0].longAccount) * 100).toFixed(1);
+    const shortPct = (parseFloat(data[0].shortAccount) * 100).toFixed(1);
+    const ratio = parseFloat(data[0].longShortRatio).toFixed(2);
+
+    let signal = '';
+    if (parseFloat(longPct) > 65) {
+      signal = '⚠️ TOO MANY LONGS — squeeze risk, consider short';
+    } else if (parseFloat(shortPct) > 60) {
+      signal = '⚠️ TOO MANY SHORTS — squeeze risk, consider long';
+    } else {
+      signal = '✅ Balanced';
+    }
+
+    return `${coin} L/S Ratio: ${longPct}% Long / ${shortPct}% Short (${ratio}) — ${signal}`;
+  } catch(e) { return null; }
+}
+
+// ── Liquidation Zones ──────────────────────────────────────────────────────
+async function getLiquidationZones(coin = 'BTC') {
+  try {
+    const symbol = `${coin}USDT`;
+    // Get recent liquidations from Binance
+    const res = await fetchT(`https://fapi.binance.com/fapi/v1/forceOrders?symbol=${symbol}&limit=10`);
+    const data = await res.json();
+    if (!Array.isArray(data) || !data.length) return null;
+
+    const longs = data.filter(l => l.side === 'SELL'); // long liquidations
+    const shorts = data.filter(l => l.side === 'BUY'); // short liquidations
+
+    const longLiqTotal = longs.reduce((s, l) => s + parseFloat(l.origQty) * parseFloat(l.price), 0);
+    const shortLiqTotal = shorts.reduce((s, l) => s + parseFloat(l.origQty) * parseFloat(l.price), 0);
+
+    const avgLongLiqPrice = longs.length 
+      ? (longs.reduce((s, l) => s + parseFloat(l.price), 0) / longs.length).toFixed(2)
+      : null;
+    const avgShortLiqPrice = shorts.length
+      ? (shorts.reduce((s, l) => s + parseFloat(l.price), 0) / shorts.length).toFixed(2)
+      : null;
+
+    let result = `${coin} Recent Liquidations:`;
+    if (avgLongLiqPrice) result += ` Long liq zone ~$${avgLongLiqPrice} ($${(longLiqTotal/1000).toFixed(0)}K)`;
+    if (avgShortLiqPrice) result += ` | Short liq zone ~$${avgShortLiqPrice} ($${(shortLiqTotal/1000).toFixed(0)}K)`;
+
+    return result;
+  } catch(e) { return null; }
+}
+
+// ── Volume Spike Detection ─────────────────────────────────────────────────
+async function getVolumeAnalysis(coin = 'BTC') {
+  try {
+    const symbol = `${coin}USDT`;
+    const res = await fetchT(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=5m&limit=6`);
+    const data = await res.json();
+    if (!data?.length) return null;
+
+    const volumes = data.map(k => parseFloat(k[5]));
+    const currentVol = volumes[volumes.length - 1];
+    const avgVol = volumes.slice(0, -1).reduce((s, v) => s + v, 0) / (volumes.length - 1);
+    const volRatio = (currentVol / avgVol).toFixed(1);
+
+    let signal = '';
+    if (parseFloat(volRatio) > 2) {
+      signal = `🔥 VOLUME SPIKE ${volRatio}x avg — strong momentum`;
+    } else if (parseFloat(volRatio) > 1.5) {
+      signal = `📈 Volume elevated ${volRatio}x avg`;
+    } else if (parseFloat(volRatio) < 0.5) {
+      signal = `😴 Low volume ${volRatio}x avg — reduce position size 50%, use tight stops`;
+    } else {
+      signal = `Normal volume ${volRatio}x avg`;
+    }
+
+    return `${coin} Volume: ${signal}`;
+  } catch(e) { return null; }
+}
+
+// ── BTC Dominance Trend ────────────────────────────────────────────────────
+async function getBTCDominanceTrend() {
+  try {
+    const res = await fetchT('https://api.coingecko.com/api/v3/global');
+    const data = await res.json();
+    const btc = data.data.market_cap_percentage.btc.toFixed(1);
+    const eth = data.data.market_cap_percentage.eth.toFixed(1);
+
+    let signal = '';
+    if (parseFloat(btc) > 55) signal = '📈 High BTC dom — altcoins weak, stick to BTC/ETH';
+    else if (parseFloat(btc) < 45) signal = '🎉 Low BTC dom — altcoin season, alts can outperform';
+    else signal = '⚖️ Neutral BTC dom';
+
+    return `BTC Dominance: ${btc}% | ETH: ${eth}% — ${signal}`;
+  } catch(e) { return null; }
+}
+
+// ── Full Market Intelligence (all signals combined) ────────────────────────
+async function getFullMarketIntel(coin = 'BTC') {
+  const [fg, funding, oi, ls, liq, vol, dom, ta, ob] = await Promise.all([
+    getFearGreed().catch(() => null),
+    getFundingRate(coin).catch(() => null),
+    getOpenInterest(coin).catch(() => null),
+    getLongShortRatio(coin).catch(() => null),
+    getLiquidationZones(coin).catch(() => null),
+    getVolumeAnalysis(coin).catch(() => null),
+    getBTCDominanceTrend().catch(() => null),
+    getTechnicalAnalysis(coin).catch(() => null),
+    getOrderBook(coin).catch(() => null)
+  ]);
+
+  const signals = [fg, funding, oi, ls, liq, vol, dom, ta, ob].filter(Boolean);
+  return signals.join('\n');
+}
+
+// ── TECHNICAL ANALYSIS ENGINE ──────────────────────────────────────────────
+
+// Fetch candles helper
+async function getCandles(coin, interval = '1h', limit = 100) {
+  const symbol = `${coin}USDT`;
+  const res = await fetchT(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+  const data = await res.json();
+  if (!Array.isArray(data)) return null;
+  return data.map(k => ({
+    open: parseFloat(k[1]),
+    high: parseFloat(k[2]),
+    low: parseFloat(k[3]),
+    close: parseFloat(k[4]),
+    volume: parseFloat(k[5])
+  }));
+}
+
+// RSI calculation
+function calcRSI(candles, period = 14) {
+  if (candles.length < period + 1) return null;
+  const closes = candles.map(c => c.close);
+  let gains = 0, losses = 0;
+  for (let i = closes.length - period; i < closes.length; i++) {
+    const diff = closes[i] - closes[i-1];
+    if (diff > 0) gains += diff;
+    else losses += Math.abs(diff);
+  }
+  const avgGain = gains / period;
+  const avgLoss = losses / period;
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return parseFloat((100 - (100 / (1 + rs))).toFixed(2));
+}
+
+// EMA calculation
+function calcEMA(candles, period) {
+  const closes = candles.map(c => c.close);
+  const k = 2 / (period + 1);
+  let ema = closes[0];
+  for (let i = 1; i < closes.length; i++) {
+    ema = closes[i] * k + ema * (1 - k);
+  }
+  return parseFloat(ema.toFixed(6));
+}
+
+// SMA calculation
+function calcSMA(candles, period) {
+  const closes = candles.map(c => c.close);
+  const slice = closes.slice(-period);
+  return parseFloat((slice.reduce((s, v) => s + v, 0) / slice.length).toFixed(6));
+}
+
+// MACD calculation
+function calcMACD(candles) {
+  if (candles.length < 26) return null;
+  const ema12 = calcEMA(candles.slice(-12), 12);
+  const ema26 = calcEMA(candles.slice(-26), 26);
+  const macdLine = parseFloat((ema12 - ema26).toFixed(6));
+  return { macdLine, ema12, ema26 };
+}
+
+// Bollinger Bands
+function calcBollingerBands(candles, period = 20, multiplier = 2) {
+  if (candles.length < period) return null;
+  const closes = candles.slice(-period).map(c => c.close);
+  const sma = closes.reduce((s, v) => s + v, 0) / period;
+  const variance = closes.reduce((s, v) => s + Math.pow(v - sma, 2), 0) / period;
+  const stdDev = Math.sqrt(variance);
+  return {
+    upper: parseFloat((sma + multiplier * stdDev).toFixed(6)),
+    middle: parseFloat(sma.toFixed(6)),
+    lower: parseFloat((sma - multiplier * stdDev).toFixed(6)),
+    stdDev: parseFloat(stdDev.toFixed(6))
+  };
+}
+
+// Support/Resistance levels
+function calcSupportResistance(candles) {
+  const highs = candles.map(c => c.high).sort((a, b) => b - a);
+  const lows = candles.map(c => c.low).sort((a, b) => a - b);
+  const currentPrice = candles[candles.length - 1].close;
+
+  // Find nearest resistance (recent highs above price)
+  const resistances = highs.filter(h => h > currentPrice).slice(0, 3);
+  // Find nearest support (recent lows below price)
+  const supports = lows.filter(l => l < currentPrice).slice(0, 3);
+
+  const nearestResistance = resistances[0] ? parseFloat(resistances[0].toFixed(6)) : null;
+  const nearestSupport = supports[0] ? parseFloat(supports[0].toFixed(6)) : null;
+
+  const distToResistance = nearestResistance ? ((nearestResistance - currentPrice) / currentPrice * 100).toFixed(2) : null;
+  const distToSupport = nearestSupport ? ((currentPrice - nearestSupport) / currentPrice * 100).toFixed(2) : null;
+
+  return { nearestResistance, nearestSupport, distToResistance, distToSupport };
+}
+
+// ── ATR (Average True Range) ──────────────────────────────────────────────
+function calcATR(candles, period = 14) {
+  if (candles.length < period + 1) return null;
+  const trs = [];
+  for (let i = 1; i < candles.length; i++) {
+    const high = candles[i].high;
+    const low = candles[i].low;
+    const prevClose = candles[i-1].close;
+    const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+    trs.push(tr);
+  }
+  // Wilder's smoothing
+  let atr = trs.slice(0, period).reduce((s, v) => s + v, 0) / period;
+  for (let i = period; i < trs.length; i++) {
+    atr = (atr * (period - 1) + trs[i]) / period;
+  }
+  return parseFloat(atr.toFixed(6));
+}
+
+// ATR-based TP/SL calculation
+function calcATRTargets(candles, direction, entry, settings = {}) {
+  const period = settings.atrPeriod || 14;
+  const tpMultiplier = settings.atrTpMultiplier || 2;
+  const slMultiplier = settings.atrSlMultiplier || 1;
+  const atr = calcATR(candles, period);
+  if (!atr) return null;
+
+  const target = direction === 'long'
+    ? parseFloat((entry + atr * tpMultiplier).toFixed(6))
+    : parseFloat((entry - atr * tpMultiplier).toFixed(6));
+
+  const stopLoss = direction === 'long'
+    ? parseFloat((entry - atr * slMultiplier).toFixed(6))
+    : parseFloat((entry + atr * slMultiplier).toFixed(6));
+
+  const tpPct = (Math.abs(target - entry) / entry * 100).toFixed(2);
+  const slPct = (Math.abs(stopLoss - entry) / entry * 100).toFixed(2);
+
+  return { atr, target, stopLoss, tpPct, slPct, ratio: (tpMultiplier / slMultiplier).toFixed(1) };
+}
+
+// ── VWAP ──────────────────────────────────────────────────────────────────
+function calcVWAP(candles) {
+  if (!candles?.length) return null;
+  let cumVolPrice = 0;
+  let cumVol = 0;
+  for (const c of candles) {
+    const typicalPrice = (c.high + c.low + c.close) / 3;
+    cumVolPrice += typicalPrice * c.volume;
+    cumVol += c.volume;
+  }
+  if (cumVol === 0) return null;
+  return parseFloat((cumVolPrice / cumVol).toFixed(6));
+}
+
+async function getVWAP(coin) {
+  try {
+    // Use today's 1h candles for intraday VWAP
+    const candles = await getCandles(coin, '1h', 24);
+    if (!candles) return null;
+    const vwap = calcVWAP(candles);
+    const currentPrice = candles[candles.length-1].close;
+    if (!vwap) return null;
+
+    const pctFromVwap = ((currentPrice - vwap) / vwap * 100).toFixed(2);
+    const aboveBelow = currentPrice > vwap ? 'ABOVE' : 'BELOW';
+    const signal = currentPrice > vwap
+      ? '📈 Price above VWAP — bullish intraday bias'
+      : '📉 Price below VWAP — bearish intraday bias';
+
+    return `VWAP: $${vwap.toFixed(2)} | Price ${aboveBelow} by ${Math.abs(pctFromVwap)}% — ${signal}`;
+  } catch(e) { return null; }
+}
+
+// ── Stochastic RSI ────────────────────────────────────────────────────────
+function calcStochRSI(candles, rsiPeriod = 14, stochPeriod = 14, kPeriod = 3, dPeriod = 3) {
+  if (candles.length < rsiPeriod + stochPeriod + kPeriod) return null;
+
+  // Calculate RSI values for each candle
+  const closes = candles.map(c => c.close);
+  const rsiValues = [];
+
+  for (let i = rsiPeriod; i < closes.length; i++) {
+    const slice = closes.slice(i - rsiPeriod, i + 1).map((v, idx, arr) => idx > 0 ? v - arr[idx-1] : 0).slice(1);
+    const gains = slice.filter(v => v > 0).reduce((s, v) => s + v, 0) / rsiPeriod;
+    const losses = Math.abs(slice.filter(v => v < 0).reduce((s, v) => s + v, 0)) / rsiPeriod;
+    const rs = losses === 0 ? 100 : gains / losses;
+    rsiValues.push(100 - (100 / (1 + rs)));
+  }
+
+  if (rsiValues.length < stochPeriod) return null;
+
+  // Stochastic of RSI
+  const stochValues = [];
+  for (let i = stochPeriod - 1; i < rsiValues.length; i++) {
+    const slice = rsiValues.slice(i - stochPeriod + 1, i + 1);
+    const highest = Math.max(...slice);
+    const lowest = Math.min(...slice);
+    const stoch = highest === lowest ? 50 : ((rsiValues[i] - lowest) / (highest - lowest)) * 100;
+    stochValues.push(stoch);
+  }
+
+  // K line (smooth stoch)
+  const kValues = [];
+  for (let i = kPeriod - 1; i < stochValues.length; i++) {
+    kValues.push(stochValues.slice(i - kPeriod + 1, i + 1).reduce((s, v) => s + v, 0) / kPeriod);
+  }
+
+  // D line (smooth K)
+  const dValues = [];
+  for (let i = dPeriod - 1; i < kValues.length; i++) {
+    dValues.push(kValues.slice(i - dPeriod + 1, i + 1).reduce((s, v) => s + v, 0) / dPeriod);
+  }
+
+  const k = kValues[kValues.length - 1];
+  const d = dValues[dValues.length - 1];
+  if (k === undefined || d === undefined) return null;
+
+  let signal = '';
+  if (k < 20 && d < 20) signal = '🔥 OVERSOLD — strong long signal';
+  else if (k > 80 && d > 80) signal = '🔥 OVERBOUGHT — strong short signal';
+  else if (k > d && k < 50) signal = '📈 Bullish cross in oversold zone';
+  else if (k < d && k > 50) signal = '📉 Bearish cross in overbought zone';
+  else signal = 'Neutral';
+
+  return {
+    k: parseFloat(k.toFixed(2)),
+    d: parseFloat(d.toFixed(2)),
+    signal,
+    summary: `StochRSI: K=${k.toFixed(1)} D=${d.toFixed(1)} — ${signal}`
+  };
+}
+
+// ── EMA Cross Detection ───────────────────────────────────────────────────
+function detectEMACross(candles, fastPeriod = 9, slowPeriod = 21) {
+  if (candles.length < slowPeriod + 2) return null;
+
+  // Calculate EMA for last 2 candles to detect cross
+  const calcEMAAt = (candles, period, endIdx) => {
+    const k = 2 / (period + 1);
+    let ema = candles[0].close;
+    for (let i = 1; i <= endIdx; i++) {
+      ema = candles[i].close * k + ema * (1 - k);
+    }
+    return ema;
+  };
+
+  const len = candles.length;
+  const fastNow = calcEMAAt(candles, fastPeriod, len-1);
+  const slowNow = calcEMAAt(candles, slowPeriod, len-1);
+  const fastPrev = calcEMAAt(candles, fastPeriod, len-2);
+  const slowPrev = calcEMAAt(candles, slowPeriod, len-2);
+
+  const crossedUp = fastPrev <= slowPrev && fastNow > slowNow;
+  const crossedDown = fastPrev >= slowPrev && fastNow < slowNow;
+  const fastAbove = fastNow > slowNow;
+
+  let signal = '';
+  if (crossedUp) signal = `🚨 BULLISH CROSS: EMA${fastPeriod} crossed ABOVE EMA${slowPeriod}`;
+  else if (crossedDown) signal = `🚨 BEARISH CROSS: EMA${fastPeriod} crossed BELOW EMA${slowPeriod}`;
+  else if (fastAbove) signal = `📈 EMA${fastPeriod} above EMA${slowPeriod} — bullish momentum`;
+  else signal = `📉 EMA${fastPeriod} below EMA${slowPeriod} — bearish momentum`;
+
+  return {
+    fastEMA: parseFloat(fastNow.toFixed(4)),
+    slowEMA: parseFloat(slowNow.toFixed(4)),
+    crossedUp,
+    crossedDown,
+    fastAbove,
+    signal,
+    summary: `EMA Cross (${fastPeriod}/${slowPeriod}): ${signal}`
+  };
+}
+
+// ── Funding Rate Extremes ─────────────────────────────────────────────────
+async function getFundingRateExtreme(coin = 'BTC') {
+  try {
+    const symbol = `${coin}USDT`;
+    const res = await fetchT(`https://fapi.binance.com/fapi/v1/fundingRate?symbol=${symbol}&limit=8`);
+    const data = await res.json();
+    if (!Array.isArray(data) || !data.length) return null;
+
+    const rates = data.map(d => parseFloat(d.fundingRate) * 100);
+    const latest = rates[rates.length - 1];
+    const avg = rates.reduce((s, v) => s + v, 0) / rates.length;
+
+    let signal = '';
+    let extreme = false;
+    if (latest > 0.1) {
+      signal = `🚨 EXTREME POSITIVE funding ${latest.toFixed(4)}% — longs paying heavily, dump risk HIGH`;
+      extreme = true;
+    } else if (latest < -0.1) {
+      signal = `🚨 EXTREME NEGATIVE funding ${latest.toFixed(4)}% — shorts paying heavily, squeeze risk HIGH`;
+      extreme = true;
+    } else if (latest > 0.05) {
+      signal = `⚠️ High positive funding ${latest.toFixed(4)}% — avoid new longs`;
+    } else if (latest < -0.05) {
+      signal = `⚠️ High negative funding ${latest.toFixed(4)}% — avoid new shorts`;
+    } else {
+      signal = `✅ Normal funding ${latest.toFixed(4)}%`;
+    }
+
+    return { rate: latest, avg, extreme, signal, summary: `Funding Extreme: ${signal}` };
+  } catch(e) { return null; }
+}
+
+// ── Pivot Points ──────────────────────────────────────────────────────────
+async function getPivotPoints(coin = 'BTC') {
+  try {
+    // Use previous day's daily candle for pivot points
+    const candles = await getCandles(coin, '1d', 3);
+    if (!candles || candles.length < 2) return null;
+
+    const prev = candles[candles.length - 2]; // Yesterday's candle
+    const H = prev.high;
+    const L = prev.low;
+    const C = prev.close;
+
+    // Standard pivot points
+    const PP = (H + L + C) / 3;
+    const R1 = 2 * PP - L;
+    const R2 = PP + (H - L);
+    const R3 = H + 2 * (PP - L);
+    const S1 = 2 * PP - H;
+    const S2 = PP - (H - L);
+    const S3 = L - 2 * (H - PP);
+
+    const currentPrice = candles[candles.length - 1].close;
+
+    // Find nearest levels
+    const levels = [
+      { name: 'R3', price: R3, type: 'resistance' },
+      { name: 'R2', price: R2, type: 'resistance' },
+      { name: 'R1', price: R1, type: 'resistance' },
+      { name: 'PP', price: PP, type: 'pivot' },
+      { name: 'S1', price: S1, type: 'support' },
+      { name: 'S2', price: S2, type: 'support' },
+      { name: 'S3', price: S3, type: 'support' },
+    ].sort((a, b) => Math.abs(a.price - currentPrice) - Math.abs(b.price - currentPrice));
+
+    const nearest = levels[0];
+    const nearestPct = ((nearest.price - currentPrice) / currentPrice * 100).toFixed(2);
+
+    // Are we above or below pivot?
+    const abovePivot = currentPrice > PP;
+    const signal = abovePivot
+      ? `📈 Price above PP ($${PP.toFixed(2)}) — bullish bias | Nearest resistance: ${levels.find(l => l.price > currentPrice)?.name || 'R1'} $${levels.find(l => l.price > currentPrice)?.price?.toFixed(2)}`
+      : `📉 Price below PP ($${PP.toFixed(2)}) — bearish bias | Nearest support: ${levels.find(l => l.price < currentPrice)?.name || 'S1'} $${levels.find(l => l.price < currentPrice)?.price?.toFixed(2)}`;
+
+    return {
+      PP: parseFloat(PP.toFixed(2)),
+      R1: parseFloat(R1.toFixed(2)), R2: parseFloat(R2.toFixed(2)), R3: parseFloat(R3.toFixed(2)),
+      S1: parseFloat(S1.toFixed(2)), S2: parseFloat(S2.toFixed(2)), S3: parseFloat(S3.toFixed(2)),
+      abovePivot,
+      nearestLevel: nearest.name,
+      signal,
+      summary: `Pivot Points: PP=$${PP.toFixed(2)} | ${signal}`
+    };
+  } catch(e) { return null; }
+}
+
+// ── Ichimoku Cloud ────────────────────────────────────────────────────────
+function calcIchimoku(candles, settings = {}) {
+  const tenkanPeriod = settings.tenkan || 9;
+  const kijunPeriod = settings.kijun || 26;
+  const senkouBPeriod = settings.senkouB || 52;
+  const displacement = settings.displacement || 26;
+
+  if (candles.length < senkouBPeriod + displacement) return null;
+
+  // Helper: highest high and lowest low over period
+  const highLow = (arr, period, idx) => {
+    const slice = arr.slice(Math.max(0, idx - period + 1), idx + 1);
+    return {
+      high: Math.max(...slice.map(c => c.high)),
+      low: Math.min(...slice.map(c => c.low))
+    };
+  };
+
+  const len = candles.length;
+  const current = len - 1;
+
+  // Tenkan-sen (Conversion Line) = (9-period high + low) / 2
+  const tenkan = (() => {
+    const { high, low } = highLow(candles, tenkanPeriod, current);
+    return (high + low) / 2;
+  })();
+
+  // Kijun-sen (Base Line) = (26-period high + low) / 2
+  const kijun = (() => {
+    const { high, low } = highLow(candles, kijunPeriod, current);
+    return (high + low) / 2;
+  })();
+
+  // Senkou Span A (Leading Span A) = (Tenkan + Kijun) / 2, displaced 26 forward
+  const senkouA = (tenkan + kijun) / 2;
+
+  // Senkou Span B (Leading Span B) = (52-period high + low) / 2, displaced 26 forward
+  const senkouB = (() => {
+    const { high, low } = highLow(candles, senkouBPeriod, current);
+    return (high + low) / 2;
+  })();
+
+  // Chikou Span (Lagging Span) = current close displaced 26 back
+  const chikou = candles[current].close;
+  const chikouCompare = candles[Math.max(0, current - displacement)]?.close;
+
+  const currentPrice = candles[current].close;
+
+  // Cloud top and bottom (using current displaced cloud)
+  // The current cloud was set 26 periods ago
+  const cloudIdx = Math.max(0, current - displacement);
+  const pastTenkan = (() => {
+    const { high, low } = highLow(candles, tenkanPeriod, cloudIdx);
+    return (high + low) / 2;
+  })();
+  const pastKijun = (() => {
+    const { high, low } = highLow(candles, kijunPeriod, cloudIdx);
+    return (high + low) / 2;
+  })();
+  const pastSenkouA = (pastTenkan + pastKijun) / 2;
+  const pastSenkouB = (() => {
+    const { high, low } = highLow(candles, senkouBPeriod, cloudIdx);
+    return (high + low) / 2;
+  })();
+
+  const cloudTop = Math.max(pastSenkouA, pastSenkouB);
+  const cloudBottom = Math.min(pastSenkouA, pastSenkouB);
+
+  // Signals
+  const aboveCloud = currentPrice > cloudTop;
+  const belowCloud = currentPrice < cloudBottom;
+  const inCloud = !aboveCloud && !belowCloud;
+
+  const tenkanAboveKijun = tenkan > kijun; // bullish cross
+  const tkCross = tenkanAboveKijun ? 'Bullish TK cross' : 'Bearish TK cross';
+
+  // Chikou above/below price 26 periods ago
+  const chikouBullish = chikouCompare ? chikou > chikouCompare : null;
+
+  // Overall Ichimoku signal
+  let signal = '';
+  let bullishPoints = 0;
+  let bearishPoints = 0;
+
+  if (aboveCloud) { signal = '✅ Price ABOVE cloud — bullish trend'; bullishPoints += 2; }
+  else if (belowCloud) { signal = '❌ Price BELOW cloud — bearish trend'; bearishPoints += 2; }
+  else { signal = '⚠️ Price IN cloud — consolidation/uncertainty'; }
+
+  if (tenkanAboveKijun) bullishPoints++;
+  else bearishPoints++;
+
+  if (chikouBullish === true) bullishPoints++;
+  else if (chikouBullish === false) bearishPoints++;
+
+  // Cloud color (future cloud)
+  const futureCloudBullish = senkouA > senkouB;
+  if (futureCloudBullish) bullishPoints++;
+  else bearishPoints++;
+
+  const overallBias = bullishPoints > bearishPoints ? '🟢 BULLISH' 
+    : bearishPoints > bullishPoints ? '🔴 BEARISH' 
+    : '⚪ NEUTRAL';
+
+  return {
+    tenkan: parseFloat(tenkan.toFixed(4)),
+    kijun: parseFloat(kijun.toFixed(4)),
+    senkouA: parseFloat(senkouA.toFixed(4)),
+    senkouB: parseFloat(senkouB.toFixed(4)),
+    cloudTop: parseFloat(cloudTop.toFixed(4)),
+    cloudBottom: parseFloat(cloudBottom.toFixed(4)),
+    aboveCloud,
+    belowCloud,
+    inCloud,
+    tenkanAboveKijun,
+    chikouBullish,
+    futureCloudBullish,
+    bullishPoints,
+    bearishPoints,
+    signal,
+    overallBias,
+    summary: `Ichimoku: ${signal} | TK: ${tkCross} | Cloud: ${futureCloudBullish ? 'Green (bullish)' : 'Red (bearish)'} | ${overallBias}`
+  };
+}
+
+// ── Full Technical Analysis ────────────────────────────────────────────────
+async function getTechnicalAnalysis(coin = 'BTC') {
+  try {
+    const settings = loadSettings();
+    const taMode = settings.taMode || 'auto';
+    const enabledIndicators = settings.enabledIndicators || {
+      rsi: true, ma: true, macd: true, bb: true, sr: true
+    };
+
+    // Fetch candles on multiple timeframes
+    const [candles1h, candles4h, candles15m, candles1hIchi] = await Promise.all([
+      getCandles(coin, '1h', 100).catch(() => null),
+      getCandles(coin, '4h', 50).catch(() => null),
+      getCandles(coin, '15m', 50).catch(() => null),
+      getCandles(coin, '1h', 120).catch(() => null)
+    ]);
+
+    if (!candles1h) return null;
+
+    const currentPrice = candles1h[candles1h.length - 1].close;
+    const results = [];
+    const signals = { bullish: 0, bearish: 0, neutral: 0 };
+
+    // RSI period from settings
+    const rsiPeriod = settings.rsiPeriod || 14;
+
+    // Get additional indicators in parallel
+    const [vwapResult, pivotResult, fundingExtreme] = await Promise.all([
+      getVWAP(coin).catch(() => null),
+      getPivotPoints(coin).catch(() => null),
+      getFundingRateExtreme(coin).catch(() => null)
+    ]);
+
+    // RSI (user-configurable period on 1h + 4h)
+    if (enabledIndicators.rsi !== false) {
+      const rsi1h = calcRSI(candles1h, rsiPeriod);
+      const rsi4h = candles4h ? calcRSI(candles4h, rsiPeriod) : null;
+      if (rsi1h !== null) {
+        let rsiSignal = '';
+        if (rsi1h < 25) { rsiSignal = '🔥 EXTREMELY OVERSOLD — strong long signal'; signals.bullish += 2; }
+        else if (rsi1h < 35) { rsiSignal = '📈 Oversold — long bias'; signals.bullish++; }
+        else if (rsi1h > 75) { rsiSignal = '🔥 EXTREMELY OVERBOUGHT — strong short signal'; signals.bearish += 2; }
+        else if (rsi1h > 65) { rsiSignal = '📉 Overbought — short bias'; signals.bearish++; }
+        else { rsiSignal = 'Neutral zone'; signals.neutral++; }
+        results.push(`RSI(14) 1h: ${rsi1h} ${rsiSignal}${rsi4h ? ` | 4h: ${rsi4h}` : ''}`);
+      }
+    }
+
+    // Moving Averages
+    if (enabledIndicators.ma !== false) {
+      const ma20 = calcSMA(candles1h, 20);
+      const ma50 = calcSMA(candles1h, 50);
+      const ma200 = candles1h.length >= 200 ? calcSMA(candles1h, 200) : calcEMA(candles1h, 50);
+      const ema9 = calcEMA(candles1h, 9);
+
+      const aboveMa20 = currentPrice > ma20;
+      const aboveMa50 = currentPrice > ma50;
+      const aboveMa200 = currentPrice > ma200;
+
+      // Golden/Death cross
+      const goldenCross = ma50 > ma200 && ma20 > ma50;
+      const deathCross = ma50 < ma200 && ma20 < ma50;
+
+      if (goldenCross) { results.push(`MA: Golden Cross ✅ — strong bullish trend`); signals.bullish += 2; }
+      else if (deathCross) { results.push(`MA: Death Cross ❌ — strong bearish trend`); signals.bearish += 2; }
+      else {
+        const maTrend = aboveMa200 ? '📈 Above 200MA (bullish)' : '📉 Below 200MA (bearish)';
+        results.push(`MA: EMA9=$${ema9.toFixed(2)} | SMA20=$${ma20.toFixed(2)} | SMA200=$${ma200.toFixed(2)} — ${maTrend}`);
+        if (aboveMa200) signals.bullish++; else signals.bearish++;
+      }
+    }
+
+    // MACD
+    if (enabledIndicators.macd !== false) {
+      const macd = calcMACD(candles1h);
+      if (macd) {
+        const macdSignal = macd.macdLine > 0 ? '📈 Bullish momentum' : '📉 Bearish momentum';
+        results.push(`MACD: ${macd.macdLine.toFixed(4)} — ${macdSignal}`);
+        if (macd.macdLine > 0) signals.bullish++; else signals.bearish++;
+      }
+    }
+
+    // Bollinger Bands
+    if (enabledIndicators.bb !== false) {
+      const bb = calcBollingerBands(candles1h, 20, 2);
+      if (bb) {
+        const bbWidth = ((bb.upper - bb.lower) / bb.middle * 100).toFixed(2);
+        let bbSignal = '';
+        if (currentPrice <= bb.lower) { bbSignal = '🔥 Price at LOWER band — oversold bounce likely'; signals.bullish++; }
+        else if (currentPrice >= bb.upper) { bbSignal = '🔥 Price at UPPER band — overbought pullback likely'; signals.bearish++; }
+        else if (parseFloat(bbWidth) < 2) { bbSignal = '⚡ Band SQUEEZE — big move incoming!'; signals.neutral++; }
+        else { bbSignal = `In middle band (width: ${bbWidth}%)`; }
+        results.push(`BB: Upper=$${bb.upper.toFixed(2)} Lower=$${bb.lower.toFixed(2)} — ${bbSignal}`);
+      }
+    }
+
+    // Support/Resistance
+    if (enabledIndicators.sr !== false) {
+      const sr = calcSupportResistance(candles1h);
+      if (sr.nearestSupport && sr.nearestResistance) {
+        let srSignal = '';
+        if (parseFloat(sr.distToSupport) < 0.5) { srSignal = '🛡️ Price at SUPPORT — good long entry'; signals.bullish++; }
+        else if (parseFloat(sr.distToResistance) < 0.5) { srSignal = '🚧 Price at RESISTANCE — good short entry'; signals.bearish++; }
+        else { srSignal = `Support: ${sr.distToSupport}% below | Resistance: ${sr.distToResistance}% above`; }
+        results.push(`S/R: Support=$${sr.nearestSupport.toFixed(2)} | Resistance=$${sr.nearestResistance.toFixed(2)} — ${srSignal}`);
+      }
+    }
+
+    // ATR-based TP/SL suggestion
+    if (enabledIndicators.atr !== false) {
+      const atr = calcATR(candles1h, rsiPeriod);
+      if (atr) {
+        const atrPct = (atr / currentPrice * 100).toFixed(2);
+        const atrTargets = calcATRTargets(candles1h, 'long', currentPrice, settings);
+        let atrSignal = '';
+        if (parseFloat(atrPct) > 3) atrSignal = '🌋 High volatility — use wider stops';
+        else if (parseFloat(atrPct) < 0.5) atrSignal = '😴 Low volatility — squeeze incoming?';
+        else atrSignal = 'Normal volatility';
+        results.push(`ATR(${rsiPeriod}): $${atr.toFixed(2)} (${atrPct}% of price) — ${atrSignal} | Smart TP: +${atrTargets?.tpPct}% SL: -${atrTargets?.slPct}%`);
+        if (parseFloat(atrPct) > 3) signals.neutral++; // high vol = neutral
+        else signals.neutral++;
+      }
+    }
+
+    // VWAP
+    if (enabledIndicators.vwap !== false && vwapResult) {
+      results.push(vwapResult);
+      if (vwapResult.includes('above')) signals.bullish++;
+      else signals.bearish++;
+    }
+
+    // Stochastic RSI
+    if (enabledIndicators.stochRsi !== false) {
+      const stoch = calcStochRSI(candles1h, rsiPeriod);
+      if (stoch) {
+        results.push(stoch.summary);
+        if (stoch.k < 20) signals.bullish += 2;
+        else if (stoch.k > 80) signals.bearish += 2;
+        else if (stoch.k > stoch.d) signals.bullish++;
+        else signals.bearish++;
+      }
+    }
+
+    // EMA Cross
+    if (enabledIndicators.emaCross !== false) {
+      const fastP = settings.emaFastPeriod || 9;
+      const slowP = settings.emaSlowPeriod || 21;
+      const emaCross = detectEMACross(candles1h, fastP, slowP);
+      if (emaCross) {
+        results.push(emaCross.summary);
+        if (emaCross.crossedUp) signals.bullish += 2;
+        else if (emaCross.crossedDown) signals.bearish += 2;
+        else if (emaCross.fastAbove) signals.bullish++;
+        else signals.bearish++;
+      }
+    }
+
+    // Funding Rate Extremes
+    if (enabledIndicators.fundingExtreme !== false && fundingExtreme) {
+      if (fundingExtreme.extreme) {
+        results.push(fundingExtreme.summary);
+        if (fundingExtreme.rate > 0.1) signals.bearish += 2; // longs squeezed
+        else if (fundingExtreme.rate < -0.1) signals.bullish += 2; // shorts squeezed
+      }
+    }
+
+    // Pivot Points
+    if (enabledIndicators.pivots !== false && pivotResult) {
+      results.push(pivotResult.summary);
+      if (pivotResult.abovePivot) signals.bullish++;
+      else signals.bearish++;
+    }
+
+    // Ichimoku Cloud
+    if (enabledIndicators.ichimoku !== false && candles1hIchi) {
+      const ichimokuSettings = {
+        tenkan: settings.ichimokuTenkan || 9,
+        kijun: settings.ichimokuKijun || 26,
+        senkouB: settings.ichimokuSenkouB || 52,
+        displacement: 26
+      };
+      const ichi = calcIchimoku(candles1hIchi, ichimokuSettings);
+      if (ichi) {
+        results.push(ichi.summary);
+        // Add to signal count (weighted heavily - Ichimoku is very reliable)
+        if (ichi.aboveCloud) { signals.bullish += 2; }
+        else if (ichi.belowCloud) { signals.bearish += 2; }
+        else { signals.neutral++; }
+        if (ichi.tenkanAboveKijun) signals.bullish++;
+        else signals.bearish++;
+        if (ichi.futureCloudBullish) signals.bullish++;
+        else signals.bearish++;
+      }
+    }
+
+    // Overall TA signal
+    const total = signals.bullish + signals.bearish + signals.neutral;
+    const bullPct = total > 0 ? Math.round(signals.bullish / total * 100) : 50;
+    const bearPct = total > 0 ? Math.round(signals.bearish / total * 100) : 50;
+
+    let overall = '';
+    if (signals.bullish > signals.bearish + 1) overall = `✅ TA BULLISH (${bullPct}% signals bullish)`;
+    else if (signals.bearish > signals.bullish + 1) overall = `❌ TA BEARISH (${bearPct}% signals bearish)`;
+    else overall = '⚖️ TA MIXED — no clear direction';
+
+    return `${coin} Technical Analysis:\n${results.join('\n')}\nOverall: ${overall}`;
+  } catch(e) {
+    console.error('TA error:', e.message?.slice(0, 60));
+    return null;
+  }
+}
+
+// ── Order Book Analysis ────────────────────────────────────────────────────
+async function getOrderBook(coin = 'BTC') {
+  try {
+    const symbol = `${coin}USDT`;
+    const res = await fetchT(`https://fapi.binance.com/fapi/v1/depth?symbol=${symbol}&limit=20`);
+    const data = await res.json();
+    if (!data?.bids || !data?.asks) return null;
+
+    const currentPrice = parseFloat(data.asks[0][0]);
+
+    // Calculate buy/sell wall strength
+    const bidVolume = data.bids.reduce((s, b) => s + parseFloat(b[1]), 0);
+    const askVolume = data.asks.reduce((s, a) => s + parseFloat(a[1]), 0);
+    const ratio = (bidVolume / askVolume).toFixed(2);
+
+    // Find biggest walls
+    const biggestBid = data.bids.reduce((m, b) => parseFloat(b[1]) > parseFloat(m[1]) ? b : m);
+    const biggestAsk = data.asks.reduce((m, a) => parseFloat(a[1]) > parseFloat(m[1]) ? a : m);
+
+    let signal = '';
+    if (parseFloat(ratio) > 1.5) signal = '🟢 Strong buy pressure — bulls in control';
+    else if (parseFloat(ratio) < 0.7) signal = '🔴 Strong sell pressure — bears in control';
+    else signal = '⚖️ Balanced order book';
+
+    const bigBuyWall = parseFloat(biggestBid[1]) > bidVolume * 0.2
+      ? `Big buy wall at $${parseFloat(biggestBid[0]).toFixed(2)}` : null;
+    const bigSellWall = parseFloat(biggestAsk[1]) > askVolume * 0.2
+      ? `Big sell wall at $${parseFloat(biggestAsk[0]).toFixed(2)}` : null;
+
+    let result = `${coin} Order Book: Bid/Ask ratio ${ratio} — ${signal}`;
+    if (bigBuyWall) result += ` | ${bigBuyWall} ← price magnet`;
+    if (bigSellWall) result += ` | ${bigSellWall} ← price resistance`;
+
+    return result;
+  } catch(e) { return null; }
+}
+
+// ── Correlation Analysis ───────────────────────────────────────────────────
+async function getCorrelation(coin = 'ETH') {
+  if (coin === 'BTC') return null; // BTC is the base
+  try {
+    const [btcCandles, coinCandles] = await Promise.all([
+      getCandles('BTC', '1h', 24).catch(() => null),
+      getCandles(coin, '1h', 24).catch(() => null)
+    ]);
+    if (!btcCandles || !coinCandles) return null;
+
+    const btcChange = (btcCandles[btcCandles.length-1].close - btcCandles[0].close) / btcCandles[0].close * 100;
+    const coinChange = (coinCandles[coinCandles.length-1].close - coinCandles[0].close) / coinCandles[0].close * 100;
+    const lag = btcChange - coinChange;
+
+    let signal = '';
+    if (btcChange > 1 && coinChange < 0) signal = `⚡ BTC up ${btcChange.toFixed(1)}% but ${coin} lagging — catch-up pump likely`;
+    else if (btcChange < -1 && coinChange > 0) signal = `⚠️ BTC down but ${coin} holding — ${coin} may dump soon`;
+    else signal = `BTC 24h: ${btcChange.toFixed(1)}% | ${coin} 24h: ${coinChange.toFixed(1)}% | Lag: ${lag.toFixed(1)}%`;
+
+    return `Correlation: ${signal}`;
+  } catch(e) { return null; }
+}
+
+// ── Time of Day Filter ─────────────────────────────────────────────────────
+function getTimeSignal() {
+  const hour = new Date().getUTCHours();
+  const day = new Date().getUTCDay(); // 0=Sun, 6=Sat
+
+  // Weekend = lower volume
+  if (day === 0 || day === 6) return '📅 Weekend — lower volume, wider spreads. Reduce size 50%, lower leverage, tighter TP/SL. Still trade cautiously.';
+
+  // Best trading hours (UTC)
+  if (hour >= 13 && hour <= 17) return '🔥 NY session — highest volume, best time to trade';
+  if (hour >= 8 && hour <= 12) return '📈 London session — good volume';
+  if (hour >= 0 && hour <= 4) return '🌏 Asia session — moderate volume';
+  if (hour >= 22 || hour <= 1) return '😴 Asian low volume hours — reduce position size 30%, still trade';
+
+  return `Market session: UTC ${hour}:00`;
+}
+
+
+
+
 
 async function getFundingRate(coin = 'BTC') {
   try {
@@ -1075,7 +2027,136 @@ async function routeCommand(userText) {
   lastActivityTime = Date.now();
   inActivityFired  = false;
 
-  // ── 1. CASUAL FILTER — instant, no API ──────────────────────────────────
+  // ── MARKET INTELLIGENCE VOICE COMMANDS ──────────────────────────────────
+  if (lower.includes('market intel') || lower.includes('full analysis') || lower.includes('market signals') || lower.includes('what does the market say')) {
+    const coinInMsg = Object.keys(COIN_MAP).find(k => lower.includes(k)) || 'btc';
+    const coinUpper = coinInMsg.toUpperCase();
+    const intel = await getFullMarketIntel(coinUpper);
+    return `Here's the full market intelligence for ${coinUpper}:\n\n${intel}`;
+  }
+
+  if (lower.includes('long short ratio') || lower.includes('ls ratio')) {
+    const coinInMsg = Object.keys(COIN_MAP).find(k => lower.includes(k)) || 'btc';
+    const ls = await getLongShortRatio(coinInMsg.toUpperCase());
+    return ls || 'Could not fetch L/S ratio right now';
+  }
+
+  if (lower.includes('open interest') || lower.includes('oi')) {
+    const coinInMsg = Object.keys(COIN_MAP).find(k => lower.includes(k)) || 'btc';
+    const oi = await getOpenInterest(coinInMsg.toUpperCase());
+    return oi || 'Could not fetch open interest right now';
+  }
+
+  // ── SPOT TRADING VOICE COMMANDS ──────────────────────────────────────────
+  // "buy $200 of BTC" or "buy BTC 200"
+  const buyMatch = lower.match(/buy\s+\$?(\d+)\s+(?:of\s+)?([a-z]+)|buy\s+([a-z]+)\s+\$?(\d+)/);
+  if (buyMatch && (lower.includes('buy') && !lower.includes('should i buy'))) {
+    const amount = parseFloat(buyMatch[1] || buyMatch[4]);
+    const coin = (buyMatch[2] || buyMatch[3])?.toUpperCase();
+    if (amount && coin && Object.keys(COIN_MAP).some(k => coin.toLowerCase().includes(k))) {
+      const order = await spotBuy(coin, amount);
+      if (order) {
+        return `Bought ${order.quantity} ${coin} for $${amount} at ~$${parseFloat(order.price || 0).toLocaleString()} 🟢`;
+      }
+      return `Spot buy failed — check your balance or try again`;
+    }
+  }
+
+  // "sell 50% of my BTC" or "sell all ETH" or "sell $100 of BTC"
+  const sellMatch = lower.match(/sell\s+(all|\d+%?)\s+(?:of\s+)?(?:my\s+)?([a-z]+)/);
+  if (sellMatch && lower.includes('sell')) {
+    const amountStr = sellMatch[1];
+    const coin = sellMatch[2]?.toUpperCase();
+    if (coin && Object.keys(COIN_MAP).some(k => coin.toLowerCase().includes(k))) {
+      let order;
+      if (amountStr === 'all') {
+        order = await spotSell(coin, null, 100);
+      } else if (amountStr.includes('%')) {
+        const pct = parseFloat(amountStr);
+        order = await spotSell(coin, null, pct);
+      } else {
+        const price = await getSpotPrice(`${coin}USDT`);
+        const qty = parseFloat(amountStr) / (price || 1);
+        order = await spotSell(coin, qty);
+      }
+      if (order) {
+        return `Sold ${order.quantity} ${coin} at ~$${parseFloat(order.price || 0).toLocaleString()} 🔴`;
+      }
+      return `Spot sell failed — check your balance`;
+    }
+  }
+
+  // "set limit buy BTC at 60000" 
+  const limitBuyMatch = lower.match(/limit buy\s+([a-z]+)\s+(?:at\s+)?\$?([\d,]+)/);
+  if (limitBuyMatch) {
+    const coin = limitBuyMatch[1]?.toUpperCase();
+    const price = parseFloat(limitBuyMatch[2].replace(',',''));
+    const settings = loadSettings();
+    const baseTradeSize = settings.paperTradeSize || 500;
+  const amount = settings.useKellyCriterion ? calcKellySize(signal?.coin || 'BTC', baseTradeSize) : baseTradeSize;
+    const order = await spotLimitBuy(coin, amount, price);
+    if (order) return `Limit buy set: ${order.quantity} ${coin} at $${price.toLocaleString()} 📋`;
+    return `Limit buy failed`;
+  }
+
+  // "my spot balance" or "show my wallet"
+  if (lower.includes('spot balance') || lower.includes('my wallet') || lower.includes('my holdings') || lower.includes('what do i hold')) {
+    const balances = await getSpotBalances();
+    if (!balances.length) return `No spot holdings yet. Say "buy $100 of BTC" to get started!`;
+    let msg = `Your spot holdings:\n\n`;
+    for (const b of balances.slice(0, 10)) {
+      if (b.coin === 'USDT') {
+        msg += `💵 USDT: $${b.total.toFixed(2)}\n`;
+      } else {
+        const price = await getSpotPrice(`${b.coin}USDT`).catch(() => null);
+        const value = price ? (b.total * price).toFixed(2) : '?';
+        msg += `🪙 ${b.coin}: ${b.total.toFixed(4)} (~$${value})\n`;
+      }
+    }
+    return msg;
+  }
+
+  // ── END SPOT COMMANDS ─────────────────────────────────────────────────────
+
+  // ── SECOND BRAIN ──────────────────────────────────────────────────────────
+  if (lower.startsWith('remember ') || lower.startsWith('note ') || lower.includes("don't forget")) {
+    const text = userText.replace(/^(remember|note)\s+/i, '').replace(/don't forget\s+/i, '');
+    const memory = addMemory(text);
+    return `Got it! I'll remember that 🧠\n"${text}"\nSaved on ${memory.date}`;
+  }
+
+  if (lower.startsWith('what do i know') || lower.startsWith('recall') || lower.startsWith('what did i save')) {
+    const query = lower.replace(/^(what do i know about|recall|what did i save about?)\s+/i, '');
+    const memories = searchMemories(query);
+    if (!memories.length) return `Nothing saved about "${query}" yet. Tell me something to remember!`;
+    return `Here's what I remember:\n\n${memories.map(m => `• [${m.date}] ${m.text}`).join('\n')}`;
+  }
+
+  if (lower.includes('show my memories') || lower.includes('what do you remember about me')) {
+    const brain = loadBrain();
+    if (!brain.memories.length) return "No memories saved yet! Say 'remember [something]' and I'll keep it.";
+    return `Your memories:\n\n${brain.memories.slice(-10).reverse().map(m => `• [${m.date}] ${m.text}`).join('\n')}`;
+  }
+
+  // ── RAGE LOCK ─────────────────────────────────────────────────────────────
+  if (lower.includes('lock trading') || lower.includes('lock me out')) {
+    activateRageLock('Manual lock by user');
+    return `🔒 Trading locked! Taking a break is smart. I'll unlock in ${settings.rageLockMinutes || 30} minutes. You've got this 💙`;
+  }
+
+  if (lower.includes('unlock trading') || lower.includes('unlock me')) {
+    ipcMain.emit('unlock-rage-lock');
+    return '🔓 Trading unlocked! Trade wisely 💙';
+  }
+
+  // ── PSYCHOLOGY SCORE ──────────────────────────────────────────────────────
+  if (lower.includes('psychology score') || lower.includes('my trading psychology') || lower.includes('how am i trading')) {
+    const score = await calculatePsychologyScore();
+    if (!score) return "Not enough trades yet to calculate your psychology score. Keep trading!";
+    return `🧠 Trading Psychology Score: ${score.score}/100 (Grade: ${score.grade})\n\nWin Rate: ${score.winRate}%\n${score.issues.length ? '\n⚠️ Issues:\n' + score.issues.map(i => `• ${i}`).join('\n') : ''}\n${score.wins.length ? '\n✅ Strengths:\n' + score.wins.map(w => `• ${w}`).join('\n') : ''}`;
+  }
+
+  // ── 1. CASUAL FILTER ──────────────────────────────────────────────────────
   const casual = getCasualReply(lower);
   if (casual) return casual;
 
@@ -2528,13 +3609,209 @@ ipcMain.handle('process-voice-input', async (e, audioInput) => {
 
 // Send Telegram message to self
 async function sendTelegramNotification(message) {
+  const settings = loadSettings();
+  
+  // If bot is authenticated — send there instead of saved messages
+  if (settings.telegramBotChatId && process.env.TELEGRAM_BOT_TOKEN) {
+    try {
+      await fetchT(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: settings.telegramBotChatId, text: message })
+      }, 8000);
+      console.log('📱 Bot notification sent:', message.slice(0, 50));
+      return;
+    } catch(e) { console.error('Bot notify error:', e.message); }
+  }
+  
+  // Fallback to saved messages via MTProto
   if (!tgClient) return;
   try {
-    const settings = loadSettings();
     const contact = settings.tgNotifyContact || 'me';
     await tgClient.sendMessage(contact, { message });
     console.log('📱 TG notification sent:', message.slice(0, 50));
   } catch(e) { console.error('TG notify error:', e.message); }
+}
+
+// ─── SMART TRADE CALCULATOR ───────────────────────────────────────────────
+async function calculateSmartTrade(coin, direction, confidence, fearGreed, funding, entry) {
+  const fg = parseInt(fearGreed?.match(/\d+/)?.[0] || 50);
+  const fundingNum = parseFloat(funding?.match(/[\d.-]+/)?.[0] || 0);
+  const settings = loadSettings();
+
+  // Coin volatility tiers
+  const highVol = ['PEPE','DOGE','SHIB','FLOKI','BONK','WIF','MEME'].includes(coin);
+  const medVol = ['SOL','BNB','XRP','LINK','AVAX','ARB','MATIC'].includes(coin);
+
+  // Market regime
+  const isChoppy = fg >= 35 && fg <= 65;
+  const isTrending = fg < 25 || fg > 75;
+  const extremeFunding = Math.abs(fundingNum) > 0.05;
+
+  // Position size by confidence
+  const sizeMultiplier = confidence >= 90 ? 0.08
+    : confidence >= 80 ? 0.05
+    : confidence >= 70 ? 0.03
+    : confidence >= 60 ? 0.02
+    : 0.015;
+
+  let tpPct, slPct, mode, partialTp;
+
+  // ── User TP/SL settings ──────────────────────────────────────────────────
+  const tpSlMode = settings.tpSlMode || 'auto'; // 'auto' or 'manual'
+  const userRatio = settings.tpSlRatio || 2; // TP:SL ratio (e.g. 2 = TP is 2x SL)
+  const userTpPct = settings.customTpPct ? settings.customTpPct / 100 : null;
+  const userSlPct = settings.customSlPct ? settings.customSlPct / 100 : null;
+
+  if (tpSlMode === 'manual' && userTpPct && userSlPct) {
+    // User set custom TP/SL
+    tpPct = userTpPct;
+    slPct = userSlPct;
+    mode = 'custom';
+    partialTp = 0.7;
+  } else if (tpSlMode === 'ratio' && userRatio) {
+    // Auto calculate based on market, but enforce user ratio
+    if (isChoppy) {
+      slPct = highVol ? 0.015 : medVol ? 0.01 : 0.007;
+      mode = 'scalp';
+      partialTp = 1.0;
+    } else if (isTrending) {
+      slPct = highVol ? 0.04 : medVol ? 0.025 : 0.015;
+      mode = 'swing';
+      partialTp = 0.5;
+    } else {
+      slPct = highVol ? 0.025 : medVol ? 0.018 : 0.012;
+      mode = 'normal';
+      partialTp = 0.7;
+    }
+    // TP = SL × userRatio (enforce ratio)
+    tpPct = slPct * userRatio;
+  } else {
+    // Full auto mode
+    if (isChoppy) {
+      mode = 'scalp';
+      tpPct = highVol ? 0.025 : medVol ? 0.015 : 0.01;
+      slPct = highVol ? 0.015 : medVol ? 0.01 : 0.007;
+      partialTp = 1.0;
+    } else if (isTrending) {
+      mode = 'swing';
+      tpPct = highVol ? 0.12 : medVol ? 0.08 : 0.05;
+      slPct = highVol ? 0.04 : medVol ? 0.025 : 0.015;
+      partialTp = 0.5;
+    } else {
+      mode = 'normal';
+      tpPct = highVol ? 0.06 : medVol ? 0.04 : 0.025;
+      slPct = highVol ? 0.025 : medVol ? 0.018 : 0.012;
+      partialTp = 0.7;
+    }
+  }
+
+  // ALWAYS enforce minimum 1:1 ratio — TP must be >= SL
+  if (tpPct < slPct) tpPct = slPct;
+
+  // Funding rate adjustment
+  if (extremeFunding && direction === 'long' && fundingNum < -0.05) {
+    tpPct *= 1.5;
+  }
+
+  // Try ATR-based TP/SL if ATR mode enabled
+  let target, stopLoss;
+  const useATR = settings.tpSlMode === 'atr';
+  if (useATR) {
+    try {
+      const atrCandles = await getCandles(coin, '1h', 30).catch(() => null);
+      if (atrCandles) {
+        const atrResult = calcATRTargets(atrCandles, direction, entry, {
+          atrPeriod: settings.atrPeriod || 14,
+          atrTpMultiplier: settings.atrTpMultiplier || 2,
+          atrSlMultiplier: settings.atrSlMultiplier || 1
+        });
+        if (atrResult) {
+          target = atrResult.target;
+          stopLoss = atrResult.stopLoss;
+          tpPct = parseFloat(atrResult.tpPct) / 100;
+          slPct = parseFloat(atrResult.slPct) / 100;
+          console.log(`📐 ATR mode: TP ${atrResult.tpPct}% SL ${atrResult.slPct}% (ATR=$${atrResult.atr.toFixed(2)})`);
+        }
+      }
+    } catch(e) {}
+  }
+
+  if (!target) {
+    target = direction === 'long'
+      ? parseFloat((entry * (1 + tpPct)).toFixed(6))
+      : parseFloat((entry * (1 - tpPct)).toFixed(6));
+  }
+  if (!stopLoss) {
+    stopLoss = direction === 'long'
+      ? parseFloat((entry * (1 - slPct)).toFixed(6))
+      : parseFloat((entry * (1 + slPct)).toFixed(6));
+  }
+
+  const trailingLevels = [
+    { profitPct: 3, moveSLTo: 0 },
+    { profitPct: 5, moveSLTo: 2 },
+    { profitPct: 8, moveSLTo: 5 },
+    { profitPct: 15, moveSLTo: 10 },
+  ];
+
+  // Auto-reduce on low volume / weekend
+  const timeNow = getTimeSignal();
+  const isLowVolume = timeNow?.includes('Weekend') || timeNow?.includes('low volume');
+  if (isLowVolume) {
+    sizeMultiplier *= 0.5; // 50% size on low volume
+    tpPct *= 0.7;  // tighter TP
+    slPct *= 0.7;  // tighter SL
+    mode = mode + '-lowvol';
+    console.log('📉 Low volume mode: size halved, TP/SL tightened');
+  }
+
+  const ratioActual = (tpPct / slPct).toFixed(1);
+  console.log(`📐 Smart trade: ${mode} mode | TP: ${(tpPct*100).toFixed(1)}% | SL: ${(slPct*100).toFixed(1)}% | Ratio: 1:${ratioActual} | Mode: ${tpSlMode}`);
+
+  return { sizeMultiplier, tpPct, slPct, target, stopLoss, mode, partialTp, trailingLevels };
+}
+
+// Apply trailing stops in checkPaperTrades
+async function applyTrailingStop(trade, currentPrice) {
+  const leverage = trade.leverage || 1;
+  const priceDiff = trade.direction === 'long'
+    ? currentPrice - trade.entry
+    : trade.entry - currentPrice;
+  const profitPct = (priceDiff / trade.entry) * leverage * 100;
+
+  if (!trade.trailingLevels || profitPct <= 0) return null;
+
+  let newSL = null;
+  for (const level of trade.trailingLevels) {
+    if (profitPct >= level.profitPct) {
+      const targetSLPct = level.moveSLTo / leverage / 100;
+      const newSLPrice = trade.direction === 'long'
+        ? trade.entry * (1 + targetSLPct)
+        : trade.entry * (1 - targetSLPct);
+
+      // Only move SL in direction of profit (never make it worse)
+      if (trade.direction === 'long' && newSLPrice > (trade.stopLoss || 0)) {
+        newSL = parseFloat(newSLPrice.toFixed(6));
+      } else if (trade.direction === 'short' && newSLPrice < (trade.stopLoss || Infinity)) {
+        newSL = parseFloat(newSLPrice.toFixed(6));
+      }
+    }
+  }
+
+  if (newSL && newSL !== trade.stopLoss) {
+    const pd = loadPaperTrades();
+    const t = pd.trades.find(tr => tr.id === trade.id);
+    if (t) {
+      const oldSL = t.stopLoss;
+      t.stopLoss = newSL;
+      savePaperTrades(pd);
+      console.log(`📈 Trailing stop moved: ${trade.coin} SL ${oldSL} → ${newSL} (profit: ${profitPct.toFixed(1)}%)`);
+      sendTelegramNotification(`📈 Trailing Stop Updated\n${trade.direction?.toUpperCase()} ${trade.coin}\nSL moved: $${oldSL} → $${newSL}\nProfit locked: ${profitPct.toFixed(1)}%`);
+      return newSL;
+    }
+  }
+  return null;
 }
 
 // ─── INDEPENDENT MARKET SCANNER ───────────────────────────────────────────
@@ -2563,13 +3840,46 @@ async function scanCoinForTrade(scanCoin) {
     const settings = loadSettings();
     if (!settings.independentScanner) return;
     if (!settings.autoPaperTrade) return;
-    // Collect market data for specific coin
-    const [coinPrice, funding, fearGreed, dominance, news] = await Promise.all([
+    // Collect market data — full intelligence suite
+    // Cache FG for hard blocks
+const fgRaw = await getFearGreed().catch(() => '50');
+global._cachedFearGreed = parseInt(fgRaw?.match(/\d+/)?.[0] || 50);
+
+// Get today's daily RSI signal for bias context
+const dailySignals = loadDailySignals();
+const dailySignalForCoin = dailySignals?.signals?.[scanCoin];
+const dailyBiasCtx = dailySignalForCoin
+  ? `DAILY TRADE SIGNAL: ${dailySignalForCoin.tier} (Daily RSI: ${dailySignalForCoin.rsi}) — ${dailySignalForCoin.direction?.toUpperCase()} bias from daily timeframe`
+  : '';
+
+// Get market regime + news sentiment + whale signal + divergence + TG sentiment
+const [regime, newsSentiment, divergence, tgSentiment] = await Promise.all([
+  detectMarketRegime().catch(() => null),
+  getNewsSentiment(scanCoin).catch(() => null),
+  detectRSIDivergence(scanCoin).catch(() => null),
+  getTelegramGroupSentiment(scanCoin).catch(() => null)
+]);
+const whaleSignal = getWhaleSignalForTrade(scanCoin);
+const corrConflict = null; // checked per trade direction later
+const regimeCtx = regime?.summary || '';
+const newsCtx = newsSentiment ? `News Sentiment: ${newsSentiment.label} (${newsSentiment.score}/10) — ${newsSentiment.key_event}` : '';
+const whaleCtx = whaleSignal || '';
+const divergenceCtx = divergence?.signal || '';
+const tgSentimentCtx = tgSentiment?.signal || '';
+const [coinPrice, funding, fearGreed, dominance, news, openInterest, lsRatio, liquidations, volume, technicalAnalysis, orderBook, correlation, timeSignal] = await Promise.all([
       getCryptoPrice(scanCoin.toLowerCase()).catch(() => null),
       getFundingRate(scanCoin).catch(() => null),
-      getFearGreed().catch(() => null),
-      getDominance().catch(() => null),
-      getCryptoNews().catch(() => null)
+      Promise.resolve(fgRaw),
+      getBTCDominanceTrend().catch(() => null),
+      getCryptoNews().catch(() => null),
+      getOpenInterest(scanCoin).catch(() => null),
+      getLongShortRatio(scanCoin).catch(() => null),
+      getLiquidationZones(scanCoin).catch(() => null),
+      getVolumeAnalysis(scanCoin).catch(() => null),
+      getTechnicalAnalysis(scanCoin).catch(() => null),
+      getOrderBook(scanCoin).catch(() => null),
+      getCorrelation(scanCoin).catch(() => null),
+      Promise.resolve(getTimeSignal())
     ]);
 
     const pd = loadPaperTrades();
@@ -2585,13 +3895,37 @@ async function scanCoinForTrade(scanCoin) {
 
 MARKET DATA:
 - ${scanCoin} Price: ${coinPrice}
-- ${scanCoin} Funding Rate: ${funding} (positive = longs paying = bearish signal, negative = shorts paying = bullish)
-- Fear & Greed Index: ${fearGreed} (0-25 = extreme fear = potential bottom, 75-100 = extreme greed = potential top)
+- Funding Rate: ${funding} (positive = longs paying = bearish, negative = shorts paying = bullish)
+- Fear & Greed: ${fearGreed}
 - BTC Dominance: ${dominance}
-- Latest News: ${news?.slice(0, 200)}
+${openInterest ? `- Open Interest: ${openInterest}` : ''}
+${lsRatio ? `- Long/Short Ratio: ${lsRatio}` : ''}
+${liquidations ? `- Liquidation Zones: ${liquidations}` : ''}
+${volume ? `- Volume: ${volume}` : ''}
+${technicalAnalysis ? `\nTECHNICAL ANALYSIS:\n${technicalAnalysis}` : ''}
+${orderBook ? `- Order Book: ${orderBook}` : ''}
+${correlation ? `- Correlation: ${correlation}` : ''}
+- Time: ${timeSignal}
+${dailyBiasCtx ? `- Daily Bias: ${dailyBiasCtx}` : ''}
+${regimeCtx ? `- Market Regime: ${regimeCtx}` : ''}
+${newsCtx ? `- News Sentiment: ${newsCtx}` : ''}
+${whaleCtx ? `- Whale Activity: ${whaleCtx}` : ''}
+${divergenceCtx ? `- RSI Divergence: ${divergenceCtx}` : ''}
+${tgSentimentCtx ? `- TG Sentiment: ${tgSentimentCtx}` : ''}
+- News: ${news?.slice(0, 150) || 'N/A'}
 
-RECENT ${scanCoin} PAPER TRADES:
+SIGNAL INTERPRETATION:
+${lsRatio?.includes('TOO MANY LONGS') ? '⚠️ Crowded longs = squeeze risk = SHORT bias' : ''}
+${lsRatio?.includes('TOO MANY SHORTS') ? '⚠️ Crowded shorts = squeeze risk = LONG bias' : ''}
+${openInterest?.includes('RISING') ? '📈 Rising OI = new money entering = trend strengthening' : ''}
+${openInterest?.includes('FALLING') ? '📉 Falling OI = positions closing = trend weakening' : ''}
+${volume?.includes('SPIKE') ? '🔥 Volume spike = strong momentum = trade with it' : ''}
+${volume?.includes('Low volume') ? '😴 Low volume = reduce size 50%, lower leverage max 3x, tighter stops. Still trade if direction is clear from RSI/MA/L-S ratio.' : ''}
+
+RECENT ${scanCoin} TRADES:
 ${recentTrades.length ? recentTrades.map(t => `${t.direction} at $${t.entry} → ${t.status} P&L: $${t.pnl}`).join('\n') : 'No recent trades'}
+
+${lessonsContext ? 'LEARNED RULES:\n' + lessonsContext : ''}
 
 Current overall win rate: ${winRate}%
 
@@ -2605,11 +3939,16 @@ SHORTING RULES — consider SHORT when:
 - Bad news hitting the coin
 
 LONGING RULES — consider LONG when:
-- Price dipping but fundamentals strong  
-- Funding rate low or negative
-- Fear & Greed below 25 (extreme fear = bottom)
+- Price dipped 5%+ quickly = oversold bounce incoming
+- Fear & Greed below 20 = extreme capitulation = bottom signal
+- Funding rate negative = shorts paying = short squeeze risk
 - Strong support level holding
-- Good news or whale accumulation
+- Even in downtrends — catch the bounces (scalp 1-3%)
+
+IMPORTANT: Even in bearish markets you MUST look for bounce longs.
+Pure shorting = predictable = bad strategy long term.
+Mix directions: 60% short bias in bear market BUT still 40% long opportunities.
+Catching bounces in bear markets is profitable and reduces risk.
 
 Respond ONLY with JSON:
 {
@@ -2624,9 +3963,9 @@ Respond ONLY with JSON:
   "marketBias": "bullish" or "bearish" or "neutral"
 }
 
-Always consider BOTH directions. Short when bearish signals are strong.
-IMPORTANT: If market is clearly bearish (FG < 30, price dumping, high funding) — suggest a SHORT trade, not no trade.
-A bearish market IS a trading opportunity for shorts. Never say shouldTrade=false just because market is bad — bad market = short opportunity.`;
+Always consider BOTH directions.
+In bearish market: look for short setups AND bounce long opportunities.
+Only trade when there is a CLEAR edge — don't force trades.`;
 
     const res = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -2657,46 +3996,136 @@ A bearish market IS a trading opportunity for shorts. Never say shouldTrade=fals
         threshold = 50;
       }
 
-      // ── MiroFish Swarm Validation ──────────────────────────────────────
-      const agentTypes = [
-        'technical analyst', 'sentiment trader', 'whale watcher',
-        'macro analyst', 'contrarian trader', 'momentum trader',
-        'risk manager', 'news trader', 'funding specialist', 'pattern trader'
-      ];
-
+      // ── MiroFish Group Chat 2-Round Debate (Groq + Cerebras) ────────────
+      const TOTAL_AGENTS = 20;
+      const NUM_GROUPS = 2;  // 2 groups of 10 agents — within rate limit
+      const AGENTS_PER_GROUP = 10;
       const marketSummary = `${scanCoin} at ${coinPrice}, Funding: ${funding}, FG: ${fearGreed}. Claude suggests: ${analysis.direction?.toUpperCase()} with ${analysis.confidence}% confidence. Reason: ${analysis.reason}`;
 
-      console.log(`🐟 Running MiroFish with ${agentTypes.length} agents...`);
+      const allRoles = [
+        'technical analyst', 'sentiment trader', 'whale watcher', 'macro analyst',
+        'contrarian trader', 'momentum trader', 'risk manager', 'news trader',
+        'funding specialist', 'pattern trader', 'volume analyst', 'options trader',
+        'derivatives specialist', 'on-chain analyst', 'market maker',
+        'retail sentiment gauge', 'institutional trader', 'algorithmic trader',
+        'volatility trader', 'correlation analyst'
+      ];
 
-      const agentResults = await Promise.all(agentTypes.map(async (role) => {
-        try {
-          const agentRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
-            body: JSON.stringify({
-              model: 'llama-3.3-70b-versatile',
-              max_tokens: 80,
-              messages: [{ role: 'user', content: `You are a crypto ${role}. Market: ${marketSummary}. Do you AGREE with this ${analysis.direction?.toUpperCase()} trade? Reply JSON only: {"agree":true/false,"confidence":0-100}` }]
-            })
-          });
-          const data = await agentRes.json();
-          const t = data.choices?.[0]?.message?.content?.trim().replace(/```json|```/g,'').trim();
-          return JSON.parse(t);
-        } catch(e) { return { agree: Math.random() > 0.5, confidence: 50 }; }
+      // MiroFish agent — Claude Haiku with retry on rate limit
+      async function callMiroAgent(role, prompt) {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const res = await anthropic.messages.create({
+              model: 'claude-haiku-4-5-20251001',
+              max_tokens: 150,
+              messages: [{ role: 'user', content: prompt + '\n\nRespond with valid JSON only.' }]
+            });
+            const raw = res.content[0].text.trim();
+            const jsonMatch = raw.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) return null;
+            return JSON.parse(jsonMatch[0]);
+          } catch(e) {
+            if (e.status === 429 || e.message?.includes('rate_limit') || e.message?.includes('429')) {
+              const wait = (attempt + 1) * 3000;
+              await new Promise(r => setTimeout(r, wait));
+              continue;
+            }
+            return null;
+          }
+        }
+        return null;
+      }
+
+      // Run one group debate — staggered calls to avoid rate limits
+      async function runGroupDebate(groupId, groupRoles) {
+        const delay = ms => new Promise(r => setTimeout(r, ms));
+        
+        // Round 1 — all agents evaluate Claude's suggested direction
+        const round1Results = [];
+        for (let i = 0; i < groupRoles.length; i++) {
+          if (i > 0) await delay(500);
+          const role = groupRoles[i];
+          const result = await callMiroAgent(role,
+            `You are a crypto ${role}. Market: ${marketSummary}. Should we ${analysis.direction?.toUpperCase()} ${scanCoin} right now? JSON: {"agree":true/false,"confidence":0-100,"argument":"specific reason in 10 words"}`
+          );
+          round1Results.push(result ? { ...result, role } : { agree: false, confidence: 50, argument: 'unclear', role });
+        }
+
+        // Compile debate
+        const agentMessages = round1Results.map(r => `${r.role}: "${r.argument}" (${r.agree ? 'AGREE' : 'DISAGREE'})`).join('\n');
+        const bullArgs = round1Results.filter(r => r.agree).map(r => `${r.role}: ${r.argument}`).slice(0,2).join('; ');
+        const bearArgs = round1Results.filter(r => !r.agree).map(r => `${r.role}: ${r.argument}`).slice(0,2).join('; ');
+
+        // Round 2 — agents read debate and give final vote
+        const round2Results = [];
+        for (let i = 0; i < round1Results.length; i++) {
+          if (i > 0) await delay(500);
+          const agent = round1Results[i];
+          const result = await callMiroAgent(groupRoles[i],
+            `You are a crypto ${groupRoles[i]}. 
+Your initial view: "${agent.argument}" (${agent.agree ? 'AGREE' : 'DISAGREE'} with ${analysis.direction?.toUpperCase()})
+Team summary: ${agentMessages.slice(0, 300)}
+Best bull argument: ${bullArgs.slice(0, 100)}
+Best bear argument: ${bearArgs.slice(0, 100)}
+After reading team debate — FINAL answer: should we ${analysis.direction?.toUpperCase()} ${scanCoin}?
+Stay with your view unless someone made a VERY strong point.
+JSON: {"agree":true/false,"confidence":0-100,"changed":true/false}`
+          );
+          // If result is null, keep original vote
+          round2Results.push(result || { agree: agent.agree, confidence: agent.confidence, changed: false });
+        }
+
+        const groupAgree = round2Results.filter(v => v.agree).length;
+        const groupChanged = round2Results.filter(v => v.changed).length;
+        const groupConf = Math.round(round2Results.reduce((s, v) => s + (v.confidence || 50), 0) / round2Results.length);
+
+        return {
+          groupId, agree: groupAgree, total: groupRoles.length,
+          changed: groupChanged, confidence: groupConf,
+          topBullArg: round1Results.filter(r => r.agree)[0]?.argument || '',
+          topBearArg: round1Results.filter(r => !r.agree)[0]?.argument || '',
+          pct: Math.round(groupAgree / groupRoles.length * 100)
+        };
+      }
+
+      console.log(`🐟 MiroFish Group Chat — ${NUM_GROUPS} groups of ${AGENTS_PER_GROUP} debating...`);
+
+      // Create MIXED groups — each group has diverse roles to prevent echo chambers
+      const groups = Array(NUM_GROUPS).fill(0).map((_, gi) => ({
+        id: gi,
+        // Each group gets one of each role type — true diversity
+        roles: Array(AGENTS_PER_GROUP).fill(0).map((_, ai) => allRoles[ai % allRoles.length]),
+        useGroq: false  // Not used anymore — all Haiku
       }));
 
-      const agreeCount = agentResults.filter(a => a.agree).length;
-      const swarmConfidence = Math.round(agentResults.reduce((s, a) => s + (a.confidence || 50), 0) / agentResults.length);
-      const swarmAgreePct = Math.round(agreeCount / agentResults.length * 100);
-      const combinedConfidence = Math.round((analysis.confidence * 0.6) + (swarmConfidence * 0.4));
+      // Run all groups in PARALLEL — stagger within each group handles rate limits
+      const groupResults = await Promise.all(
+        groups.map(g => runGroupDebate(g.id, g.roles))
+      );
 
-      console.log(`🐟 MiroFish: ${agreeCount}/${agentTypes.length} agree (${swarmAgreePct}%) | Swarm: ${swarmConfidence}% | Combined: ${combinedConfidence}%`);
+      // Compile group results
+      const totalAgree = groupResults.reduce((s, g) => s + g.agree, 0);
+      const totalChanged = groupResults.reduce((s, g) => s + g.changed, 0);
+      const swarmAgreePct = Math.round(totalAgree / TOTAL_AGENTS * 100);
+      const swarmConfidence = Math.round(groupResults.reduce((s, g) => s + g.confidence, 0) / groupResults.length);
+      // combinedConfidence calculated below
+      const agreeCount = totalAgree;
+
+      // Cross-group insights
+      const bestBullArg = groupResults.filter(g => g.pct >= 60).map(g => g.topBullArg)[0] || '';
+      const bestBearArg = groupResults.filter(g => g.pct < 40).map(g => g.topBearArg)[0] || '';
+      const r1Pct = swarmAgreePct; // for Claude 2 reference
+      const r2Pct = swarmAgreePct;
+      const changed = totalChanged;
+
+      console.log(`🐟 MiroFish Group Chat Results: ${agreeCount}/${TOTAL_AGENTS} agree (${swarmAgreePct}%) | ${totalChanged} agents changed mind`);
+      console.log(`🐟 Group breakdown: ${groupResults.map(g => `G${g.groupId}:${g.pct}%`).join(' ')}`);
 
       sendIntelEvent({
         type: 'scan',
-        source: 'MiroFish Swarm',
-        body: `${analysis.direction?.toUpperCase()} ${scanCoin} — ${agreeCount}/${agentTypes.length} agents agree (${swarmAgreePct}%)`,
-        note: `Claude: ${analysis.confidence}% | Swarm: ${swarmAgreePct}% | Combined: ${combinedConfidence}%`,
+        source: 'MiroFish Group Chat (8 groups × 10 agents)',
+        body: `${analysis.direction?.toUpperCase()} ${scanCoin} — ${agreeCount}/${TOTAL_AGENTS} agree (${swarmAgreePct}%)`,
+        note: `${totalChanged} agents changed mind | Best bull: "${bestBullArg}" | Best bear: "${bestBearArg}"`,
         notify: false
       });
 
@@ -2706,8 +4135,15 @@ A bearish market IS a trading opportunity for shorts. Never say shouldTrade=fals
         return;
       }
 
-      // ── Claude Final Decision (synthesizes Claude + MiroFish) ──────────
+      // ── Claude Final Decision (synthesizes Claude 1 + full 3-round debate) ──
       console.log(`🧠 Claude final decision synthesis...`);
+      // Calculate combined confidence directly — don't let Claude underweight swarm
+      const combinedConfidence = Math.round(
+        (analysis.confidence * 0.35) +  // Claude 1: 35%
+        (swarmConfidence * 0.40) +       // Swarm confidence: 40%
+        (swarmAgreePct * 0.25)           // Swarm agreement %: 25%
+      );
+
       const finalRes = await anthropic.messages.create({
         model: CLAUDE_MODEL,
         max_tokens: 200,
@@ -2717,33 +4153,39 @@ CLAUDE INITIAL ANALYSIS:
 - Direction: ${analysis.direction?.toUpperCase()}
 - Confidence: ${analysis.confidence}%
 - Reason: ${analysis.reason}
-- Market bias: ${analysis.marketBias}
 
-MIROFISH SWARM RESULT (${agentTypes.length} AI traders):
-- ${agreeCount} out of ${agentTypes.length} agents agree (${swarmAgreePct}%)
-- Swarm confidence: ${swarmConfidence}%
+MIROFISH DEBATE (${TOTAL_AGENTS} traders, 2 rounds):
+- ${agreeCount}/${TOTAL_AGENTS} agree (${swarmAgreePct}%)
+- ${changed} changed mind during debate
+- Bull argument: "${bestBullArg || 'momentum'}"
+- Bear argument: "${bestBearArg || 'downtrend'}"
 
-MARKET: ${scanCoin} at ${coinPrice}, FG: ${fearGreed}, Funding: ${funding}
+PRE-CALCULATED CONFIDENCE: ${combinedConfidence}%
+(Claude 35% + Swarm quality 40% + Swarm agreement 25%)
 
-Based on BOTH the initial analysis AND the swarm debate — make the FINAL trading decision.
-You can change direction or confidence if the swarm revealed something important.
+MARKET: ${scanCoin} at ${coinPrice}, FG: ${fearGreed}
 
-Respond ONLY with JSON:
+Your job: decide shouldTrade and confirm/adjust the direction.
+Use the pre-calculated confidence — only change it by ±5% max.
+
+JSON only:
 {
   "shouldTrade": true/false,
   "direction": "long" or "short",
   "entry": ${analysis.entry},
   "target": number,
   "stopLoss": number,
-  "confidence": 0-100,
-  "reason": "final reason under 20 words"
+  "confidence": ${combinedConfidence},
+  "reason": "final reason under 15 words"
 }` }]
       });
 
-      const finalText = finalRes.content[0].text.trim().replace(/```json|```/g, '').trim();
+      const finalText = finalRes.content[0].text.trim().replace(/\`\`\`json|\`\`\`/g, '').trim();
       const finalDecision = JSON.parse(finalText);
+      // Enforce combined confidence — Claude can't override it wildly
+      finalDecision.confidence = Math.round((finalDecision.confidence + combinedConfidence) / 2);
 
-      console.log(`🧠 Claude final: ${finalDecision.shouldTrade ? finalDecision.direction?.toUpperCase() : 'NO TRADE'} ${scanCoin} — ${finalDecision.confidence}% — ${finalDecision.reason}`);
+      console.log(`🧠 Claude final: ${finalDecision.shouldTrade ? finalDecision.direction?.toUpperCase() : 'NO TRADE'} ${scanCoin} — ${finalDecision.confidence}% (combined: ${combinedConfidence}%) — ${finalDecision.reason}`);
 
       if (!finalDecision.shouldTrade) {
         console.log(`❌ Claude final rejected the trade`);
@@ -2755,6 +4197,18 @@ Respond ONLY with JSON:
         return;
       }
       // ────────────────────────────────────────────────────────────────────
+
+      // ── Smart Trade Calculator — auto TP/SL/scalp/swing ──────────────
+      const entryPrice = finalDecision.entry || analysis.entry || 
+        parseFloat(coinPrice?.match(/[\$]?([\d,]+\.?\d*)/)?.[1]?.replace(',','') || 0);
+      const smartParams = await calculateSmartTrade(
+        scanCoin, finalDecision.direction, finalDecision.confidence,
+        fearGreed, funding, entryPrice
+      );
+      // Override with smart parameters
+      finalDecision.target = smartParams.target;
+      finalDecision.stopLoss = smartParams.stopLoss;
+      // ─────────────────────────────────────────────────────────────────
 
       // Check not already in this coin
       const existingTrade = pd.trades.find(t => t.status === 'open' && t.coin === analysis.coin);
@@ -2776,12 +4230,21 @@ Respond ONLY with JSON:
         stopLoss: finalDecision.stopLoss,
         confidence: finalDecision.confidence,
         caller: 'Asuka (Independent)',
-        groupName: `Claude→MiroFish→Claude | ${swarmAgreePct}% agree`,
+        groupName: `Claude→MiroFish→Claude | ${swarmAgreePct}% agree | ${smartParams.mode} mode`,
         messageId: `scan_${Date.now()}`,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        tradeMode: smartParams.mode,
+        trailingLevels: smartParams.trailingLevels,
+        partialTp: smartParams.partialTp
       };
 
       openPaperTrade(signal);
+
+      // Run scalp scan using main trade as context
+      const scalpSettings = loadSettings();
+      if (scalpSettings.scalpTrading) {
+        setTimeout(() => runScalpScan(signal), 2000);
+      }
 
       if (mainWindow) {
         mainWindow.webContents.send('independent-signal', {
@@ -2806,10 +4269,10 @@ Respond ONLY with JSON:
 let independentScanInterval = null;
 function startIndependentScanner() {
   if (independentScanInterval) clearInterval(independentScanInterval);
-  independentScanInterval = setInterval(runIndependentScan, 30 * 60 * 1000); // Every 30 minutes
-  console.log('🔍 Independent market scanner started');
-  // Run immediately only if enabled in settings
   const settings = loadSettings();
+  const intervalMinutes = settings.scanIntervalMinutes || 30;
+  independentScanInterval = setInterval(runIndependentScan, intervalMinutes * 60 * 1000);
+  console.log(`🔍 Independent market scanner started (every ${intervalMinutes} min)`);
   if (settings.independentScanner) {
     setTimeout(runIndependentScan, 5000);
   }
@@ -2822,6 +4285,26 @@ function loadTradingLessons() {
   return loadJSON(TRADING_LESSONS_FILE, { lessons: [], patterns: [], lastUpdated: null });
 }
 function saveTradingLessons(d) { saveJSON(TRADING_LESSONS_FILE, d); }
+
+// ── Learning Queue — prevents concurrent Sonnet rate limits ───────────────
+const learningQueue = [];
+let learningRunning = false;
+
+async function processLearningQueue() {
+  if (learningRunning) return;
+  learningRunning = true;
+  while (learningQueue.length > 0) {
+    const fn = learningQueue.shift();
+    try { await fn(); } catch(e) { console.error('Learning error:', e.message?.slice(0,60)); }
+    await new Promise(r => setTimeout(r, 4000)); // 4s between lessons
+  }
+  learningRunning = false;
+}
+
+function queueLearnFromTrade(trade, pnl, reason) {
+  learningQueue.push(() => learnFromTrade(trade, pnl, reason));
+  processLearningQueue();
+}
 
 async function learnFromTrade(trade, pnl, reason) {
   try {
@@ -2973,11 +4456,1352 @@ ${recentLessons.filter(l => l.rule).slice(-5).map(l => `- ${l.rule}`).join('\n')
 }
 
 // IPC handler to get lessons
+ipcMain.handle('get-lessons', async () => {
+  const data = loadTradingLessons();
+  return data?.lessons || [];
+});
+
 ipcMain.handle('get-trading-lessons', async () => {
   return loadTradingLessons();
 });
 
-// ─── PAPER TRADING ENGINE ─────────────────────────────────────────────────
+// ─── BINANCE TESTNET INTEGRATION ──────────────────────────────────────────
+const crypto = require('crypto');
+
+function binanceSign(params, secret) {
+  const query = Object.entries(params).map(([k,v]) => `${k}=${v}`).join('&');
+  const sig = crypto.createHmac('sha256', secret).update(query).digest('hex');
+  return `${query}&signature=${sig}`;
+}
+
+async function binanceTestnetRequest(method, path, params = {}) {
+  const apiKey = process.env.BINANCE_TESTNET_API_KEY;
+  const secret = process.env.BINANCE_TESTNET_SECRET;
+  if (!apiKey || !secret) return null;
+
+  params.timestamp = Date.now();
+  params.recvWindow = 5000;
+  const query = binanceSign(params, secret);
+  const url = `https://testnet.binancefuture.com${path}?${query}`;
+
+  try {
+    // Strict 5 second timeout to prevent hanging
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(url, {
+      method,
+      headers: { 'X-MBX-APIKEY': apiKey },
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    return await res.json();
+  } catch(e) {
+    if (e.name === 'AbortError') console.log('Binance testnet timeout — using local data');
+    else console.error('Binance testnet error:', e.message);
+    return null;
+  }
+}
+
+// Set leverage on Binance testnet and return actual leverage set
+async function setBinanceLeverage(symbol, leverage) {
+  const res = await binanceTestnetRequest('POST', '/fapi/v1/leverage', { symbol, leverage });
+  if (res?.leverage) {
+    const actualLeverage = parseInt(res.leverage);
+    if (actualLeverage !== leverage) {
+      console.log(`⚠️ Binance capped leverage: requested ${leverage}x → actual ${actualLeverage}x for ${symbol}`);
+    }
+    return actualLeverage;
+  }
+  return leverage; // fallback to requested
+}
+
+// Open position on Binance testnet
+async function openBinancePosition(signal) {
+  const settings = loadSettings();
+  const leverage = settings.paperLeverage || 1;
+  const symbol = `${signal.coin}USDT`;
+  const side = signal.direction === 'long' ? 'BUY' : 'SELL';
+
+  // Set leverage first — get ACTUAL leverage Binance accepts
+  const actualLeverage = await setBinanceLeverage(symbol, leverage);
+  
+  // Use actual leverage for quantity calculation
+  const priceStr = await getCryptoPrice(signal.coin.toLowerCase());
+  const priceMatch = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
+  const currentPrice = priceMatch ? parseFloat(priceMatch[1].replace(',', '')) : signal.entry;
+  const pd = loadPaperTrades();
+  const size = settings.paperTradeSize || (pd.balance * 0.05);
+  const quantity = parseFloat((size / currentPrice).toFixed(3));
+
+  const order = await binanceTestnetRequest('POST', '/fapi/v1/order', {
+    symbol,
+    side,
+    type: 'MARKET',
+    quantity
+  });
+
+  if (!order?.orderId) {
+    console.error('Binance order failed:', JSON.stringify(order));
+    return null;
+  }
+
+  console.log(`✅ Binance testnet order: ${side} ${symbol} qty=${quantity} leverage=${actualLeverage}x orderId=${order.orderId}`);
+
+  // Place real SL and TP orders on Binance
+  const closeSide = side === 'BUY' ? 'SELL' : 'BUY';
+  
+  // Stop Loss order
+  if (signal.stopLoss) {
+    try {
+      const slOrder = await binanceTestnetRequest('POST', '/fapi/v1/order', {
+        symbol,
+        side: closeSide,
+        type: 'STOP_MARKET',
+        stopPrice: signal.stopLoss.toFixed(2),
+        closePosition: true,
+        quantity
+      });
+      if (slOrder?.orderId) {
+        console.log(`🛑 Binance SL set: $${signal.stopLoss} orderId=${slOrder.orderId}`);
+      }
+    } catch(e) { console.log(`⚠️ SL order failed: ${e.message?.slice(0,60)}`); }
+  }
+
+  // Take Profit order  
+  if (signal.target) {
+    try {
+      const tpOrder = await binanceTestnetRequest('POST', '/fapi/v1/order', {
+        symbol,
+        side: closeSide,
+        type: 'TAKE_PROFIT_MARKET',
+        stopPrice: signal.target.toFixed(2),
+        closePosition: true,
+        quantity
+      });
+      if (tpOrder?.orderId) {
+        console.log(`🎯 Binance TP set: $${signal.target} orderId=${tpOrder.orderId}`);
+      }
+    } catch(e) { console.log(`⚠️ TP order failed: ${e.message?.slice(0,60)}`); }
+  }
+
+  return { ...order, symbol, side, quantity, leverage: actualLeverage };
+}
+
+// Close position on Binance testnet
+async function closeBinancePosition(symbol, side, quantity) {
+  const closeSide = side === 'BUY' ? 'SELL' : 'BUY';
+  const order = await binanceTestnetRequest('POST', '/fapi/v1/order', {
+    symbol,
+    side: closeSide,
+    type: 'MARKET',
+    quantity,
+    reduceOnly: true
+  });
+  if (order?.orderId) {
+    console.log(`✅ Binance testnet position closed: ${symbol}`);
+  }
+  return order;
+}
+
+// Get all open positions from Binance testnet
+async function getBinancePositions() {
+  const positions = await binanceTestnetRequest('GET', '/fapi/v2/positionRisk', {});
+  if (!positions) return [];
+  return positions.filter(p => parseFloat(p.positionAmt) !== 0);
+}
+
+// Get Binance testnet account balance
+async function getBinanceBalance() {
+  const account = await binanceTestnetRequest('GET', '/fapi/v2/account', {});
+  if (!account) return null;
+  const usdt = account.assets?.find(a => a.asset === 'USDT');
+  return usdt ? parseFloat(usdt.availableBalance) : null;
+}
+
+// Check if Binance testnet is configured
+function isBinanceTestnet() {
+  return !!(process.env.BINANCE_TESTNET_API_KEY && process.env.BINANCE_TESTNET_SECRET);
+}
+
+// Coins supported on Binance testnet futures
+const BINANCE_TESTNET_COINS = ['BTC', 'ETH', 'BNB', 'LTC', 'TRX', 'XRP', 'ADA', 'DOT', 'LINK', 'SOL'];
+
+function isSupportedOnTestnet(coin) {
+  return BINANCE_TESTNET_COINS.includes(coin?.toUpperCase());
+}
+
+// ─── INDEPENDENT SCALP SCANNER ────────────────────────────────────────────
+async function runIndependentScalpScan() {
+  const settings = loadSettings();
+  if (!settings.scalpTrading) return;
+  if (!settings.autoPaperTrade) return;
+
+  const pd = loadPaperTrades();
+  const coins = settings.tradingCoins || ['BTC', 'ETH', 'SOL'];
+  const scalpLeverage = settings.scalpLeverage || 10;
+  const scalpSize = settings.scalpSize || 50;
+  const scalpDuration = settings.scalpDuration || 30;
+  const scalpThreshold = settings.scalpThreshold || 55;
+  const maxScalps = settings.maxScalpTrades || 3;
+
+  // Check total open scalps
+  const totalOpenScalps = pd.trades.filter(t => t.status === 'open' && t.isScalp).length;
+  if (totalOpenScalps >= maxScalps) {
+    console.log(`⚡ Scalp scan skipped — max scalps reached (${totalOpenScalps}/${maxScalps})`);
+    return;
+  }
+
+  // Get lessons context for smarter decisions
+  const lessonsCtx = buildLessonsContext();
+
+  // Get market data once for all coins
+  let fearGreed = 50, funding = {};
+  try { 
+    const fg = await getFearGreed();
+    fearGreed = fg;
+    // Cache for hard block in openPaperTrade
+    const fgNum = parseInt(fg?.match(/\d+/)?.[0] || 50);
+    global._cachedFearGreed = fgNum;
+  } catch(e) {}
+
+  console.log('⚡ Running scalp scan (Haiku→5 agents→Sonnet pipeline)...');
+
+  const delay = ms => new Promise(r => setTimeout(r, ms));
+
+  for (const coin of coins) {
+    try {
+      // Reload fresh each coin
+      const freshPd = loadPaperTrades();
+      const openScalps = freshPd.trades.filter(t => t.status === 'open' && t.isScalp).length;
+      if (openScalps >= maxScalps) break;
+
+      const existingScalp = freshPd.trades.find(t =>
+        t.status === 'open' && t.coin === coin && t.isScalp
+      );
+      if (existingScalp) continue;
+
+      // Check cooldown
+      const cooldown = isCoinOnCooldown(coin);
+      if (cooldown) { console.log(`⏰ Scalp skipped: ${coin} on cooldown (${cooldown}min)`); continue; }
+
+      const mainTrade = freshPd.trades.find(t =>
+        t.status === 'open' && t.coin === coin && !t.isScalp
+      );
+
+      const priceStr = await getCryptoPrice(coin.toLowerCase());
+      const priceMatch = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
+      if (!priceMatch) continue;
+      const currentPrice = parseFloat(priceMatch[1].replace(',', ''));
+
+      // Get extra signals for smarter scalp decisions
+      const settings2 = loadSettings();
+      const scalpIndicators = settings2.scalpIndicators || { rsi: true, bb: true, sr: true, ob: true };
+      
+      const [lsRatio, liq, vol, scalpRsi, scalpBb, scalpSr, scalpOb, scalpIchi] = await Promise.all([
+        getLongShortRatio(coin).catch(() => null),
+        getLiquidationZones(coin).catch(() => null),
+        getVolumeAnalysis(coin).catch(() => null),
+        scalpIndicators.rsi !== false ? getCandles(coin, '15m', 30).then(c => c ? `RSI(${settings2.rsiPeriod||14}) 15m: ${calcRSI(c, settings2.rsiPeriod||14)}` : null).catch(() => null) : null,
+        scalpIndicators.bb !== false ? getCandles(coin, '15m', 25).then(c => {
+          if (!c) return null;
+          const bb = calcBollingerBands(c, 20, 2);
+          if (!bb) return null;
+          const price = c[c.length-1].close;
+          if (price <= bb.lower * 1.001) return `BB: Price at LOWER band — oversold bounce signal`;
+          if (price >= bb.upper * 0.999) return `BB: Price at UPPER band — overbought reversal signal`;
+          return `BB: Mid band (upper=$${bb.upper.toFixed(2)} lower=$${bb.lower.toFixed(2)})`;
+        }).catch(() => null) : null,
+        scalpIndicators.sr !== false ? getCandles(coin, '15m', 50).then(c => {
+          if (!c) return null;
+          const sr = calcSupportResistance(c);
+          if (!sr.nearestSupport) return null;
+          return `S/R: Support=$${sr.nearestSupport.toFixed(2)} (${sr.distToSupport}% away) | Resistance=$${sr.nearestResistance?.toFixed(2)} (${sr.distToResistance}% away)`;
+        }).catch(() => null) : null,
+        scalpIndicators.ob !== false ? getOrderBook(coin).catch(() => null) : null,
+        scalpIndicators.vwap !== false ? getVWAP(coin).catch(() => null) : null,
+        scalpIndicators.stochRsi !== false ? getCandles(coin, '15m', 50).then(c => {
+          if (!c) return null;
+          const sr = calcStochRSI(c, settings2.rsiPeriod||14);
+          return sr ? sr.summary : null;
+        }).catch(() => null) : null,
+        scalpIndicators.emaCross !== false ? getCandles(coin, '15m', 50).then(c => {
+          if (!c) return null;
+          const ec = detectEMACross(c, 9, 21);
+          return ec?.crossedUp || ec?.crossedDown ? ec.summary : null;
+        }).catch(() => null) : null,
+        scalpIndicators.ichimoku !== false ? getCandles(coin, '1h', 120).then(c => {
+          if (!c) return null;
+          const ichi = calcIchimoku(c, { tenkan: settings2.ichimokuTenkan||9, kijun: settings2.ichimokuKijun||26, senkouB: 52 });
+          return ichi ? `Ichimoku: ${ichi.aboveCloud ? '✅ Above cloud (bullish)' : ichi.belowCloud ? '❌ Below cloud (bearish)' : '⚠️ In cloud'} | ${ichi.overallBias}` : null;
+        }).catch(() => null) : null
+      ]);
+      
+      // Additional scalp signals
+      const [scalpFunding, scalpPivot] = await Promise.all([
+        scalpIndicators.fundingExtreme !== false ? getFundingRateExtreme(coin).catch(() => null) : null,
+        scalpIndicators.pivots !== false ? getPivotPoints(coin).catch(() => null) : null
+      ]);
+
+      // ATR for scalp sizing
+      let scalpATRInfo = null;
+      if (scalpIndicators.atr !== false) {
+        const atrC = await getCandles(coin, '15m', 30).catch(() => null);
+        if (atrC) {
+          const atrVal = calcATR(atrC, settings2.rsiPeriod || 14);
+          if (atrVal) scalpATRInfo = `ATR(15m): $${atrVal.toFixed(4)} — ${(atrVal/currentPrice*100).toFixed(3)}% volatility`;
+        }
+      }
+
+      const extraSignals = [
+        lsRatio, liq, vol, scalpRsi, scalpBb, scalpSr, scalpOb, scalpIchi,
+        scalpATRInfo,
+        scalpFunding?.extreme ? scalpFunding.summary : null,
+        scalpPivot ? `Pivots: PP=$${scalpPivot.PP} | ${scalpPivot.abovePivot ? 'Above PP bullish' : 'Below PP bearish'}` : null
+      ].filter(Boolean).join('\n');
+      const vwapSignal = extraSignals;
+
+      // Today's performance on this coin
+      const todayTrades = freshPd.trades.filter(t =>
+        t.coin === coin &&
+        t.status !== 'open' &&
+        t.closeTime > Date.now() - 86400000
+      );
+      const todayWins = todayTrades.filter(t => t.pnl > 0).length;
+      const todayLosses = todayTrades.filter(t => t.pnl <= 0).length;
+      const todayPnl = todayTrades.reduce((s, t) => s + (t.pnl || 0), 0);
+
+      const mainContext = mainTrade
+        ? `MAIN TRADE: ${mainTrade.direction?.toUpperCase()} ${coin} at $${mainTrade.entry} | Target: $${mainTrade.target} | SL: $${mainTrade.stopLoss} | Currently: ${mainTrade.unrealizedPnl >= 0 ? 'WINNING' : 'LOSING'}`
+        : 'No main trade open';
+
+      const performanceCtx = `Today on ${coin}: ${todayWins}W/${todayLosses}L, P&L: $${todayPnl.toFixed(2)}`;
+
+      // ── STEP 1: Haiku Scout ──────────────────────────────────────────
+      let scoutResult = null;
+      try {
+        const scoutRes = await anthropic.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 150,
+          messages: [{ role: 'user', content: `You are a crypto scalp scout. Find quick trading opportunities.
+
+COIN: ${coin} at $${currentPrice}
+Fear & Greed: ${fearGreed}
+${mainContext}
+${performanceCtx}
+
+MARKET SIGNALS:
+${extraSignals || 'No extra signals'}
+
+${lsRatio?.includes('TOO MANY LONGS') ? 'SHORT bias: crowded longs' : ''}
+${lsRatio?.includes('TOO MANY SHORTS') ? 'LONG bias: crowded shorts' : ''}
+${vol?.includes('SPIKE') ? '🔥 High volume: trade with momentum, normal size' : ''}
+${vol?.includes('Low volume') ? '😴 Low volume: use SMALL scalp ($20-30 max), tight TP 0.2-0.3%, still scalp if direction clear' : ''}
+${fearGreed < 20 ? 'Extreme Fear: short bias preferred' : ''}
+
+${lessonsCtx ? 'RULES:\n' + lessonsCtx : ''}
+
+Is there a scalp opportunity RIGHT NOW?
+TP: 0.3-1.5% | SL: 0.2-0.8% | Max 30 min
+
+JSON only: {"shouldScalp":true/false,"direction":"long"or"short","entry":${currentPrice},"target":number,"stopLoss":number,"confidence":0-100,"reason":"under 8 words"}` }]
+        });
+        const raw = scoutRes.content[0].text.trim();
+        const m = raw.match(/\{[\s\S]*\}/);
+        if (m) scoutResult = JSON.parse(m[0]);
+      } catch(e) {
+        if (e.status === 429) await delay(3000);
+        continue;
+      }
+
+      if (!scoutResult?.shouldScalp || scoutResult.confidence < 45) {
+        console.log(`⚡ Scout: no opportunity on ${coin} (${scoutResult?.confidence || 0}%)`);
+        continue;
+      }
+
+      console.log(`⚡ Scout found: ${scoutResult.direction?.toUpperCase()} ${coin} ${scoutResult.confidence}% — ${scoutResult.reason}`);
+
+      // ── STEP 2: 5 Agent Debate ───────────────────────────────────────
+      const agentRoles = [
+        'technical analyst',
+        'momentum trader',
+        'risk manager',
+        'contrarian trader',
+        'sentiment analyst'
+      ];
+
+      const agentResults = [];
+      for (let i = 0; i < agentRoles.length; i++) {
+        if (i > 0) await delay(400);
+        try {
+          const aRes = await anthropic.messages.create({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 100,
+            messages: [{ role: 'user', content: `You are a crypto ${agentRoles[i]}.
+
+Scout proposes: ${scoutResult.direction?.toUpperCase()} ${coin} at $${currentPrice}
+Target: $${scoutResult.target} (${((Math.abs(scoutResult.target - currentPrice)/currentPrice)*100).toFixed(2)}% away)
+SL: $${scoutResult.stopLoss} (${((Math.abs(scoutResult.stopLoss - currentPrice)/currentPrice)*100).toFixed(2)}% away)
+Scout reason: "${scoutResult.reason}"
+Scout confidence: ${scoutResult.confidence}%
+Fear & Greed: ${fearGreed}
+Today on ${coin}: ${todayWins}W/${todayLosses}L
+
+${lessonsCtx ? 'LEARNED RULES: ' + lessonsCtx.slice(0, 300) : ''}
+
+
+IMPORTANT: Scout has already analyzed market data. 
+If scout confidence is 65%+, default to AGREE unless you have a SPECIFIC strong reason to disagree.
+Disagreeing without reason = bad analysis.
+Consider: Does the direction make sense given market conditions?
+
+JSON: {"agree":true/false,"confidence":0-100,"argument":"specific reason 8 words"}` }]
+          });
+          const raw2 = aRes.content[0].text.trim();
+          const m2 = raw2.match(/\{[\s\S]*\}/);
+          if (m2) agentResults.push({ ...JSON.parse(m2[0]), role: agentRoles[i] });
+          else agentResults.push({ agree: false, confidence: 50, argument: 'unclear', role: agentRoles[i] });
+        } catch(e) {
+          if (e.status === 429) await delay(3000);
+          agentResults.push({ agree: false, confidence: 50, argument: 'rate limited', role: agentRoles[i] });
+        }
+      }
+
+      const agreeCount = agentResults.filter(a => a.agree).length;
+      const avgConf = Math.round(agentResults.reduce((s, a) => s + a.confidence, 0) / agentResults.length);
+      const agentSummary = agentResults.map(a => `${a.role}: "${a.argument}" (${a.agree ? 'AGREE' : 'DISAGREE'})`).join('\n');
+
+      console.log(`⚡ Agents: ${agreeCount}/5 agree on ${scoutResult.direction?.toUpperCase()} ${coin}`);
+
+      if (agreeCount < 2) {
+        console.log(`⚡ Agents rejected: only ${agreeCount}/5 agree — skipping ${coin}`);
+        continue;
+      }
+      // Need at least 2/5 agents to agree
+
+      // ── STEP 3: Sonnet Final Decision ────────────────────────────────
+      let finalDecision = null;
+      try {
+        await delay(500);
+        const finalRes = await anthropic.messages.create({
+          model: CLAUDE_MODEL,
+          max_tokens: 200,
+          messages: [{ role: 'user', content: `You are the final decision maker for a scalp trade.
+
+SCOUT PROPOSAL: ${scoutResult.direction?.toUpperCase()} ${coin}
+Price: $${currentPrice} | Target: $${scoutResult.target} | SL: $${scoutResult.stopLoss}
+Scout confidence: ${scoutResult.confidence}%
+
+5 AGENT DEBATE (${agreeCount}/5 agree):
+${agentSummary}
+
+USER CONTEXT:
+Balance: $${freshPd.balance?.toFixed(2)}
+Today on ${coin}: ${todayWins}W/${todayLosses}L ($${todayPnl.toFixed(2)})
+Open scalps: ${openScalps}/${maxScalps}
+${mainContext}
+Fear & Greed: ${fearGreed}
+
+LEARNED RULES:
+${lessonsCtx || 'No lessons yet'}
+
+Combined confidence: ${Math.round((scoutResult.confidence * 0.3) + (avgConf * 0.4) + (agreeCount / 5 * 100 * 0.3))}%
+
+Should we execute this scalp? Consider:
+- Agent consensus (${agreeCount}/5)
+- Today performance on this coin
+- Learned rules from past trades
+- Risk vs reward
+
+JSON only:
+{
+  "execute": true/false,
+  "direction": "${scoutResult.direction}",
+  "entry": ${currentPrice},
+  "target": number,
+  "stopLoss": number,
+  "confidence": 0-100,
+  "reason": "final reason under 12 words",
+  "sizeMultiplier": 0.5-1.5
+}` }]
+        });
+
+        const raw3 = finalRes.content[0].text.trim().replace(/\`\`\`json|\`\`\`/g, '').trim();
+        finalDecision = JSON.parse(raw3);
+      } catch(e) {
+        console.log(`⚡ Sonnet error on ${coin}: ${e.message?.slice(0, 60)}`);
+        continue;
+      }
+
+      if (!finalDecision?.execute) {
+        console.log(`⚡ Sonnet rejected ${coin}: ${finalDecision?.reason}`);
+        continue;
+      }
+
+      const threshold = settings.scalpThreshold || 55;
+      // On low volume, lower threshold slightly (small scalps are fine)
+      const isLowVolNow = vol?.includes('Low volume') || getTimeSignal()?.includes('Weekend');
+      const effectiveThreshold = isLowVolNow ? Math.max(45, threshold - 10) : threshold;
+      if (finalDecision.confidence < effectiveThreshold) {
+        console.log(`⚡ Confidence ${finalDecision.confidence}% below threshold ${effectiveThreshold}% (${isLowVolNow ? 'low vol adjusted' : 'normal'}) — skipping ${coin}`);
+        continue;
+      }
+
+      // ── STEP 4: Execute ──────────────────────────────────────────────
+      // Auto-reduce scalp size on low volume / weekend
+      const isLowVol = vol?.includes('Low volume') || getTimeSignal()?.includes('Weekend');
+      const volMultiplier = isLowVol ? 0.4 : 1; // 40% size on low volume
+      const adjustedSize = Math.max(10, Math.round(scalpSize * (finalDecision.sizeMultiplier || 1) * volMultiplier));
+      if (isLowVol) console.log(`📉 Low volume scalp: size reduced to $${adjustedSize}`);
+
+      const scalpSignal = {
+        coin,
+        direction: finalDecision.direction,
+        entry: finalDecision.entry || currentPrice,
+        target: finalDecision.target,
+        stopLoss: finalDecision.stopLoss,
+        confidence: finalDecision.confidence,
+        leverage: scalpLeverage,
+        size: adjustedSize,
+        caller: 'Asuka (Scalp)',
+        groupName: `Scalp | Scout+${agreeCount}/5 agents+Sonnet | ${scoutResult.reason}`,
+        messageId: `scalp_${Date.now()}`,
+        timestamp: Date.now(),
+        isScalp: true,
+        scalpExpiry: Date.now() + (scalpDuration * 60 * 1000),
+      };
+
+      await openPaperTrade(scalpSignal);
+      console.log(`⚡ Scalp executed: ${finalDecision.direction?.toUpperCase()} ${coin} ${finalDecision.confidence}% — ${finalDecision.reason}`);
+
+      sendIntelEvent({
+        type: 'signal',
+        source: `⚡ Scalp (${agreeCount}/5 agents)`,
+        body: `${finalDecision.direction?.toUpperCase()} ${coin} — Scout+Agents+Sonnet agreed`,
+        note: `${finalDecision.reason} | ${finalDecision.confidence}% confidence | Auto-closes ${scalpDuration}min`,
+        notify: true
+      });
+
+      // Small delay between coins
+      await delay(500);
+
+    } catch(e) {
+      console.error(`⚡ Scalp scan error on ${coin}:`, e.message?.slice(0, 80));
+    }
+  }
+}
+
+
+// ─── SCALP TRADING SYSTEM ─────────────────────────────────────────────────
+async function runScalpScan(mainTrade) {
+  const settings = loadSettings();
+  if (!settings.scalpTrading) return;
+  if (!settings.autoPaperTrade) return;
+
+  const pd = loadPaperTrades();
+  
+  // Check if already have scalp open for this coin
+  const existingScalp = pd.trades.find(t => 
+    t.status === 'open' && 
+    t.coin === mainTrade.coin && 
+    t.isScalp === true
+  );
+  if (existingScalp) return;
+
+  const scalpLeverage = settings.scalpLeverage || 20;
+  const scalpSize = settings.scalpSize || (pd.balance * 0.01); // 1% default
+  const scalpDuration = settings.scalpDuration || 30; // minutes
+
+  try {
+    // Get current price
+    const priceStr = await getCryptoPrice(mainTrade.coin.toLowerCase());
+    const priceMatch = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
+    if (!priceMatch) return;
+    const currentPrice = parseFloat(priceMatch[1].replace(',', ''));
+
+    // 10 smart agents find scalp opportunity using main trade as context
+    const agentRoles = [
+      'scalp specialist', 'technical analyst', 'momentum trader',
+      'contrarian trader', 'pattern trader', 'funding specialist',
+      'whale watcher', 'sentiment trader', 'risk manager', 'news trader'
+    ];
+
+    const scalpPrompt = (role) => `You are a crypto ${role} finding SCALP opportunities.
+
+MAIN TRADE CONTEXT:
+Coin: ${mainTrade.coin}
+Direction: ${mainTrade.direction?.toUpperCase()} (swing trade)
+Entry: $${mainTrade.entry}
+Target: $${mainTrade.target}
+SL: $${mainTrade.stopLoss}
+Confidence: ${mainTrade.confidence}%
+
+CURRENT MARKET:
+Price: $${currentPrice}
+Main trade P&L direction: ${mainTrade.direction === 'long' ? 'going up' : 'going down'}
+
+Find the BEST scalp trade RIGHT NOW:
+- Can be SAME direction as main (momentum scalp)
+- Can be OPPOSITE direction (counter-trend scalp)
+- Must be quick: TP 0.5-2%, SL 0.3-1%
+- Must close within ${scalpDuration} minutes
+
+JSON only:
+{
+  "shouldScalp": true/false,
+  "direction": "long" or "short",
+  "entry": ${currentPrice},
+  "target": number,
+  "stopLoss": number,
+  "confidence": 0-100,
+  "reason": "under 10 words",
+  "expectedDuration": "5-30 minutes"
+}`;
+
+    // Run 10 agents in parallel
+    const delay = ms => new Promise(r => setTimeout(r, ms));
+    const agentResults = [];
+    
+    for (let i = 0; i < agentRoles.length; i++) {
+      if (i > 0) await delay(300);
+      try {
+        const res = await anthropic.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 150,
+          messages: [{ role: 'user', content: scalpPrompt(agentRoles[i]) + '\n\nJSON only.' }]
+        });
+        const raw = res.content[0].text.trim();
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const result = JSON.parse(jsonMatch[0]);
+          agentResults.push({ ...result, role: agentRoles[i] });
+        }
+      } catch(e) {
+        if (e.status === 429) await delay(3000);
+      }
+    }
+
+    if (!agentResults.length) return;
+
+    // Find best scalp opportunity
+    const scalpSuggestions = agentResults.filter(a => a.shouldScalp && a.confidence >= 60);
+    if (scalpSuggestions.length < 3) {
+      console.log(`⚡ Scalp: only ${scalpSuggestions.length}/10 agents see opportunity — skipping`);
+      return;
+    }
+
+    // Average confidence and pick majority direction
+    const avgConf = Math.round(scalpSuggestions.reduce((s, a) => s + a.confidence, 0) / scalpSuggestions.length);
+    const longVotes = scalpSuggestions.filter(a => a.direction === 'long').length;
+    const shortVotes = scalpSuggestions.filter(a => a.direction === 'short').length;
+    const scalpDirection = longVotes >= shortVotes ? 'long' : 'short';
+
+    // Claude final scalp decision
+    const finalRes = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 150,
+      messages: [{ role: 'user', content: `You are deciding on a scalp trade.
+
+MAIN TRADE: ${mainTrade.direction?.toUpperCase()} ${mainTrade.coin} swing
+SCALP AGENTS: ${scalpSuggestions.length}/10 see opportunity
+Direction votes: ${longVotes} LONG vs ${shortVotes} SHORT
+Avg confidence: ${avgConf}%
+Best reason: "${scalpSuggestions[0]?.reason}"
+Current price: $${currentPrice}
+Max duration: ${scalpDuration} min
+
+Approve this scalp? JSON only:
+{
+  "approve": true/false,
+  "direction": "${scalpDirection}",
+  "entry": ${currentPrice},
+  "target": number,
+  "stopLoss": number,
+  "confidence": 0-100,
+  "reason": "under 10 words"
+}` }]
+    });
+
+    const finalRaw = finalRes.content[0].text.trim();
+    const finalMatch = finalRaw.match(/\{[\s\S]*\}/);
+    if (!finalMatch) return;
+    const finalDecision = JSON.parse(finalMatch[0]);
+
+    if (!finalDecision.approve || finalDecision.confidence < 60) {
+      console.log(`⚡ Scalp rejected by Claude: ${finalDecision.reason}`);
+      return;
+    }
+
+    // Open scalp trade
+    const scalpSignal = {
+      coin: mainTrade.coin,
+      direction: finalDecision.direction,
+      entry: finalDecision.entry || currentPrice,
+      target: finalDecision.target,
+      stopLoss: finalDecision.stopLoss,
+      confidence: finalDecision.confidence,
+      caller: 'Asuka (Scalp)',
+      groupName: `Scalp | ${scalpSuggestions.length}/10 agents | ${scalpDirection === mainTrade.direction ? 'With trend' : 'Counter trend'}`,
+      messageId: `scalp_${Date.now()}`,
+      timestamp: Date.now(),
+      isScalp: true,
+      scalpExpiry: Date.now() + (scalpDuration * 60 * 1000),
+      leverage: scalpLeverage,
+      size: scalpSize
+    };
+
+    const trade = await openPaperTrade(scalpSignal);
+    console.log(`⚡ Scalp opened: ${finalDecision.direction?.toUpperCase()} ${mainTrade.coin} — ${finalDecision.confidence}% — ${finalDecision.reason}`);
+
+    sendIntelEvent({
+      type: 'signal',
+      source: '⚡ Scalp Trade',
+      body: `${finalDecision.direction?.toUpperCase()} ${mainTrade.coin} scalp — ${scalpSuggestions.length}/10 agents agree`,
+      note: `${finalDecision.reason} | Auto-closes in ${scalpDuration} min | ${finalDecision.confidence}% confidence`,
+      notify: true
+    });
+
+  } catch(e) {
+    console.error('Scalp scan error:', e.message);
+  }
+}
+
+// Check scalp trades — smart exit + time expiry
+async function checkScalpExpiry() {
+  const pd = loadPaperTrades();
+  const openScalps = pd.trades.filter(t => t.status === 'open' && t.isScalp);
+
+  for (const trade of openScalps) {
+    try {
+      const priceStr = await getCryptoPrice(trade.coin.toLowerCase());
+      const priceMatch = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
+      if (!priceMatch) continue;
+      const currentPrice = parseFloat(priceMatch[1].replace(',', ''));
+
+      // Sanity check
+      const priceDiffPct = Math.abs(currentPrice - trade.entry) / trade.entry * 100;
+      if (priceDiffPct > 50) continue;
+
+      const leverage = trade.leverage || 1;
+      const priceDiff = trade.direction === 'long'
+        ? currentPrice - trade.entry
+        : trade.entry - currentPrice;
+      const pnlPct = (priceDiff / trade.entry) * leverage * 100;
+
+      // 1. Time limit expired
+      if (trade.scalpExpiry && Date.now() > trade.scalpExpiry) {
+        await closePaperTrade(trade.id, currentPrice, 'scalp time limit reached');
+        console.log(`⚡ Scalp auto-closed (time): ${trade.direction} ${trade.coin} P&L: ${pnlPct.toFixed(1)}%`);
+        continue;
+      }
+
+      // 2. Smart exit — conditions turned against scalp
+      const timeSinceOpen = (Date.now() - trade.openTime) / 1000 / 60; // minutes
+      
+      // If losing more than 3% leveraged AND been open 5+ min → close early
+      if (pnlPct < -3 && timeSinceOpen > 5) {
+        await closePaperTrade(trade.id, currentPrice, 'scalp smart exit — conditions changed');
+        console.log(`⚡ Scalp smart exit (losing): ${trade.direction} ${trade.coin} ${pnlPct.toFixed(1)}%`);
+        sendTelegramNotification(`⚡ Scalp Smart Exit\n${trade.direction?.toUpperCase()} ${trade.coin}\nConditions changed — cutting loss early\nP&L: ${pnlPct.toFixed(1)}%`);
+        continue;
+      }
+
+      // 3. Profit target hit (scalp TP)
+      const hitTarget = trade.direction === 'long'
+        ? currentPrice >= trade.target
+        : currentPrice <= trade.target;
+      if (hitTarget) {
+        await closePaperTrade(trade.id, currentPrice, 'scalp target hit');
+        console.log(`⚡ Scalp TP hit: ${trade.direction} ${trade.coin} +${pnlPct.toFixed(1)}%`);
+        continue;
+      }
+
+      // 4. Half time passed + already profitable → close to lock profit
+      const halfTime = trade.scalpExpiry 
+        ? Date.now() > (trade.openTime + (trade.scalpExpiry - trade.openTime) / 2)
+        : false;
+      if (halfTime && pnlPct > 1.5) {
+        await closePaperTrade(trade.id, currentPrice, 'scalp locking profit at half time');
+        console.log(`⚡ Scalp profit lock at half time: ${trade.coin} +${pnlPct.toFixed(1)}%`);
+        continue;
+      }
+
+    } catch(e) {}
+  }
+}
+
+
+// ─── BINANCE SPOT TRADING ─────────────────────────────────────────────────
+
+// Binance spot testnet: https://testnet.binance.vision
+async function binanceSpotRequest(method, path, params = {}) {
+  const apiKey = process.env.BINANCE_TESTNET_API_KEY;
+  const secret = process.env.BINANCE_TESTNET_SECRET;
+  if (!apiKey || !secret) return null;
+
+  params.timestamp = Date.now();
+  params.recvWindow = 5000;
+  const query = binanceSign(params, secret);
+  
+  const isGet = method === 'GET';
+  const url = isGet 
+    ? `https://testnet.binance.vision${path}?${query}`
+    : `https://testnet.binance.vision${path}`;
+    
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, {
+      method,
+      headers: { 
+        'X-MBX-APIKEY': apiKey,
+        ...(isGet ? {} : { 'Content-Type': 'application/x-www-form-urlencoded' })
+      },
+      body: isGet ? undefined : query,
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    return await res.json();
+  } catch(e) {
+    if (e.name === 'AbortError') console.log('Binance spot timeout');
+    else console.error('Binance spot error:', e.message?.slice(0,60));
+    return null;
+  }
+}
+
+// Get spot balances
+async function getSpotBalances() {
+  const res = await binanceSpotRequest('GET', '/api/v3/account', {});
+  if (!res?.balances) return [];
+  return res.balances
+    .filter(b => parseFloat(b.free) > 0 || parseFloat(b.locked) > 0)
+    .map(b => ({
+      coin: b.asset,
+      free: parseFloat(b.free),
+      locked: parseFloat(b.locked),
+      total: parseFloat(b.free) + parseFloat(b.locked)
+    }));
+}
+
+// Get spot ticker price
+async function getSpotPrice(symbol) {
+  const res = await binanceSpotRequest('GET', `/api/v3/ticker/price`, { symbol });
+  return res?.price ? parseFloat(res.price) : null;
+}
+
+// Place spot market buy order
+async function spotBuy(coin, usdtAmount) {
+  const symbol = `${coin}USDT`;
+  
+  // Get current price
+  const price = await getSpotPrice(symbol);
+  if (!price) return null;
+  
+  // Precision map for spot
+  const precisionMap = { 
+    BTC: 5, ETH: 4, BNB: 3, SOL: 2, 
+    XRP: 1, DOGE: 0, AVAX: 2, LINK: 2 
+  };
+  const precision = precisionMap[coin] ?? 2;
+  const quantity = parseFloat((usdtAmount / price).toFixed(precision));
+  
+  const order = await binanceSpotRequest('POST', '/api/v3/order', {
+    symbol,
+    side: 'BUY',
+    type: 'MARKET',
+    quantity
+  });
+  
+  if (order?.orderId) {
+    console.log(`✅ Spot BUY: ${quantity} ${coin} at ~$${price} (order ${order.orderId})`);
+    return { ...order, coin, quantity, price, usdtAmount };
+  }
+  console.error('Spot buy failed:', JSON.stringify(order)?.slice(0,100));
+  return null;
+}
+
+// Place spot market sell order
+async function spotSell(coin, quantity, percent = 100) {
+  const symbol = `${coin}USDT`;
+  
+  // Get balance if selling by percent
+  if (percent < 100) {
+    const balances = await getSpotBalances();
+    const bal = balances.find(b => b.coin === coin);
+    if (!bal) return null;
+    const precisionMap = { BTC: 5, ETH: 4, BNB: 3, SOL: 2, XRP: 1, DOGE: 0, AVAX: 2 };
+    const precision = precisionMap[coin] ?? 2;
+    quantity = parseFloat((bal.free * percent / 100).toFixed(precision));
+  }
+  
+  if (!quantity || quantity <= 0) return null;
+  
+  const price = await getSpotPrice(symbol);
+  
+  const order = await binanceSpotRequest('POST', '/api/v3/order', {
+    symbol,
+    side: 'SELL',
+    type: 'MARKET',
+    quantity
+  });
+  
+  if (order?.orderId) {
+    console.log(`✅ Spot SELL: ${quantity} ${coin} at ~$${price} (order ${order.orderId})`);
+    return { ...order, coin, quantity, price };
+  }
+  console.error('Spot sell failed:', JSON.stringify(order)?.slice(0,100));
+  return null;
+}
+
+// Place spot limit buy order
+async function spotLimitBuy(coin, usdtAmount, limitPrice) {
+  const symbol = `${coin}USDT`;
+  const precisionMap = { BTC: 5, ETH: 4, BNB: 3, SOL: 2, XRP: 1, DOGE: 0 };
+  const precision = precisionMap[coin] ?? 2;
+  const quantity = parseFloat((usdtAmount / limitPrice).toFixed(precision));
+  
+  const order = await binanceSpotRequest('POST', '/api/v3/order', {
+    symbol,
+    side: 'BUY',
+    type: 'LIMIT',
+    timeInForce: 'GTC',
+    quantity,
+    price: limitPrice.toFixed(2)
+  });
+  
+  if (order?.orderId) {
+    console.log(`✅ Spot LIMIT BUY: ${quantity} ${coin} at $${limitPrice} (order ${order.orderId})`);
+    return { ...order, coin, quantity, limitPrice };
+  }
+  return null;
+}
+
+// Place spot limit sell order  
+async function spotLimitSell(coin, quantity, limitPrice) {
+  const symbol = `${coin}USDT`;
+  
+  const order = await binanceSpotRequest('POST', '/api/v3/order', {
+    symbol,
+    side: 'SELL',
+    type: 'LIMIT',
+    timeInForce: 'GTC',
+    quantity,
+    price: limitPrice.toFixed(2)
+  });
+  
+  if (order?.orderId) {
+    console.log(`✅ Spot LIMIT SELL: ${quantity} ${coin} at $${limitPrice} (order ${order.orderId})`);
+    return { ...order, coin, quantity, limitPrice };
+  }
+  return null;
+}
+
+// Cancel spot order
+async function cancelSpotOrder(symbol, orderId) {
+  const res = await binanceSpotRequest('DELETE', '/api/v3/order', { symbol, orderId });
+  return res?.status === 'CANCELED';
+}
+
+// Get open spot orders
+async function getOpenSpotOrders(symbol = null) {
+  const params = symbol ? { symbol } : {};
+  const res = await binanceSpotRequest('GET', '/api/v3/openOrders', params);
+  return Array.isArray(res) ? res : [];
+}
+
+// Save spot trade to local history
+const SPOT_TRADES_FILE = path.join(DATA_DIR, 'spot-trades.json');
+function loadSpotTrades() {
+  return loadJSON(SPOT_TRADES_FILE, { trades: [], totalPnl: 0 });
+}
+function saveSpotTrade(trade) {
+  const data = loadSpotTrades();
+  data.trades.push({ ...trade, timestamp: Date.now() });
+  saveJSON(SPOT_TRADES_FILE, data);
+}
+
+// IPC handlers for spot trading
+ipcMain.handle('spot-buy', async (e, { coin, amount }) => {
+  try {
+    const order = await spotBuy(coin, amount);
+    if (order) {
+      saveSpotTrade({ type: 'buy', coin, amount, price: order.price, qty: order.quantity });
+      sendTelegramNotification(`🟢 Spot Buy\n${order.quantity} ${coin}\nAmount: $${amount}\nPrice: ~$${order.price?.toLocaleString()}`);
+    }
+    return order;
+  } catch(e) { return null; }
+});
+
+ipcMain.handle('spot-sell', async (e, { coin, quantity, percent }) => {
+  try {
+    const order = await spotSell(coin, quantity, percent);
+    if (order) {
+      sendTelegramNotification(`🔴 Spot Sell\n${order.quantity} ${coin}\nPrice: ~$${order.price?.toLocaleString()}`);
+    }
+    return order;
+  } catch(e) { return null; }
+});
+
+ipcMain.handle('spot-limit-buy', async (e, { coin, amount, price }) => {
+  return await spotLimitBuy(coin, amount, price);
+});
+
+ipcMain.handle('spot-limit-sell', async (e, { coin, quantity, price }) => {
+  return await spotLimitSell(coin, quantity, price);
+});
+
+ipcMain.handle('get-spot-balances', async () => {
+  return await getSpotBalances();
+});
+
+ipcMain.handle('get-open-spot-orders', async () => {
+  return await getOpenSpotOrders();
+});
+
+ipcMain.handle('cancel-spot-order', async (e, { symbol, orderId }) => {
+  return await cancelSpotOrder(symbol, orderId);
+});
+
+ipcMain.handle('get-spot-trades', () => loadSpotTrades());
+
+// Voice commands for spot trading in routeCommand
+
+// ─── RAGE TRADE LOCK ──────────────────────────────────────────────────────
+let rageLockActive = false;
+let rageLockTimer = null;
+let consecutiveLosses = 0;
+
+function checkRageLock() {
+  const settings = loadSettings();
+  if (!settings.rageLockEnabled) return false;
+  if (rageLockActive) return true;
+  return false;
+}
+
+function activateRageLock(reason = 'consecutive losses') {
+  const settings = loadSettings();
+  const lockMinutes = settings.rageLockMinutes || 30;
+  rageLockActive = true;
+  consecutiveLosses = 0;
+
+  console.log(`🔒 Rage lock activated for ${lockMinutes} min — ${reason}`);
+
+  const msg = `🔒 Trading Locked — Cool Down Time\n\nReason: ${reason}\nDuration: ${lockMinutes} minutes\n\nStep away, drink water, breathe.\nI'll unlock trading when you're ready 💙`;
+  sendTelegramNotification(msg);
+
+  if (mainWindow) {
+    mainWindow.webContents.send('rage-lock-activated', { 
+      reason, 
+      minutes: lockMinutes,
+      unlockAt: Date.now() + (lockMinutes * 60 * 1000)
+    });
+  }
+
+  if (rageLockTimer) clearTimeout(rageLockTimer);
+  rageLockTimer = setTimeout(() => {
+    rageLockActive = false;
+    console.log('🔓 Rage lock deactivated — trading resumed');
+    sendTelegramNotification('🔓 Trading Unlocked\nCool down complete. Trade wisely 💙');
+    if (mainWindow) mainWindow.webContents.send('rage-lock-deactivated');
+  }, lockMinutes * 60 * 1000);
+}
+
+// Track consecutive losses
+function trackTradeLoss(trade) {
+  const settings = loadSettings();
+  if (!settings.rageLockEnabled) return;
+  
+  consecutiveLosses++;
+  const threshold = settings.rageLockThreshold || 3;
+  
+  console.log(`📉 Consecutive losses: ${consecutiveLosses}/${threshold}`);
+  
+  if (consecutiveLosses >= threshold) {
+    activateRageLock(`${consecutiveLosses} consecutive losses`);
+  }
+}
+
+function trackTradeWin() {
+  consecutiveLosses = 0; // Reset on win
+}
+
+// IPC handlers for rage lock
+ipcMain.handle('get-rage-lock-status', () => ({
+  active: rageLockActive,
+  consecutiveLosses
+}));
+
+ipcMain.on('manual-rage-lock', (e, minutes) => {
+  const lockMin = minutes || 30;
+  activateRageLock('Manual lock activated');
+});
+
+ipcMain.on('unlock-rage-lock', () => {
+  rageLockActive = false;
+  consecutiveLosses = 0;
+  if (rageLockTimer) clearTimeout(rageLockTimer);
+  console.log('🔓 Rage lock manually deactivated');
+  if (mainWindow) mainWindow.webContents.send('rage-lock-deactivated');
+});
+
+// ─── SECOND BRAIN ─────────────────────────────────────────────────────────
+const BRAIN_FILE = path.join(DATA_DIR, 'second-brain.json');
+
+function loadBrain() {
+  try {
+    if (fs.existsSync(BRAIN_FILE)) return JSON.parse(fs.readFileSync(BRAIN_FILE));
+  } catch(e) {}
+  return { memories: [] };
+}
+
+function saveBrain(brain) {
+  fs.writeFileSync(BRAIN_FILE, JSON.stringify(brain, null, 2));
+}
+
+function addMemory(text, category = 'general') {
+  const brain = loadBrain();
+  const memory = {
+    id: Date.now(),
+    text,
+    category,
+    date: new Date().toISOString().split('T')[0],
+    timestamp: Date.now()
+  };
+  brain.memories.push(memory);
+  saveBrain(brain);
+  console.log(`🧠 Memory saved: ${text.slice(0, 50)}`);
+  return memory;
+}
+
+function searchMemories(query) {
+  const brain = loadBrain();
+  const lower = query.toLowerCase();
+  return brain.memories.filter(m => 
+    m.text.toLowerCase().includes(lower) ||
+    m.category.toLowerCase().includes(lower)
+  ).slice(-10);
+}
+
+function buildBrainContext() {
+  const brain = loadBrain();
+  if (!brain.memories.length) return '';
+  const recent = brain.memories.slice(-20);
+  return `\n\nUSER'S SAVED MEMORIES:\n${recent.map(m => `[${m.date}] ${m.text}`).join('\n')}`;
+}
+
+ipcMain.handle('get-trusted-callers', () => {
+  const settings = loadSettings();
+  return settings.trustedCallers || [];
+});
+
+ipcMain.on('toggle-trusted-caller', (e, caller) => {
+  const settings = loadSettings();
+  const trusted = settings.trustedCallers || [];
+  if (trusted.includes(caller)) {
+    settings.trustedCallers = trusted.filter(c => c !== caller);
+    console.log(`⭐ Removed trusted caller: @${caller}`);
+  } else {
+    settings.trustedCallers = [...trusted, caller];
+    console.log(`⭐ Added trusted caller: @${caller}`);
+  }
+  saveJSON(SETTINGS_FILE, settings);
+});
+
+ipcMain.handle('add-memory-ipc', (e, text) => addMemory(text));
+ipcMain.handle('get-memories', () => loadBrain().memories);
+ipcMain.handle('delete-memory', (e, id) => {
+  const brain = loadBrain();
+  brain.memories = brain.memories.filter(m => m.id !== id);
+  saveBrain(brain);
+  return true;
+});
+
+// ─── WHALE ALERTS ─────────────────────────────────────────────────────────
+let lastWhaleCheck = 0;
+
+async function checkWhaleAlerts() {
+  try {
+    const now = Date.now();
+    if (now - lastWhaleCheck < 5 * 60 * 1000) return; // Max every 5 min
+    lastWhaleCheck = now;
+
+    const res = await fetchT(
+      'https://api.whale-alert.io/v1/transactions?api_key=demo&min_value=1000000&limit=5',
+      {}, 10000
+    );
+    const data = await res.json();
+    if (!data.transactions?.length) return;
+
+    const settings = loadSettings();
+    const watchedCoins = (settings.tradingCoins || ['BTC', 'ETH']).map(c => c.toLowerCase());
+
+    for (const tx of data.transactions) {
+      const symbol = tx.symbol?.toLowerCase();
+      if (!watchedCoins.includes(symbol)) continue;
+
+      const amount = tx.amount_usd ? `$${(tx.amount_usd / 1e6).toFixed(1)}M` : '';
+      const from = tx.from?.owner_type === 'exchange' ? `${tx.from.owner} exchange` : 'unknown wallet';
+      const to = tx.to?.owner_type === 'exchange' ? `${tx.to.owner} exchange` : 'unknown wallet';
+      const direction = tx.to?.owner_type === 'exchange' ? '→ exchange (potential sell)' : '← from exchange (potential buy)';
+
+      const msg = `🐳 Whale Alert\n${amount} ${symbol?.toUpperCase()} moved\n${from} → ${to}\n${direction}`;
+      
+      console.log(`🐳 ${msg}`);
+      sendIntelEvent({
+        type: 'signal',
+        source: '🐳 Whale Alert',
+        body: `${amount} ${symbol?.toUpperCase()} ${direction}`,
+        note: `From: ${from} | To: ${to}`,
+        notify: true
+      });
+      sendTelegramNotification(msg);
+    }
+  } catch(e) {
+    // Demo key has limits — fail silently
+  }
+}
+
+// ─── MORNING BRIEFING ─────────────────────────────────────────────────────
+async function sendMorningBriefing() {
+  const now = new Date();
+  const hour = now.getHours();
+  if (hour !== 8) return; // Only at 8am
+
+  const settings = loadSettings();
+  if (!settings.morningBriefing) return;
+
+  try {
+    const [btcPrice, ethPrice, fearGreed, dominance] = await Promise.all([
+      getCryptoPrice('bitcoin'),
+      getCryptoPrice('ethereum'),
+      getFearGreed(),
+      getDominance()
+    ]);
+
+    const pd = loadPaperTrades();
+    const openTrades = pd.trades.filter(t => t.status === 'open');
+    const todayPnl = pd.trades
+      .filter(t => t.status !== 'open' && new Date(t.closeTime).toDateString() === now.toDateString())
+      .reduce((s, t) => s + (t.pnl || 0), 0);
+
+    const briefingPrompt = `You are Asuka giving a morning briefing. Be warm, concise, and helpful.
+
+Market data:
+BTC: ${btcPrice}
+ETH: ${ethPrice}
+Fear & Greed: ${fearGreed}
+${dominance}
+
+Open trades: ${openTrades.length}
+${openTrades.map(t => `${t.direction?.toUpperCase()} ${t.coin} ${t.leverage}x`).join(', ')}
+
+Today's P&L so far: $${todayPnl.toFixed(2)}
+
+Give a friendly 3-4 sentence morning briefing covering:
+1. Market mood
+2. Key thing to watch today
+3. Open positions status
+4. One actionable suggestion
+
+Keep it conversational and warm.`;
+
+    const res = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 200,
+      messages: [{ role: 'user', content: briefingPrompt }]
+    });
+
+    const briefing = res.content[0].text;
+    console.log('🌅 Morning briefing sent');
+    sendTelegramNotification(`🌅 Good Morning!\n\n${briefing}`);
+
+    if (mainWindow) {
+      mainWindow.webContents.send('morning-briefing', { briefing });
+    }
+  } catch(e) {
+    console.error('Morning briefing error:', e.message);
+  }
+}
+
+// ─── TRADING PSYCHOLOGY SCORE ──────────────────────────────────────────────
+async function calculatePsychologyScore() {
+  const pd = loadPaperTrades();
+  const settings = loadSettings();
+  const recentTrades = pd.trades.filter(t => t.status !== 'open').slice(-20);
+  
+  if (recentTrades.length < 3) return null;
+
+  let score = 100;
+  const issues = [];
+  const wins = [];
+
+  // Check for revenge trading (3+ trades in 1 hour after loss)
+  const tradesByHour = {};
+  recentTrades.forEach(t => {
+    const hour = Math.floor(t.openTime / 3600000);
+    tradesByHour[hour] = (tradesByHour[hour] || 0) + 1;
+  });
+  const maxTradesPerHour = Math.max(...Object.values(tradesByHour));
+  if (maxTradesPerHour >= 4) {
+    score -= 20;
+    issues.push('Revenge trading detected — too many trades in 1 hour');
+  }
+
+  // Check win rate
+  const winRate = pd.stats.wins / (pd.stats.wins + pd.stats.losses) * 100;
+  if (winRate < 40) { score -= 15; issues.push('Win rate below 40% — review strategy'); }
+  else if (winRate > 60) { score += 10; wins.push('Strong win rate above 60%'); }
+
+  // Check consecutive losses
+  if (consecutiveLosses >= 3) {
+    score -= 25;
+    issues.push(`${consecutiveLosses} consecutive losses — take a break`);
+  }
+
+  // Check position sizing consistency
+  const sizes = recentTrades.map(t => t.size);
+  const avgSize = sizes.reduce((a, b) => a + b, 0) / sizes.length;
+  const sizeVariance = sizes.some(s => s > avgSize * 2);
+  if (sizeVariance) {
+    score -= 10;
+    issues.push('Inconsistent position sizing detected');
+  }
+
+  // Check if following confidence threshold
+  const lowConfTrades = recentTrades.filter(t => t.confidence < 60);
+  if (lowConfTrades.length > recentTrades.length * 0.3) {
+    score -= 15;
+    issues.push('Taking too many low confidence trades');
+  }
+
+  score = Math.max(0, Math.min(100, score));
+
+  const scoreData = {
+    score,
+    grade: score >= 80 ? 'A' : score >= 65 ? 'B' : score >= 50 ? 'C' : 'D',
+    issues,
+    wins,
+    winRate: winRate.toFixed(1),
+    consecutiveLosses,
+    timestamp: Date.now()
+  };
+
+  console.log(`🧠 Psychology score: ${score}/100 (${scoreData.grade})`);
+  return scoreData;
+}
+
+ipcMain.handle('get-psychology-score', calculatePsychologyScore);
+
+// ─── START ALL NEW FEATURES ────────────────────────────────────────────────
+function startNewFeatures() {
+  // Whale alerts every 10 min
+  setInterval(checkWhaleAlerts, 10 * 60 * 1000);
+  setTimeout(checkWhaleAlerts, 30000); // First check after 30s
+
+  // Morning briefing check every hour
+  setInterval(sendMorningBriefing, 60 * 60 * 1000);
+}
+
+// ─── RAGE TRADE CHECK IN PAPER TRADES ─────────────────────────────────────
 const PAPER_TRADES_FILE = path.join(DATA_DIR, 'paper-trades.json');
 const PAPER_BALANCE = 100000; // Starting fake balance
 
@@ -2991,12 +5815,56 @@ function loadPaperTrades() {
 function savePaperTrades(d) { saveJSON(PAPER_TRADES_FILE, d); }
 
 // Open a new paper trade
-function openPaperTrade(signal) {
-  const pd = loadPaperTrades();
+async function openPaperTrade(signal) {
+  // Check rage lock
+  if (checkRageLock()) {
+    console.log('🔒 Rage lock active — trade blocked');
+    return null;
+  }
+
+  // Check daily P&L limit
+  if (isTradingPaused()) {
+    console.log("⏸️ Trading paused — daily loss limit or manual pause");
+    return null;
+  }
+
+  // Check max concurrent positions
+  if (checkMaxPositions()) {
+    console.log("⚠️ Max concurrent positions reached");
+    return null;
+  }
+
+  // Check cooldown
+  const cooldownRemaining = isCoinOnCooldown(signal.coin);
+  if (cooldownRemaining) {
+    console.log(`⏰ ${signal.coin} is on cooldown — ${cooldownRemaining} min remaining after recent loss`);
+    return null;
+  }
+
+  // Hard block based on learned lessons
   const settings = loadSettings();
-  const leverage = settings.paperLeverage || 1;
-  // Use custom size if set, otherwise 5% of balance
-  const size = settings.paperTradeSize || (pd.balance * 0.05);
+  const lessons = loadTradingLessons();
+  const lastFG = global._cachedFearGreed || 50;
+  
+  // Block BNB longs at 20x below 73% in Extreme Fear
+  if (signal.coin === 'BNB' && signal.direction === 'long' && 
+      signal.leverage >= 20 && signal.confidence < 73 && lastFG < 20) {
+    console.log('🚫 Hard block: BNB long at 20x below 73% in Extreme Fear — lesson learned');
+    return null;
+  }
+  
+  // Block any altcoin long below 70% in Extreme Fear
+  const altcoins = ['BNB','SOL','XRP','DOGE','AVAX','LINK','ARB','PEPE'];
+  if (altcoins.includes(signal.coin) && signal.direction === 'long' &&
+      signal.confidence < 70 && lastFG < 15) {
+    console.log(`🚫 Hard block: ${signal.coin} long below 70% in Extreme Fear (FG=${lastFG}) — lesson learned`);
+    return null;
+  }
+  const pd = loadPaperTrades();
+  // settings already declared
+  // Use signal leverage if provided (scalp trades), otherwise use settings
+  const leverage = signal.leverage || settings.paperLeverage || 1;
+  const size = signal.size || settings.paperTradeSize || (pd.balance * 0.05);
   const positionSize = size * leverage;
   const liquidationPct = 1 / leverage * 0.8;
   const liquidationPrice = signal.direction === 'long'
@@ -3019,24 +5887,52 @@ function openPaperTrade(signal) {
     groupName: signal.groupName,
     openTime: Date.now(),
     status: 'open',
-    pnl: 0
+    pnl: 0,
+    useBinance: false,
+    tradeMode: signal.tradeMode || 'normal',
+    trailingLevels: signal.trailingLevels || [],
+    partialTp: signal.partialTp || 1.0,
+    partialTpDone: false
   };
+
+  // Use Binance testnet if configured AND coin is supported
+  if (isBinanceTestnet() && isSupportedOnTestnet(signal.coin)) {
+    try {
+      const order = await openBinancePosition(signal);
+      if (order?.orderId) {
+        trade.binanceOrderId = order.orderId;
+        trade.binanceSymbol = order.symbol;
+        trade.binanceSide = order.side;
+        trade.binanceQty = order.quantity;
+        trade.useBinance = true;
+        // Use ACTUAL leverage from Binance, not what we requested
+        if (order.leverage && order.leverage !== leverage) {
+          trade.leverage = order.leverage;
+          trade.positionSize = trade.size * order.leverage;
+          console.log(`📊 Trade leverage updated to actual: ${order.leverage}x (was ${leverage}x)`);
+        }
+        console.log(`🔗 Linked to Binance testnet order ${order.orderId}`);
+      }
+    } catch(e) {
+      console.error('Binance open error:', e.message);
+    }
+  } else if (isBinanceTestnet() && !isSupportedOnTestnet(signal.coin)) {
+    console.log(`ℹ️ ${signal.coin} not on Binance testnet — paper trade only`);
+  }
+
   pd.trades.push(trade);
   savePaperTrades(pd);
-  console.log(`📝 Paper trade opened: ${signal.direction} ${signal.coin} at $${signal.entry} ${leverage}x | Liq: $${liquidationPrice.toFixed(2)}`);
+  console.log(`📝 Paper trade opened: ${signal.direction} ${signal.coin} at $${signal.entry} ${leverage}x | Liq: $${liquidationPrice.toFixed(2)}${trade.useBinance ? ' [Binance Testnet]' : ''}`);
 
-  // Send TG notification
-  const msg = `📝 Paper Trade Opened\n${signal.direction?.toUpperCase()} ${signal.coin} ${leverage}x\nEntry: $${signal.entry}\nTarget: $${signal.target}\nSL: $${signal.stopLoss}\nLiq: $${liquidationPrice.toFixed(2)}\nSize: $${size}\nConfidence: ${signal.confidence}%\nSource: ${signal.caller}`;
+  const msg = `📝 Paper Trade Opened${trade.useBinance ? ' [Binance Testnet]' : ''}\n${signal.direction?.toUpperCase()} ${signal.coin} ${leverage}x\nEntry: $${signal.entry}\nTarget: $${signal.target}\nSL: $${signal.stopLoss}\nLiq: $${liquidationPrice.toFixed(2)}\nSize: $${size}\nConfidence: ${signal.confidence}%\nSource: ${signal.caller}`;
   sendTelegramNotification(msg);
 
-  // Notify renderer
   if (mainWindow) mainWindow.webContents.send('trade-opened', trade);
-
   return trade;
 }
 
 // Close a paper trade
-function closePaperTrade(tradeId, closePrice, reason) {
+async function closePaperTrade(tradeId, closePrice, reason) {
   const pd = loadPaperTrades();
   const trade = pd.trades.find(t => t.id === tradeId);
   if (!trade || trade.status !== 'open') return;
@@ -3064,11 +5960,35 @@ function closePaperTrade(tradeId, closePrice, reason) {
 
   if (trade.caller) updateCallerStats(trade.caller, actualPnl > 0);
 
+  // Close on Binance testnet if linked
+  if (trade.useBinance && trade.binanceSymbol) {
+    try {
+      await closeBinancePosition(trade.binanceSymbol, trade.binanceSide, trade.binanceQty);
+    } catch(e) { console.error('Binance close error:', e.message); }
+  }
+
   const pnlStr = `${actualPnl >= 0 ? '+' : ''}$${actualPnl.toFixed(2)} (${(pnlPct * leverage * 100).toFixed(1)}% at ${leverage}x)`;
-  console.log(`${actualPnl > 0 ? '✅' : '❌'} Paper trade closed: ${trade.direction} ${trade.coin} — P&L: ${pnlStr} (${reason})`);
+  console.log(`${actualPnl > 0 ? '✅' : '❌'} Paper trade closed: ${trade.direction} ${trade.coin} — P&L: ${pnlStr} (${reason})${trade.useBinance ? ' [Binance Testnet]' : ''}`);
+
+  // Set cooldown after loss
+  if (actualPnl < 0) {
+    const lossSettings = loadSettings();
+    const cooldownMin = lossSettings.lossCooldownMinutes || 0;
+    if (cooldownMin > 0) setCoinCooldown(trade.coin, cooldownMin);
+  }
+
+  // Track for rage lock
+  if (actualPnl > 0) trackTradeWin();
+  else trackTradeLoss(trade);
 
   // Learn from this trade
-  learnFromTrade(trade, actualPnl, reason).catch(e => console.error('Learn error:', e.message));
+  // Queue learning to prevent concurrent rate limit hits
+  queueLearnFromTrade(trade, actualPnl, reason);
+
+  // Learn from chat patterns if TG signal
+  if (trade.originalMessage && trade.caller) {
+    learnFromChatPattern(trade, actualPnl).catch(e => console.error('Chat learn error:', e.message));
+  }
 
   // Send TG notification
   const emoji = actualPnl > 0 ? '✅' : '❌';
@@ -3144,6 +6064,40 @@ async function checkPaperTrades() {
         }
       }
 
+      // Sanity check — price shouldn't differ more than 80% from entry
+      // For tiny prices (PEPE etc), use wider tolerance
+      const priceDiffPct = Math.abs(currentPrice - trade.entry) / trade.entry * 100;
+      const maxDiff = trade.entry < 0.001 ? 90 : 50; // wider for micro-cap
+      if (priceDiffPct > maxDiff) {
+        console.log(`⚠️ Price sanity fail for ${trade.coin}: entry $${trade.entry}, current $${currentPrice} (${priceDiffPct.toFixed(0)}% diff > ${maxDiff}%) — bad data, skipping`);
+        continue;
+      }
+
+      // Partial TP — close portion at target
+      if (!trade.partialTpDone && trade.partialTp && trade.partialTp < 1) {
+        const hitTarget = trade.direction === 'long'
+          ? currentPrice >= trade.target
+          : currentPrice <= trade.target;
+        if (hitTarget) {
+          // Close partial position
+          console.log(`💰 Partial TP hit: closing ${trade.partialTp * 100}% of ${trade.coin} position`);
+          const partialPnl = pnlDollar * trade.partialTp;
+          sendTelegramNotification(`💰 Partial TP Hit!\n${trade.direction?.toUpperCase()} ${trade.coin}\nClosed ${trade.partialTp * 100}% at $${currentPrice}\nLocked profit: +$${partialPnl.toFixed(2)}\nLetting remaining ${(1-trade.partialTp)*100}% run...`);
+          const pd3 = loadPaperTrades();
+          const t3 = pd3.trades.find(tr => tr.id === trade.id);
+          if (t3) {
+            t3.partialTpDone = true;
+            t3.size = t3.size * (1 - trade.partialTp); // Reduce size
+            // Move SL to entry (free trade)
+            t3.stopLoss = trade.direction === 'long'
+              ? Math.max(t3.stopLoss || 0, trade.entry)
+              : Math.min(t3.stopLoss || Infinity, trade.entry);
+            savePaperTrades(pd3);
+          }
+          continue; // Don't close fully yet
+        }
+      }
+
       // Check liquidation first
       if (trade.liquidationPrice) {
         if (trade.direction === 'long' && currentPrice <= trade.liquidationPrice) {
@@ -3195,13 +6149,11 @@ async function runMarketScan() {
       if (!signal.entry) {
         const priceStr = await getCryptoPrice(signal.coin.toLowerCase());
         const priceMatch = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
-        if (priceMatch) {
-          signal.entry = parseFloat(priceMatch[1].replace(',', ''));
-        }
+        if (priceMatch) signal.entry = parseFloat(priceMatch[1].replace(',', ''));
       }
       if (!signal.entry) continue;
 
-      // Set default target and SL if missing (5% target, 2% SL)
+      // Set default target and SL if missing
       if (!signal.target) {
         signal.target = signal.direction === 'long'
           ? parseFloat((signal.entry * 1.05).toFixed(2))
@@ -3213,41 +6165,1656 @@ async function runMarketScan() {
           : parseFloat((signal.entry * 1.02).toFixed(2));
       }
 
-      const trade = openPaperTrade(signal);
-      trade.signalId = signal.messageId;
-      // Update in pd
-      const pd2 = loadPaperTrades();
-      const t = pd2.trades.find(tr => tr.id === trade.id);
-      if (t) { t.signalId = signal.messageId; savePaperTrades(pd2); }
+      // ── Run TG signal through full Claude→MiroFish→Claude pipeline ──
+      console.log(`📡 Running TG signal through full pipeline: ${signal.direction} ${signal.coin} from @${signal.caller}`);
 
-      console.log(`📊 TG signal traded: ${signal.direction} ${signal.coin} at $${signal.entry}`);
+      // Get caller stats for context
+      const callerStats = td.callerStats?.[signal.caller] || { wins: 0, losses: 0 };
+      const callerWinRate = callerStats.wins + callerStats.losses > 0
+        ? Math.round(callerStats.wins / (callerStats.wins + callerStats.losses) * 100)
+        : 50;
 
-      if (signal.confidence >= 80) {
+      // ── Check if trusted caller — skip MiroFish debate ──────────────
+      const settings3 = loadSettings();
+      const trustedCallers = settings3.trustedCallers || [];
+      const isTrusted = trustedCallers.includes(signal.caller);
+
+      if (isTrusted && signal.entry && signal.target && signal.stopLoss) {
+        console.log(`⭐ Trusted caller @${signal.caller} (${callerWinRate}% WR) — skipping analysis, auto-copying`);
+        
+        const tradeSignal = {
+          ...signal,
+          confidence: callerWinRate,
+          groupName: `⭐ Trusted Caller | ${callerWinRate}% win rate | Auto-copied`
+        };
+
+        const trade = await openPaperTrade(tradeSignal);
+        if (trade) {
+          trade.signalId = signal.messageId;
+          const pd2 = loadPaperTrades();
+          const t = pd2.trades.find(tr => tr.id === trade.id);
+          if (t) { t.signalId = signal.messageId; savePaperTrades(pd2); }
+        }
+
         sendIntelEvent({
           type: 'signal',
-          source: signal.caller ? `@${signal.caller}` : 'TG Signal',
-          body: `${signal.direction?.toUpperCase()} ${signal.coin} at $${signal.entry}`,
-          note: `${signal.confidence}% confidence | Target: $${signal.target} | SL: $${signal.stopLoss}`,
-          action: 'Paper Trade Opened 🚀',
+          source: `⭐ @${signal.caller} (Trusted)`,
+          body: `Auto-copied: ${signal.direction?.toUpperCase()} ${signal.coin}`,
+          note: `Win rate: ${callerWinRate}% | Skipped analysis — trusted caller`,
           notify: true
         });
+        continue;
       }
+      // ────────────────────────────────────────────────────────────────
+
+      // Load chat patterns for this caller
+      const lessons = loadTradingLessons();
+      const callerPatterns = lessons.chatPatterns?.[signal.caller] || [];
+
+      // Get market data
+      const [coinPrice, funding, fearGreed] = await Promise.all([
+        getCryptoPrice(signal.coin.toLowerCase()).catch(() => null),
+        getFundingRate(signal.coin).catch(() => null),
+        getFearGreed().catch(() => null)
+      ]);
+
+      // Claude 1 — analyze TG signal with full context
+      const tgAnalysis = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 250,
+        messages: [{ role: 'user', content: `Analyze this Telegram trading signal and market conditions.
+
+SIGNAL FROM @${signal.caller}:
+"${signal.originalMessage || signal.direction + ' ' + signal.coin}"
+Direction: ${signal.direction?.toUpperCase()} ${signal.coin}
+Entry: $${signal.entry} | Target: $${signal.target} | SL: $${signal.stopLoss}
+
+CALLER STATS:
+Win rate: ${callerWinRate}% (${callerStats.wins}W/${callerStats.losses}L)
+${callerPatterns.length > 0 ? `Known patterns: ${callerPatterns.slice(-3).map(p => p.pattern).join(', ')}` : 'No patterns yet'}
+
+MARKET CONDITIONS:
+${signal.coin} price: ${coinPrice}
+Funding: ${funding}
+Fear & Greed: ${fearGreed}
+
+Should we trade this signal? Consider caller track record AND market conditions.
+
+Respond ONLY with JSON:
+{
+  "shouldTrade": true/false,
+  "direction": "${signal.direction}",
+  "entry": ${signal.entry},
+  "target": ${signal.target},
+  "stopLoss": ${signal.stopLoss},
+  "confidence": 0-100,
+  "reason": "under 20 words",
+  "marketBias": "bullish/bearish/neutral"
+}` }]
+      });
+
+      const tgText = tgAnalysis.content[0].text.trim().replace(/```json|```/g,'').trim();
+      const tgDecision = JSON.parse(tgText);
+
+      console.log(`🤖 TG Claude 1: ${tgDecision.shouldTrade ? tgDecision.direction?.toUpperCase() : 'SKIP'} — ${tgDecision.confidence}% — ${tgDecision.reason}`);
+
+      if (!tgDecision.shouldTrade || tgDecision.confidence < threshold) {
+        console.log(`⏭️ TG signal rejected by Claude 1 — skipping`);
+        continue;
+      }
+
+      // MiroFish validation for TG signals
+      const tgMarketSummary = `${signal.coin} at ${coinPrice}, Funding: ${funding}, FG: ${fearGreed}. @${signal.caller} (${callerWinRate}% win rate) says ${signal.direction?.toUpperCase()}. Claude agrees with ${tgDecision.confidence}% confidence.`;
+
+      console.log(`🐟 Running MiroFish for TG signal...`);
+
+      // Quick 3-round debate (40 agents for speed)
+      const TG_AGENTS = 40;
+      const tgRoles = ['technical analyst','sentiment trader','whale watcher','macro analyst','contrarian trader','momentum trader','risk manager','news trader','funding specialist','pattern trader'];
+
+      async function callTGAgent(role, prompt) {
+        try {
+          const res = await anthropic.messages.create({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 100,
+            messages: [{ role: 'user', content: prompt }]
+          });
+          const t = res.content[0].text.trim().replace(/```json|```/g,'').trim();
+          return JSON.parse(t);
+        } catch(e) { return null; }
+      }
+
+      // Round 1
+      const tgR1 = await Promise.all(
+        Array(TG_AGENTS).fill(0).map((_, i) => {
+          const role = tgRoles[i % tgRoles.length];
+          return callTGAgent(role,
+            `You are a crypto ${role}. Market: ${tgMarketSummary}. AGREE with ${signal.direction?.toUpperCase()} ${signal.coin}? JSON: {"agree":true/false,"confidence":0-100,"reason":"5 words"}`,
+            ).then(r => r || { agree: false, confidence: 50, reason: 'error' });
+        })
+      );
+
+      const tgR1Agree = tgR1.filter(a => a.agree).length;
+      const tgR1Pct = Math.round(tgR1Agree / TG_AGENTS * 100);
+      const tgBullReasons = tgR1.filter(a => a.agree).map(a => a.reason).slice(0,2).join('; ');
+      const tgBearReasons = tgR1.filter(a => !a.agree).map(a => a.reason).slice(0,2).join('; ');
+
+      // Round 2
+      const tgR1Summary = `${tgR1Agree}/${TG_AGENTS} support ${signal.direction?.toUpperCase()}. Bulls: ${tgBullReasons}. Bears: ${tgBearReasons}`;
+      const tgR2 = await Promise.all(
+        Array(TG_AGENTS).fill(0).map((_, i) => {
+          const role = tgRoles[i % tgRoles.length];
+          return callTGAgent(role,
+            `You are a crypto ${role}. Debate: ${tgR1Summary}. Market: ${tgMarketSummary}. FINAL vote on ${signal.direction?.toUpperCase()} ${signal.coin}? JSON: {"agree":true/false,"confidence":0-100,"changed":true/false}`,
+            ).then(r => r || tgR1[i] || { agree: false, confidence: 50 });
+        })
+      );
+
+      const tgR2Agree = tgR2.filter(a => a.agree).length;
+      const tgR2Pct = Math.round(tgR2Agree / TG_AGENTS * 100);
+      const tgChanged = tgR2.filter(a => a.changed).length;
+
+      console.log(`🐟 TG MiroFish: R1=${tgR1Pct}% → R2=${tgR2Pct}% | ${tgChanged} changed mind`);
+
+      // Claude 2 — final decision with full story
+      const tgFinalRes = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 200,
+        messages: [{ role: 'user', content: `Final decision on TG trading signal.
+
+SIGNAL: @${signal.caller} says ${signal.direction?.toUpperCase()} ${signal.coin}
+Caller win rate: ${callerWinRate}%
+
+CLAUDE 1 ANALYSIS:
+${tgDecision.reason} — ${tgDecision.confidence}% confidence
+
+MIROFISH DEBATE (40 agents, 2 rounds):
+Round 1: ${tgR1Agree}/${TG_AGENTS} agree (${tgR1Pct}%)
+Round 2: ${tgR2Agree}/${TG_AGENTS} agree (${tgR2Pct}%) | ${tgChanged} changed mind
+Conviction: ${tgR2Pct > tgR1Pct ? '📈 Growing' : tgR2Pct < tgR1Pct ? '📉 Weakening' : '➡️ Stable'}
+
+MARKET: ${signal.coin} at ${coinPrice}, FG: ${fearGreed}, Funding: ${funding}
+
+Should we trade this signal? Consider caller track record + swarm + market.
+
+JSON only:
+{
+  "shouldTrade": true/false,
+  "direction": "${signal.direction}",
+  "entry": ${signal.entry},
+  "target": ${signal.target},
+  "stopLoss": ${signal.stopLoss},
+  "confidence": 0-100,
+  "reason": "under 20 words"
+}` }]
+      });
+
+      const tgFinalText = tgFinalRes.content[0].text.trim().replace(/```json|```/g,'').trim();
+      const tgFinal = JSON.parse(tgFinalText);
+
+      console.log(`🧠 TG Claude Final: ${tgFinal.shouldTrade ? 'TRADE' : 'SKIP'} — ${tgFinal.confidence}% — ${tgFinal.reason}`);
+
+      if (!tgFinal.shouldTrade || tgFinal.confidence < threshold) {
+        console.log(`❌ TG signal rejected by Claude 2`);
+        return; // return instead of continue — we're in async function not loop
+      }
+
+      // Open the trade
+      const tradeSignal = {
+        ...signal,
+        confidence: tgFinal.confidence,
+        groupName: `${signal.groupName} | MiroFish ${tgR2Pct}% agree`
+      };
+
+      const trade = await openPaperTrade(tradeSignal);
+      trade.signalId = signal.messageId;
+      trade.originalMessage = signal.originalMessage || signal.direction + ' ' + signal.coin;
+
+      const pd2 = loadPaperTrades();
+      const t = pd2.trades.find(tr => tr.id === trade.id);
+      if (t) { t.signalId = signal.messageId; t.originalMessage = trade.originalMessage; savePaperTrades(pd2); }
+
+      console.log(`✅ TG signal traded after full pipeline: ${signal.direction} ${signal.coin}`);
+
+      sendIntelEvent({
+        type: 'signal',
+        source: `@${signal.caller} → Full Pipeline`,
+        body: `${signal.direction?.toUpperCase()} ${signal.coin} — ${tgFinal.confidence}% final confidence`,
+        note: `Caller: ${callerWinRate}% WR | Swarm: ${tgR2Pct}% agree | ${tgChanged} changed mind`,
+        action: 'Paper Trade Opened via Full Pipeline 🚀',
+        notify: true
+      });
+
     } catch(e) { console.error('Signal trade error:', e.message); }
   }
 }
 
-// Start paper trading monitor
+// ─── SMART PROFIT RECOMMENDATIONS ─────────────────────────────────────────
+// Called in paper trading monitor
+async function runPeriodicChecks() {
+  await checkDCAPlans();
+  await checkSmartPriceAlerts();
+}
+
+async function checkSmartProfitAlerts() {
+  const pd = loadPaperTrades();
+  const open = pd.trades.filter(t => t.status === 'open');
+  if (!open.length) return;
+
+  for (const trade of open) {
+    try {
+      const priceStr = await getCryptoPrice(trade.coin.toLowerCase());
+      const priceMatch = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
+      if (!priceMatch) continue;
+      const currentPrice = parseFloat(priceMatch[1].replace(',', ''));
+      if (isNaN(currentPrice)) continue;
+
+      const leverage = trade.leverage || 1;
+      const priceDiff = trade.direction === 'long'
+        ? currentPrice - trade.entry
+        : trade.entry - currentPrice;
+      const pnlPct = priceDiff / trade.entry * leverage * 100;
+      const pnlDollar = trade.size * priceDiff / trade.entry * leverage;
+
+      // Smart recommendations at key levels
+      const recommendations = [
+        { pct: 5, msg: `up 5% — consider taking 25% profit and moving SL to breakeven` },
+        { pct: 10, msg: `up 10% — strong move! Take 50% profit, let rest run` },
+        { pct: 15, msg: `up 15% — take 75% profit, trail remaining with tight SL` },
+        { pct: 20, msg: `up 20% 🔥 — consider full close, exceptional move` },
+        { pct: 25, msg: `up 25% 🚀 — CLOSE IT. Don't get greedy!` },
+        { pct: 50, msg: `up 50% 💰 — CLOSE EVERYTHING NOW. This is a gift.` },
+      ];
+
+      const lastRecommend = trade.lastRecommend || 0;
+
+      for (const rec of recommendations) {
+        if (pnlPct >= rec.pct && lastRecommend < rec.pct) {
+          const msg = `💡 Trade Advice\n${trade.direction?.toUpperCase()} ${trade.coin} ${leverage}x\n${rec.msg}\nCurrent P&L: +$${pnlDollar.toFixed(2)} (+${pnlPct.toFixed(1)}%)\nEntry: $${trade.entry} | Current: $${currentPrice}`;
+          
+          console.log(`💡 Profit recommendation: ${trade.coin} ${rec.pct}%`);
+          sendTelegramNotification(msg);
+          
+          sendIntelEvent({
+            type: 'signal',
+            source: '💡 Profit Advisor',
+            body: `${trade.direction?.toUpperCase()} ${trade.coin} ${rec.msg}`,
+            note: `P&L: +$${pnlDollar.toFixed(2)} (+${pnlPct.toFixed(1)}%) | Current: $${currentPrice}`,
+            action: 'Take Profit Recommendation',
+            notify: true
+          });
+
+          // Save recommendation level
+          const pd2 = loadPaperTrades();
+          const t = pd2.trades.find(tr => tr.id === trade.id);
+          if (t) { t.lastRecommend = rec.pct; savePaperTrades(pd2); }
+          break;
+        }
+      }
+    } catch(e) {}
+  }
+}
+
+// ─── TELEGRAM BOT ──────────────────────────────────────────────────────────
+let tgBot = null;
+
+async function startTelegramBot() {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  if (!botToken) {
+    console.log('ℹ️ No TELEGRAM_BOT_TOKEN — bot disabled. Add to .env to enable.');
+    return;
+  }
+
+  const { Api } = require('telegram');
+  let lastUpdateId = 0;
+
+  async function pollBot() {
+    try {
+      const res = await fetchT(
+        `https://api.telegram.org/bot${botToken}/getUpdates?offset=${lastUpdateId + 1}&timeout=10`,
+        {}, 15000
+      );
+      const data = await res.json();
+      
+      if (!data.ok || !data.result?.length) return;
+
+      for (const update of data.result) {
+        lastUpdateId = update.update_id;
+        const msg = update.message;
+        if (!msg?.text) continue;
+
+        const chatId = msg.chat.id;
+        const text = msg.text;
+        console.log(`🤖 Bot message from ${chatId}: ${text}`);
+
+        // Process through routeCommand
+        try {
+          const reply = await routeCommand(text);
+          await fetchT(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, text: reply || "I'm here! 💙" })
+          }, 8000);
+        } catch(e) {
+          console.error('Bot reply error:', e.message);
+        }
+      }
+    } catch(e) {}
+    
+    // Poll every 2 seconds
+    setTimeout(pollBot, 2000);
+  }
+
+  console.log('🤖 Telegram bot started — send messages to your bot!');
+  pollBot();
+}
+
+// ─── CHAT PATTERN LEARNING ────────────────────────────────────────────────
+async function learnFromChatPattern(trade, pnl) {
+  try {
+    const lessons = loadTradingLessons();
+    if (!lessons.chatPatterns) lessons.chatPatterns = {};
+    if (!lessons.chatPatterns[trade.caller]) lessons.chatPatterns[trade.caller] = [];
+
+    const res = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 200,
+      messages: [{ role: 'user', content: `Analyze this Telegram trading message outcome.
+
+CALLER: @${trade.caller}
+MESSAGE: "${trade.originalMessage}"
+RESULT: ${pnl >= 0 ? 'WIN' : 'LOSS'} — ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}
+TRADE: ${trade.direction?.toUpperCase()} ${trade.coin} at $${trade.entry}
+
+Extract key pattern from this message that predicted the ${pnl >= 0 ? 'win' : 'loss'}.
+JSON only:
+{
+  "pattern": "key phrase or signal from message",
+  "sentiment": "bullish/bearish",
+  "reliability": "high/medium/low",
+  "lesson": "one sentence about this caller's style"
+}` }]
+    });
+
+    const text = res.content[0].text.trim().replace(/\`\`\`json|\`\`\`/g,'').trim();
+    const pattern = JSON.parse(text);
+
+    lessons.chatPatterns[trade.caller].push({
+      ...pattern,
+      won: pnl >= 0,
+      pnl: pnl.toFixed(2),
+      message: trade.originalMessage?.slice(0, 100),
+      timestamp: Date.now()
+    });
+
+    if (lessons.chatPatterns[trade.caller].length > 20) {
+      lessons.chatPatterns[trade.caller] = lessons.chatPatterns[trade.caller].slice(-20);
+    }
+
+    saveTradingLessons(lessons);
+    console.log(`📚 Chat pattern learned from @${trade.caller}: ${pattern.pattern} (${pnl >= 0 ? 'WIN' : 'LOSS'})`);
+  } catch(e) { console.error('Chat pattern error:', e.message); }
+}
+
+// ─── TELEGRAM BOT ──────────────────────────────────────────────────────────
+const botAuthCodes = new Map(); // code → chatId
+const botAuthUsers = new Map(); // chatId → authenticated
+
+async function startTelegramBot() {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  if (!botToken) {
+    console.log('ℹ️ No TELEGRAM_BOT_TOKEN — bot disabled');
+    return;
+  }
+
+  let lastUpdateId = 0;
+
+  async function sendBotMessage(chatId, text) {
+    try {
+      await fetchT(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
+      }, 8000);
+    } catch(e) { console.error('Bot send error:', e.message); }
+  }
+
+  async function pollBot() {
+    try {
+      const res = await fetchT(
+        `https://api.telegram.org/bot${botToken}/getUpdates?offset=${lastUpdateId + 1}&timeout=10`,
+        {}, 15000
+      );
+      const data = await res.json();
+      if (!data.ok || !data.result?.length) { setTimeout(pollBot, 2000); return; }
+
+      for (const update of data.result) {
+        lastUpdateId = update.update_id;
+        const msg = update.message;
+        if (!msg?.text) continue;
+
+        const chatId = msg.chat.id;
+        const text = msg.text.trim();
+        const settings = loadSettings();
+
+        // ── /start command ──
+        if (text === '/start') {
+          // Generate 4-digit auth code
+          const code = `ASK-${Math.floor(1000 + Math.random() * 9000)}`;
+          botAuthCodes.set(code, chatId);
+          // Auto expire code after 10 minutes
+          setTimeout(() => botAuthCodes.delete(code), 10 * 60 * 1000);
+
+          await sendBotMessage(chatId, `👋 <b>Welcome to Asuka AI!</b>\n\nYour connection code is:\n\n<b>${code}</b>\n\nEnter this code in the Asuka app under Settings → Telegram Bot.\n\nCode expires in 10 minutes.`);
+          continue;
+        }
+
+        // ── Check if already authenticated ──
+        const isAuth = settings.telegramBotChatId === chatId;
+
+        if (!isAuth) {
+          await sendBotMessage(chatId, `⚠️ Not connected. Send /start to get your connection code, then enter it in the Asuka app.`);
+          continue;
+        }
+
+        // ── Authenticated user commands ──
+        console.log(`🤖 Bot from authenticated user: ${text}`);
+
+        // Special bot commands
+        if (text === '/positions' || text.toLowerCase().includes('open positions') || text.toLowerCase().includes('my trades')) {
+          const pd = loadPaperTrades();
+          const open = pd.trades.filter(t => t.status === 'open');
+          if (!open.length) {
+            await sendBotMessage(chatId, '📊 No open positions right now.');
+          } else {
+            let msg = '📊 <b>Open Positions:</b>\n\n';
+            for (const t of open) {
+              try {
+                const priceStr = await getCryptoPrice(t.coin.toLowerCase());
+                const priceMatch = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
+                const currentPrice = priceMatch ? parseFloat(priceMatch[1].replace(',', '')) : null;
+                
+                let pnlStr = '';
+                if (currentPrice) {
+                  const leverage = t.leverage || 1;
+                  const priceDiff = t.direction === 'long'
+                    ? currentPrice - t.entry
+                    : t.entry - currentPrice;
+                  const pnlPct = (priceDiff / t.entry * leverage * 100).toFixed(1);
+                  const pnlDollar = (t.size * priceDiff / t.entry * leverage).toFixed(2);
+                  const isProfit = parseFloat(pnlDollar) >= 0;
+                  pnlStr = `\nP&L: ${isProfit ? '+' : ''}$${pnlDollar} (${isProfit ? '+' : ''}${pnlPct}%)\nCurrent: $${currentPrice}`
+                }
+
+                msg += `<b>${t.direction?.toUpperCase()} ${t.coin} ${t.leverage}x</b>\nEntry: $${t.entry} | Target: $${t.target}\nSL: $${t.stopLoss} | Confidence: ${t.confidence}%${pnlStr}\n\n`;
+              } catch(e) {
+                msg += `<b>${t.direction?.toUpperCase()} ${t.coin} ${t.leverage}x</b>\nEntry: $${t.entry} | Target: $${t.target}\nSL: $${t.stopLoss}\n\n`;
+              }
+            }
+            await sendBotMessage(chatId, msg);
+          }
+          continue;
+        }
+
+        if (text === '/balance' || text.toLowerCase().includes('my balance')) {
+          const pd = loadPaperTrades();
+          const closed = pd.trades.filter(t => t.status !== 'open');
+          const winRate = closed.length ? Math.round(pd.stats.wins / closed.length * 100) : 0;
+          await sendBotMessage(chatId, `💰 <b>Paper Trading Stats:</b>\nBalance: $${pd.balance.toFixed(2)}\nWin Rate: ${winRate}%\nTotal P&L: ${pd.stats.totalPnl >= 0 ? '+' : ''}$${pd.stats.totalPnl.toFixed(2)}\nTrades: ${closed.length}`);
+          continue;
+        }
+
+        if (text === '/pause' || text.toLowerCase() === 'pause trading') {
+          const s = loadSettings();
+          s.autoPaperTrade = false;
+          saveJSON(SETTINGS_FILE, s);
+          await sendBotMessage(chatId, '⏸️ Auto trading paused.');
+          continue;
+        }
+
+        if (text === '/resume' || text.toLowerCase() === 'resume trading') {
+          const s = loadSettings();
+          s.autoPaperTrade = true;
+          saveJSON(SETTINGS_FILE, s);
+          await sendBotMessage(chatId, '▶️ Auto trading resumed.');
+          continue;
+        }
+
+        if (text === '/help') {
+          await sendBotMessage(chatId, `<b>Asuka Commands:</b>\n\n/positions — Open trades with live P&L\n/close BTC — Close specific trade\n/closeall — Close all trades\n/leverage 10 — Set leverage (1-150)\n/alert BTC 80000 — Set price alert\n/balance — Paper trading stats\n/pause — Pause auto trading\n/resume — Resume auto trading`);
+          continue;
+        }
+
+        // Set leverage
+        if (text.toLowerCase().startsWith('/leverage')) {
+          const lev = parseInt(text.split(' ')[1]);
+          if (!lev || lev < 1 || lev > 150) {
+            await sendBotMessage(chatId, '⚡ Usage: /leverage 10\nRange: 1-150');
+            continue;
+          }
+          const s = loadSettings();
+          s.paperLeverage = lev;
+          saveJSON(SETTINGS_FILE, s);
+          await sendBotMessage(chatId, `⚡ Leverage set to ${lev}x${lev >= 50 ? ' ⚠️ High risk!' : lev >= 20 ? ' — be careful' : ' ✅'}`);
+          continue;
+        }
+
+        // Set price alert
+        if (text.toLowerCase().startsWith('/alert')) {
+          const parts = text.split(' ');
+          const coin = parts[1]?.toUpperCase();
+          const price = parseFloat(parts[2]);
+          if (!coin || !price) {
+            await sendBotMessage(chatId, '🔔 Usage: /alert BTC 80000');
+            continue;
+          }
+          const s = loadSettings();
+          s.alerts = s.alerts || [];
+          const priceStr = await getCryptoPrice(coin.toLowerCase());
+          const currentMatch = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
+          const current = currentMatch ? parseFloat(currentMatch[1].replace(',', '')) : null;
+          const direction = current ? (price > current ? 'above' : 'below') : 'above';
+          s.alerts.push({ id: Date.now().toString(), coin, target: price, direction, triggered: false });
+          saveJSON(SETTINGS_FILE, s);
+          await sendBotMessage(chatId, `🔔 Alert set: notify when ${coin} goes ${direction} $${price.toLocaleString()}${current ? `\nCurrent: $${current.toLocaleString()}` : ''}`);
+          continue;
+        }
+
+        // Close specific trade
+        if (text.toLowerCase().startsWith('/close')) {
+          const parts = text.split(' ');
+          const coin = parts[1]?.toUpperCase();
+          const pd = loadPaperTrades();
+          
+          if (text.toLowerCase() === '/closeall') {
+            const open = pd.trades.filter(t => t.status === 'open');
+            let closed = 0;
+            for (const t of open) {
+              try {
+                const priceStr = await getCryptoPrice(t.coin.toLowerCase());
+                const priceMatch = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
+                const currentPrice = priceMatch ? parseFloat(priceMatch[1].replace(',', '')) : t.entry;
+                closePaperTrade(t.id, currentPrice, 'manual close via bot');
+                closed++;
+              } catch(e) {}
+            }
+            await sendBotMessage(chatId, `✅ Closed ${closed} trades.`);
+            continue;
+          }
+          
+          if (coin) {
+            const trade = pd.trades.find(t => t.status === 'open' && t.coin === coin);
+            if (trade) {
+              try {
+                const priceStr = await getCryptoPrice(trade.coin.toLowerCase());
+                const priceMatch = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
+                const currentPrice = priceMatch ? parseFloat(priceMatch[1].replace(',', '')) : trade.entry;
+                const closed = closePaperTrade(trade.id, currentPrice, 'manual close via bot');
+                await sendBotMessage(chatId, `${closed?.status === 'win' ? '✅' : '❌'} ${coin} trade closed\nP&L: ${closed?.pnl >= 0 ? '+' : ''}$${closed?.pnl}`);
+              } catch(e) {
+                await sendBotMessage(chatId, `Error closing ${coin} trade`);
+              }
+            } else {
+              await sendBotMessage(chatId, `No open ${coin} trade found.`);
+            }
+            continue;
+          }
+        }
+
+        // Route through Asuka's brain
+        try {
+          const reply = await routeCommand(text);
+          await sendBotMessage(chatId, reply || "I'm here! 💙");
+        } catch(e) {
+          await sendBotMessage(chatId, 'Having a moment — try again! 💙');
+        }
+      }
+    } catch(e) {}
+    setTimeout(pollBot, 2000);
+  }
+
+  console.log('🤖 Telegram bot started');
+  pollBot();
+
+  // Override sendTelegramNotification to use bot if authenticated
+  const originalSendTG = sendTelegramNotification;
+  global.sendTelegramNotificationBot = async (message) => {
+    const settings = loadSettings();
+    const chatId = settings.telegramBotChatId;
+    if (chatId && botToken) {
+      await sendBotMessage(chatId, message);
+    } else {
+      await originalSendTG(message);
+    }
+  };
+}
+
+// IPC handler for bot authentication
+ipcMain.handle('authenticate-bot', async (e, code) => {
+  const chatId = botAuthCodes.get(code);
+  if (!chatId) return { success: false, error: 'Invalid or expired code' };
+  
+  const settings = loadSettings();
+  settings.telegramBotChatId = chatId;
+  saveJSON(SETTINGS_FILE, settings);
+  botAuthCodes.delete(code);
+  
+  console.log(`✅ Bot authenticated for chatId: ${chatId}`);
+  return { success: true, chatId };
+});
+
+// Add smart profit check to paper trading monitor
 let paperTradeInterval = null;
+
+
+// ─── MARKET REGIME DETECTION ──────────────────────────────────────────────
+let _cachedMarketRegime = null;
+let _regimeLastUpdated = 0;
+
+async function detectMarketRegime() {
+  // Cache for 30 min
+  if (_cachedMarketRegime && Date.now() - _regimeLastUpdated < 30 * 60 * 1000) {
+    return _cachedMarketRegime;
+  }
+  try {
+    const [btcCandles, fg, btcDom] = await Promise.all([
+      getCandles('BTC', '1d', 30).catch(() => null),
+      getFearGreed().catch(() => null),
+      getBTCDominanceTrend().catch(() => null)
+    ]);
+    if (!btcCandles) return 'unknown';
+
+    const closes = btcCandles.map(c => c.close);
+    const currentPrice = closes[closes.length - 1];
+    const sma20 = closes.slice(-20).reduce((s, v) => s + v, 0) / 20;
+    const sma7 = closes.slice(-7).reduce((s, v) => s + v, 0) / 7;
+    const priceChange30d = ((currentPrice - closes[0]) / closes[0] * 100).toFixed(1);
+    const fgNum = parseInt(fg?.match(/\d+/)?.[0] || 50);
+    const rsi = calcRSI(btcCandles, 14);
+
+    let regime = 'sideways';
+    let bias = 'neutral';
+    let strength = 'weak';
+
+    // Determine regime
+    if (currentPrice > sma20 && sma7 > sma20 && parseFloat(priceChange30d) > 5) {
+      regime = 'bull';
+      bias = 'long';
+      strength = parseFloat(priceChange30d) > 15 ? 'strong' : 'moderate';
+    } else if (currentPrice < sma20 && sma7 < sma20 && parseFloat(priceChange30d) < -5) {
+      regime = 'bear';
+      bias = 'short';
+      strength = parseFloat(priceChange30d) < -15 ? 'strong' : 'moderate';
+    } else {
+      regime = 'sideways';
+      bias = 'neutral';
+      strength = 'weak';
+    }
+
+    // Override with extreme FG
+    if (fgNum < 15) { regime = 'bear'; bias = 'short'; }
+    if (fgNum > 85) { regime = 'bull'; bias = 'long'; }
+
+    const result = {
+      regime,
+      bias,
+      strength,
+      fgNum,
+      priceChange30d,
+      rsi,
+      summary: `Market Regime: ${regime.toUpperCase()} (${strength}) | Bias: ${bias.toUpperCase()} | 30d: ${priceChange30d}% | FG: ${fgNum}`
+    };
+
+    _cachedMarketRegime = result;
+    _regimeLastUpdated = Date.now();
+    console.log(`🌍 Market regime: ${regime} (${strength}) — bias: ${bias}`);
+    return result;
+  } catch(e) {
+    return { regime: 'unknown', bias: 'neutral', strength: 'weak', summary: 'Regime unknown' };
+  }
+}
+
+// ─── MULTI-TIMEFRAME CONFIRMATION ─────────────────────────────────────────
+async function getMultiTimeframeSignal(coin, direction) {
+  try {
+    const [candles1h, candles4h, candles1d] = await Promise.all([
+      getCandles(coin, '1h', 20).catch(() => null),
+      getCandles(coin, '4h', 20).catch(() => null),
+      getCandles(coin, '1d', 20).catch(() => null)
+    ]);
+
+    const rsi1h = candles1h ? calcRSI(candles1h, 14) : null;
+    const rsi4h = candles4h ? calcRSI(candles4h, 14) : null;
+    const rsi1d = candles1d ? calcRSI(candles1d, 14) : null;
+
+    let aligned = 0;
+    let total = 0;
+
+    const checkRSI = (rsi, tf) => {
+      if (!rsi) return;
+      total++;
+      if (direction === 'long' && rsi < 50) aligned++;
+      else if (direction === 'short' && rsi > 50) aligned++;
+    };
+
+    checkRSI(rsi1h, '1h');
+    checkRSI(rsi4h, '4h');
+    checkRSI(rsi1d, '1d');
+
+    const alignmentPct = total > 0 ? Math.round(aligned / total * 100) : 0;
+    const isAligned = alignmentPct >= 67; // at least 2/3 timeframes agree
+
+    return {
+      rsi1h, rsi4h, rsi1d,
+      aligned, total, alignmentPct, isAligned,
+      summary: `MTF Confirmation: ${aligned}/${total} timeframes agree (1h:${rsi1h?.toFixed(0)} 4h:${rsi4h?.toFixed(0)} 1d:${rsi1d?.toFixed(0)}) — ${isAligned ? '✅ ALIGNED' : '⚠️ MIXED'}`
+    };
+  } catch(e) { return null; }
+}
+
+// ─── NEWS SENTIMENT SCORING ────────────────────────────────────────────────
+let _cachedNewsSentiment = null;
+let _newsLastUpdated = 0;
+
+async function getNewsSentiment(coin = 'BTC') {
+  // Cache 1 hour
+  if (_cachedNewsSentiment?.[coin] && Date.now() - _newsLastUpdated < 60 * 60 * 1000) {
+    return _cachedNewsSentiment[coin];
+  }
+  try {
+    const news = await getCryptoNews();
+    if (!news) return null;
+
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 100,
+      messages: [{ role: 'user', content: `Rate the sentiment of these crypto news headlines for ${coin} trading.
+Headlines: ${news.slice(0, 300)}
+Score from -10 (very bearish) to +10 (very bullish). 
+JSON only: {"score": number, "label": "very bearish/bearish/neutral/bullish/very bullish", "key_event": "one key event in 5 words"}` }]
+    });
+
+    const text = res.content[0].text.replace(/\`\`\`json|\`\`\`/g, '').trim();
+    const sentiment = JSON.parse(text);
+
+    if (!_cachedNewsSentiment) _cachedNewsSentiment = {};
+    _cachedNewsSentiment[coin] = sentiment;
+    _newsLastUpdated = Date.now();
+
+    return sentiment;
+  } catch(e) { return null; }
+}
+
+// ─── WHALE ALERT TRADE SIGNAL ─────────────────────────────────────────────
+function getWhaleSignalForTrade(coin) {
+  try {
+    const pd = loadPaperTrades();
+    const whaleAlerts = pd.whaleAlerts || [];
+    const recentWhales = whaleAlerts.filter(w =>
+      w.coin?.toUpperCase() === coin.toUpperCase() &&
+      Date.now() - w.timestamp < 30 * 60 * 1000 // last 30 min
+    );
+
+    if (!recentWhales.length) return null;
+
+    let bullishSignals = 0;
+    let bearishSignals = 0;
+
+    recentWhales.forEach(w => {
+      if (w.to === 'unknown' || w.to?.includes('wallet')) bullishSignals++; // moved off exchange
+      if (w.to?.includes('exchange') || w.to?.includes('binance') || w.to?.includes('coinbase')) bearishSignals++; // moved to exchange
+    });
+
+    if (bullishSignals > bearishSignals) {
+      return `🐋 Whale activity: ${bullishSignals} large transfers OFF exchange — accumulation signal (bullish)`;
+    } else if (bearishSignals > bullishSignals) {
+      return `🐋 Whale activity: ${bearishSignals} large transfers TO exchange — distribution signal (bearish)`;
+    }
+    return `🐋 ${recentWhales.length} whale transactions in last 30min — high activity`;
+  } catch(e) { return null; }
+}
+
+// ─── COOLDOWN AFTER LOSS ───────────────────────────────────────────────────
+const COIN_COOLDOWNS = {};
+
+function setCoinCooldown(coin, minutes = 30) {
+  COIN_COOLDOWNS[coin] = Date.now() + minutes * 60 * 1000;
+  console.log(`⏰ Cooldown set for ${coin}: ${minutes} min`);
+}
+
+function isCoinOnCooldown(coin) {
+  const cooldownUntil = COIN_COOLDOWNS[coin];
+  if (!cooldownUntil) return false;
+  if (Date.now() > cooldownUntil) {
+    delete COIN_COOLDOWNS[coin];
+    return false;
+  }
+  const remaining = Math.round((cooldownUntil - Date.now()) / 60000);
+  return remaining;
+}
+
+// ─── KELLY CRITERION POSITION SIZING ──────────────────────────────────────
+function calcKellySize(coin, baseSize) {
+  try {
+    const pd = loadPaperTrades();
+    const coinTrades = pd.trades.filter(t =>
+      t.coin === coin && t.status !== 'open' && t.pnl !== undefined
+    ).slice(-20); // last 20 trades
+
+    if (coinTrades.length < 5) return baseSize; // not enough data
+
+    const wins = coinTrades.filter(t => t.pnl > 0);
+    const losses = coinTrades.filter(t => t.pnl <= 0);
+
+    if (!wins.length || !losses.length) return baseSize;
+
+    const winRate = wins.length / coinTrades.length;
+    const avgWin = wins.reduce((s, t) => s + t.pnl, 0) / wins.length;
+    const avgLoss = Math.abs(losses.reduce((s, t) => s + t.pnl, 0) / losses.length);
+
+    if (avgLoss === 0) return baseSize;
+
+    const winLossRatio = avgWin / avgLoss;
+    // Kelly formula: f = W - (1-W)/R where W=winRate, R=win/loss ratio
+    const kelly = winRate - (1 - winRate) / winLossRatio;
+    const halfKelly = Math.max(0.1, Math.min(0.5, kelly / 2)); // Half-Kelly, capped 10-50%
+
+    const kellySize = Math.round(baseSize * (halfKelly / 0.1)); // scale to base
+    console.log(`📐 Kelly ${coin}: W=${(winRate*100).toFixed(0)}% R=${winLossRatio.toFixed(1)} → ${(halfKelly*100).toFixed(0)}% → $${kellySize}`);
+    return kellySize;
+  } catch(e) { return baseSize; }
+}
+
+// ─── CORRELATION MATRIX ────────────────────────────────────────────────────
+const CORRELATED_PAIRS = {
+  'BTC': ['ETH'],
+  'ETH': ['BTC'],
+  'SOL': ['ETH', 'BTC'],
+  'DOGE': ['SHIB'],
+  'BNB': ['BTC'],
+};
+
+function checkCorrelationConflict(coin, direction) {
+  try {
+    const pd = loadPaperTrades();
+    const openTrades = pd.trades.filter(t => t.status === 'open');
+    const correlated = CORRELATED_PAIRS[coin] || [];
+
+    for (const corr of correlated) {
+      const existingTrade = openTrades.find(t => t.coin === corr);
+      if (existingTrade && existingTrade.direction === direction) {
+        return `⚠️ Correlation risk: Already ${direction} ${corr} — ${coin}/${corr} are correlated, double exposure`;
+      }
+    }
+    return null;
+  } catch(e) { return null; }
+}
+
+// ─── TRADE PERFORMANCE ANALYTICS ─────────────────────────────────────────
+function getTradeAnalytics() {
+  try {
+    const pd = loadPaperTrades();
+    const closed = pd.trades.filter(t => t.status !== 'open' && t.pnl !== undefined);
+    if (closed.length < 3) return null;
+
+    // Best coin
+    const coinStats = {};
+    closed.forEach(t => {
+      if (!coinStats[t.coin]) coinStats[t.coin] = { wins: 0, losses: 0, pnl: 0, count: 0 };
+      coinStats[t.coin].count++;
+      coinStats[t.coin].pnl += t.pnl;
+      if (t.pnl > 0) coinStats[t.coin].wins++;
+      else coinStats[t.coin].losses++;
+    });
+
+    const bestCoin = Object.entries(coinStats)
+      .sort((a, b) => b[1].pnl - a[1].pnl)[0];
+    const worstCoin = Object.entries(coinStats)
+      .sort((a, b) => a[1].pnl - b[1].pnl)[0];
+
+    // Best time of day
+    const hourStats = {};
+    closed.forEach(t => {
+      const hour = new Date(t.openTime).getUTCHours();
+      if (!hourStats[hour]) hourStats[hour] = { wins: 0, losses: 0, pnl: 0 };
+      hourStats[hour].pnl += t.pnl;
+      if (t.pnl > 0) hourStats[hour].wins++;
+      else hourStats[hour].losses++;
+    });
+
+    const bestHour = Object.entries(hourStats)
+      .sort((a, b) => b[1].pnl - a[1].pnl)[0];
+
+    // Avg hold time
+    const closedWithTime = closed.filter(t => t.closeTime && t.openTime);
+    const avgHoldMs = closedWithTime.reduce((s, t) => s + (t.closeTime - t.openTime), 0) / (closedWithTime.length || 1);
+    const avgHoldMin = Math.round(avgHoldMs / 60000);
+
+    // Best signal type
+    const callerStats = {};
+    closed.forEach(t => {
+      const caller = t.caller || 'unknown';
+      if (!callerStats[caller]) callerStats[caller] = { wins: 0, total: 0, pnl: 0 };
+      callerStats[caller].total++;
+      callerStats[caller].pnl += t.pnl;
+      if (t.pnl > 0) callerStats[caller].wins++;
+    });
+
+    return {
+      bestCoin: bestCoin ? { coin: bestCoin[0], ...bestCoin[1] } : null,
+      worstCoin: worstCoin ? { coin: worstCoin[0], ...worstCoin[1] } : null,
+      bestHour: bestHour ? { hour: parseInt(bestHour[0]), ...bestHour[1] } : null,
+      avgHoldMin,
+      coinStats,
+      callerStats,
+      totalTrades: closed.length,
+      totalPnl: closed.reduce((s, t) => s + t.pnl, 0)
+    };
+  } catch(e) { return null; }
+}
+
+// IPC handlers for new features
+ipcMain.handle('get-market-regime', async () => detectMarketRegime());
+ipcMain.handle('get-trade-analytics', () => getTradeAnalytics());
+ipcMain.handle('get-coin-cooldowns', () => COIN_COOLDOWNS);
+
+
+
+// ─── DAILY P&L HARD STOP ──────────────────────────────────────────────────
+let _tradingPausedUntil = 0;
+let _dailyPnlTracker = { date: null, pnl: 0 };
+
+function checkDailyPnlLimit() {
+  const settings = loadSettings();
+  const limit = settings.dailyLossLimit;
+  if (!limit || limit <= 0) return false;
+
+  const today = new Date().toDateString();
+  if (_dailyPnlTracker.date !== today) {
+    _dailyPnlTracker = { date: today, pnl: 0 };
+  }
+
+  // Calculate today's closed P&L
+  const pd = loadPaperTrades();
+  const todayTrades = pd.trades.filter(t => {
+    if (!t.closeTime) return false;
+    return new Date(t.closeTime).toDateString() === today;
+  });
+  const todayPnl = todayTrades.reduce((s, t) => s + (t.pnl || 0), 0);
+
+  if (todayPnl <= -Math.abs(limit)) {
+    console.log(`🛑 Daily loss limit hit: $${todayPnl.toFixed(2)} (limit: -$${limit})`);
+    sendTelegramNotification(`🛑 DAILY LOSS LIMIT HIT
+Loss: $${Math.abs(todayPnl).toFixed(2)}
+Limit: $${limit}
+All trading paused until midnight UTC`);
+    sendIntelEvent({
+      type: 'alert',
+      source: '🛑 Risk Management',
+      body: `Daily loss limit hit — $${Math.abs(todayPnl).toFixed(2)} lost today`,
+      note: `Trading paused. Limit: $${limit}. Resets at midnight UTC.`,
+      notify: true
+    });
+    return true;
+  }
+  return false;
+}
+
+function isTradingPaused() {
+  if (checkDailyPnlLimit()) return true;
+  if (_tradingPausedUntil > Date.now()) return true;
+  return false;
+}
+
+// ─── MAX CONCURRENT POSITIONS ─────────────────────────────────────────────
+function checkMaxPositions() {
+  const settings = loadSettings();
+  const maxPositions = settings.maxOpenPositions;
+  if (!maxPositions || maxPositions <= 0) return false;
+
+  const pd = loadPaperTrades();
+  const openCount = pd.trades.filter(t => t.status === 'open').length;
+
+  if (openCount >= maxPositions) {
+    console.log(`⚠️ Max positions reached: ${openCount}/${maxPositions}`);
+    return true;
+  }
+  return false;
+}
+
+// ─── RSI DIVERGENCE DETECTION ─────────────────────────────────────────────
+async function detectRSIDivergence(coin) {
+  try {
+    const candles = await getCandles(coin, '1h', 50);
+    if (!candles || candles.length < 20) return null;
+
+    const closes = candles.map(c => c.close);
+    const highs = candles.map(c => c.high);
+    const lows = candles.map(c => c.low);
+
+    // Calculate RSI for last 20 candles
+    const rsiValues = [];
+    for (let i = candles.length - 20; i < candles.length; i++) {
+      const slice = candles.slice(Math.max(0, i - 14), i + 1);
+      rsiValues.push(calcRSI(slice, 14) || 50);
+    }
+
+    const recentCloses = closes.slice(-20);
+    const recentHighs = highs.slice(-20);
+    const recentLows = lows.slice(-20);
+
+    // Find recent swing highs/lows
+    const findPeaks = (arr) => {
+      const peaks = [];
+      for (let i = 1; i < arr.length - 1; i++) {
+        if (arr[i] > arr[i-1] && arr[i] > arr[i+1]) peaks.push({ idx: i, val: arr[i] });
+      }
+      return peaks.slice(-3);
+    };
+
+    const pricePeaks = findPeaks(recentHighs);
+    const rsiPeaks = findPeaks(rsiValues);
+    const priceTroughs = findPeaks(recentLows.map(v => -v)).map(p => ({ idx: p.idx, val: -p.val }));
+    const rsiTroughs = findPeaks(rsiValues.map(v => -v)).map(p => ({ idx: p.idx, val: -p.val }));
+
+    let divergence = null;
+
+    // Bearish divergence: price higher high, RSI lower high
+    if (pricePeaks.length >= 2 && rsiPeaks.length >= 2) {
+      const lastPrice = pricePeaks[pricePeaks.length-1];
+      const prevPrice = pricePeaks[pricePeaks.length-2];
+      const lastRSI = rsiPeaks[rsiPeaks.length-1];
+      const prevRSI = rsiPeaks[rsiPeaks.length-2];
+
+      if (lastPrice.val > prevPrice.val && lastRSI.val < prevRSI.val) {
+        divergence = {
+          type: 'bearish',
+          signal: `🔴 BEARISH DIVERGENCE: Price made higher high ($${lastPrice.val.toFixed(2)}) but RSI made lower high (${lastRSI.val.toFixed(0)}) — reversal warning`,
+          strength: 'strong'
+        };
+      }
+    }
+
+    // Bullish divergence: price lower low, RSI higher low
+    if (!divergence && priceTroughs.length >= 2 && rsiTroughs.length >= 2) {
+      const lastPrice = priceTroughs[priceTroughs.length-1];
+      const prevPrice = priceTroughs[priceTroughs.length-2];
+      const lastRSI = rsiTroughs[rsiTroughs.length-1];
+      const prevRSI = rsiTroughs[rsiTroughs.length-2];
+
+      if (lastPrice.val < prevPrice.val && lastRSI.val > prevRSI.val) {
+        divergence = {
+          type: 'bullish',
+          signal: `🟢 BULLISH DIVERGENCE: Price made lower low ($${lastPrice.val.toFixed(2)}) but RSI made higher low (${lastRSI.val.toFixed(0)}) — reversal opportunity`,
+          strength: 'strong'
+        };
+      }
+    }
+
+    return divergence;
+  } catch(e) { return null; }
+}
+
+// ─── TG GROUP SENTIMENT ────────────────────────────────────────────────────
+async function getTelegramGroupSentiment(coin) {
+  try {
+    const td = loadTelegramData();
+    if (!td.signals?.length) return null;
+
+    // Get last 2 hours of signals
+    const recent = td.signals.filter(s =>
+      Date.now() - s.timestamp < 2 * 60 * 60 * 1000 &&
+      s.coin?.toUpperCase() === coin.toUpperCase()
+    );
+
+    if (recent.length < 2) return null;
+
+    const longs = recent.filter(s => s.direction === 'long').length;
+    const shorts = recent.filter(s => s.direction === 'short').length;
+    const total = longs + shorts;
+    const longPct = Math.round(longs / total * 100);
+
+    let signal = '';
+    if (longPct > 70) signal = `⚠️ TG groups ${longPct}% bullish on ${coin} — contrarian SHORT signal (crowded longs)`;
+    else if (longPct < 30) signal = `⚠️ TG groups ${100-longPct}% bearish on ${coin} — contrarian LONG signal (crowded shorts)`;
+    else signal = `TG sentiment balanced: ${longPct}% long / ${100-longPct}% short`;
+
+    return { longPct, total, signal };
+  } catch(e) { return null; }
+}
+
+// ─── SIGNAL QUALITY SCORING ────────────────────────────────────────────────
+function scoreSignalQuality(signal, callerStats, marketData) {
+  let score = 50; // base score
+  const reasons = [];
+
+  // Caller track record
+  if (callerStats) {
+    const wr = callerStats.winRate || 50;
+    if (wr >= 70) { score += 20; reasons.push(`Caller ${wr}% WR`); }
+    else if (wr >= 55) { score += 10; reasons.push(`Caller ${wr}% WR`); }
+    else if (wr < 40) { score -= 15; reasons.push(`Caller low ${wr}% WR`); }
+  }
+
+  // Confidence level
+  if (signal.confidence >= 80) { score += 15; reasons.push('High confidence'); }
+  else if (signal.confidence < 50) { score -= 10; reasons.push('Low confidence'); }
+
+  // Has TP and SL
+  if (signal.target && signal.stopLoss) { score += 5; reasons.push('Has TP+SL'); }
+  else { score -= 10; reasons.push('Missing TP or SL'); }
+
+  // Market alignment
+  const fg = global._cachedFearGreed || 50;
+  if (signal.direction === 'short' && fg < 30) { score += 10; reasons.push('Aligned with fear'); }
+  if (signal.direction === 'long' && fg > 70) { score += 10; reasons.push('Aligned with greed'); }
+
+  // Regime alignment
+  if (global._cachedMarketRegime) {
+    const regime = global._cachedMarketRegime;
+    if (signal.direction === regime.bias) { score += 10; reasons.push('With regime'); }
+    else if (regime.bias !== 'neutral') { score -= 10; reasons.push('Against regime'); }
+  }
+
+  score = Math.max(0, Math.min(100, score));
+  const grade = score >= 80 ? 'A' : score >= 65 ? 'B' : score >= 50 ? 'C' : 'D';
+
+  return { score, grade, reasons, label: `Signal Quality: ${score}/100 (Grade ${grade})` };
+}
+
+// ─── DAILY TRADE SUMMARY REPORT ───────────────────────────────────────────
+async function sendDailyTradeSummary() {
+  try {
+    const pd = loadPaperTrades();
+    const today = new Date().toDateString();
+    const todayTrades = pd.trades.filter(t =>
+      t.closeTime && new Date(t.closeTime).toDateString() === today
+    );
+
+    if (!todayTrades.length) return;
+
+    const wins = todayTrades.filter(t => t.pnl > 0);
+    const losses = todayTrades.filter(t => t.pnl <= 0);
+    const totalPnl = todayTrades.reduce((s, t) => s + (t.pnl || 0), 0);
+    const winRate = Math.round(wins.length / todayTrades.length * 100);
+
+    const bestTrade = wins.sort((a, b) => b.pnl - a.pnl)[0];
+    const worstTrade = losses.sort((a, b) => a.pnl - b.pnl)[0];
+
+    // Get AI lesson from today
+    const lessonsCtx = buildLessonsContext();
+
+    const summary = `📊 DAILY TRADE SUMMARY
+Date: ${new Date().toLocaleDateString()}
+
+Results:
+✅ Wins: ${wins.length} | ❌ Losses: ${losses.length}
+📈 Win Rate: ${winRate}%
+💰 Total P&L: ${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}
+💼 Balance: $${pd.balance.toFixed(2)}
+
+${bestTrade ? `🏆 Best: ${bestTrade.coin} ${bestTrade.direction?.toUpperCase()} +$${bestTrade.pnl.toFixed(2)}` : ''}
+${worstTrade ? `💀 Worst: ${worstTrade.coin} ${worstTrade.direction?.toUpperCase()} $${worstTrade.pnl.toFixed(2)}` : ''}
+
+${totalPnl > 0 ? '🌟 Profitable day!' : totalPnl < -100 ? '⚠️ Rough day — review your settings' : '📝 Break-even day'}`;
+
+    await sendTelegramNotification(summary);
+    console.log('📊 Daily summary sent via TG');
+  } catch(e) { console.error('Daily summary error:', e.message); }
+}
+
+// Schedule daily summary at 23:55 UTC
+function scheduleDailySummary() {
+  const now = new Date();
+  const nextRun = new Date();
+  nextRun.setUTCHours(23, 55, 0, 0);
+  if (nextRun <= now) nextRun.setUTCDate(nextRun.getUTCDate() + 1);
+  const ms = nextRun - now;
+  setTimeout(() => {
+    sendDailyTradeSummary();
+    setInterval(sendDailyTradeSummary, 24 * 60 * 60 * 1000);
+  }, ms);
+  console.log(`📊 Daily summary scheduled — next in ${Math.round(ms/3600000)}h`);
+}
+
+// ─── SMART PRICE ALERTS ────────────────────────────────────────────────────
+const PRICE_ALERTS = [];
+
+async function checkSmartPriceAlerts() {
+  if (!PRICE_ALERTS.length) return;
+  for (let i = PRICE_ALERTS.length - 1; i >= 0; i--) {
+    const alert = PRICE_ALERTS[i];
+    try {
+      const priceStr = await getCryptoPrice(alert.coin.toLowerCase());
+      const priceMatch = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
+      if (!priceMatch) continue;
+      const currentPrice = parseFloat(priceMatch[1].replace(',', ''));
+
+      const triggered = (alert.direction === 'above' && currentPrice >= alert.price) ||
+                       (alert.direction === 'below' && currentPrice <= alert.price);
+
+      if (triggered) {
+        // Get AI context
+        const rsi = await getCandles(alert.coin, '1h', 20).then(c => c ? calcRSI(c, 14) : null).catch(() => null);
+        const fg = global._cachedFearGreed || 50;
+        const regime = _cachedMarketRegime;
+
+        const context = `RSI: ${rsi?.toFixed(0) || '?'} | FG: ${fg} | Regime: ${regime?.regime || '?'}`;
+        const suggestion = rsi < 30 ? '📈 Oversold — potential long' :
+                          rsi > 70 ? '📉 Overbought — potential short' :
+                          'Neutral zone — wait for confirmation';
+
+        await sendTelegramNotification(
+          `🎯 PRICE ALERT: ${alert.coin}
+` +
+          `Price hit $${currentPrice.toLocaleString()} (target: $${alert.price.toLocaleString()})
+
+` +
+          `Market Context:
+${context}
+${suggestion}
+
+` +
+          `Set by you at: ${new Date(alert.setAt).toLocaleTimeString()}`
+        );
+
+        PRICE_ALERTS.splice(i, 1); // Remove triggered alert
+        console.log(`🎯 Smart price alert triggered: ${alert.coin} at $${currentPrice}`);
+      }
+    } catch(e) {}
+  }
+}
+
+ipcMain.on('set-price-alert', (e, { coin, price, direction }) => {
+  PRICE_ALERTS.push({ coin, price, direction, setAt: Date.now() });
+  console.log(`🎯 Price alert set: ${coin} ${direction} $${price}`);
+});
+
+ipcMain.handle('get-price-alerts', () => PRICE_ALERTS);
+ipcMain.on('remove-price-alert', (e, idx) => PRICE_ALERTS.splice(idx, 1));
+
+// ─── DCA AUTOMATION ────────────────────────────────────────────────────────
+const DCA_FILE = path.join(DATA_DIR, 'dca-settings.json');
+function loadDCASettings() { return loadJSON(DCA_FILE, { plans: [] }); }
+function saveDCASettings(d) { saveJSON(DCA_FILE, d); }
+
+async function checkDCAPlans() {
+  const dca = loadDCASettings();
+  if (!dca.plans?.length) return;
+
+  const now = Date.now();
+  for (const plan of dca.plans) {
+    if (!plan.enabled) continue;
+    if (!plan.nextRun || now >= plan.nextRun) {
+      try {
+        // Execute DCA buy
+        const priceStr = await getCryptoPrice(plan.coin.toLowerCase());
+        const priceMatch = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
+        if (!priceMatch) continue;
+        const price = parseFloat(priceMatch[1].replace(',', ''));
+
+        console.log(`💰 DCA: Buying $${plan.amount} ${plan.coin} at $${price}`);
+
+        // Open as spot trade or paper trade
+        const dcaSignal = {
+          coin: plan.coin,
+          direction: 'long',
+          entry: price,
+          target: price * 1.1, // 10% TP
+          stopLoss: price * 0.9, // 10% SL
+          confidence: 60,
+          leverage: 1,
+          size: plan.amount,
+          caller: 'DCA Bot',
+          groupName: `DCA | $${plan.amount} every ${plan.interval}`,
+          isDCA: true
+        };
+
+        await openPaperTrade(dcaSignal);
+        await sendTelegramNotification(`💰 DCA Executed
+${plan.coin}: Bought $${plan.amount} at $${price.toLocaleString()}
+Next: ${new Date(plan.nextRun + getIntervalMs(plan.interval)).toLocaleDateString()}`);
+
+        // Set next run
+        plan.nextRun = now + getIntervalMs(plan.interval);
+        plan.lastRun = now;
+        plan.totalInvested = (plan.totalInvested || 0) + plan.amount;
+      } catch(e) { console.error('DCA error:', e.message); }
+    }
+  }
+  saveDCASettings(dca);
+}
+
+function getIntervalMs(interval) {
+  const map = { daily: 86400000, weekly: 604800000, biweekly: 1209600000, monthly: 2592000000 };
+  return map[interval] || 604800000;
+}
+
+ipcMain.handle('get-dca-plans', () => loadDCASettings());
+ipcMain.on('save-dca-plan', (e, plan) => {
+  const dca = loadDCASettings();
+  const idx = dca.plans.findIndex(p => p.id === plan.id);
+  if (idx >= 0) dca.plans[idx] = plan;
+  else dca.plans.push({ ...plan, id: Date.now(), nextRun: Date.now() });
+  saveDCASettings(dca);
+});
+ipcMain.on('delete-dca-plan', (e, id) => {
+  const dca = loadDCASettings();
+  dca.plans = dca.plans.filter(p => p.id !== id);
+  saveDCASettings(dca);
+});
+
+// IPC handlers
+ipcMain.handle('get-signal-quality', (e, signal, callerStats) => scoreSignalQuality(signal, callerStats, {}));
+ipcMain.on('pause-trading', (e, minutes) => {
+  _tradingPausedUntil = Date.now() + minutes * 60 * 1000;
+  console.log(`⏸️ Trading paused for ${minutes} min`);
+});
+ipcMain.on('resume-trading', () => { _tradingPausedUntil = 0; });
+ipcMain.handle('is-trading-paused', () => isTradingPaused());
+
+
+// ─── DAILY TRADE BOT ──────────────────────────────────────────────────────────
+
+// Daily RSI signal storage
+const DAILY_SIGNALS_FILE = path.join(DATA_DIR, 'daily-signals.json');
+function loadDailySignals() { return loadJSON(DAILY_SIGNALS_FILE, { signals: {}, lastUpdated: null, date: null }); }
+function saveDailySignals(d) { saveJSON(DAILY_SIGNALS_FILE, d); }
+
+// Calculate daily RSI from daily candles
+async function getDailyRSI(coin, period = 14) {
+  try {
+    const candles = await getCandles(coin, '1d', period + 5);
+    if (!candles || candles.length < period) return null;
+    const rsi = calcRSI(candles, period);
+    return rsi;
+  } catch(e) {
+    console.error(`Daily RSI error for ${coin}:`, e.message?.slice(0, 50));
+    return null;
+  }
+}
+
+// Get signal tier based on RSI and user settings
+function getDailySignalTier(rsi, settings) {
+  if (rsi === null) return 'unknown';
+  const powerBuy = settings.dailyPowerBuyRSI || 20;
+  const buy = settings.dailyBuyRSI || 30;
+  const sell = settings.dailySellRSI || 70;
+  const powerSell = settings.dailyPowerSellRSI || 80;
+
+  if (rsi <= powerBuy) return 'Power Buy';
+  if (rsi <= buy) return 'Buy';
+  if (rsi >= powerSell) return 'Power Sell';
+  if (rsi >= sell) return 'Sell';
+  return 'Neutral';
+}
+
+// Get direction from signal tier
+function getSignalDirection(tier) {
+  if (tier === 'Power Buy' || tier === 'Buy') return 'long';
+  if (tier === 'Power Sell' || tier === 'Sell') return 'short';
+  return null;
+}
+
+// Main daily trade bot scanner
+async function runDailyTradeBot() {
+  const settings = loadSettings();
+  if (!settings.dailyTradeEnabled) return;
+  if (!settings.autoPaperTrade) return;
+
+  console.log('📅 Running Daily Trade Bot...');
+
+  const coins = settings.tradingCoins || ['BTC', 'ETH', 'SOL', 'DOGE', 'BNB'];
+  const period = settings.dailyRSIPeriod || 14;
+  const powerOnly = settings.dailyPowerOnly !== false; // default true
+  const leverage = settings.dailyLeverage || 3;
+  const size = settings.dailyTradeSize || 1000;
+  const maxTrades = settings.dailyMaxTrades || 1;
+
+  // Check how many day trades already open
+  const pd = loadPaperTrades();
+  const openDayTrades = pd.trades.filter(t => t.status === 'open' && t.isDayTrade);
+  if (openDayTrades.length >= maxTrades) {
+    console.log(`📅 Daily bot: max day trades reached (${openDayTrades.length}/${maxTrades})`);
+    return;
+  }
+
+  // Get FG for context
+  const fg = global._cachedFearGreed || 50;
+  const lessonsCtx = buildLessonsContext();
+
+  // Scan each coin
+  const signals = [];
+  for (const coin of coins) {
+    try {
+      // Skip if already have day trade on this coin
+      const existingDayTrade = pd.trades.find(t =>
+        t.status === 'open' && t.coin === coin && t.isDayTrade
+      );
+      if (existingDayTrade) continue;
+
+      const rsi = await getDailyRSI(coin, period);
+      if (rsi === null) continue;
+
+      const tier = getDailySignalTier(rsi, settings);
+      const direction = getSignalDirection(tier);
+
+      console.log(`📅 ${coin} Daily RSI: ${rsi?.toFixed(2)} → ${tier}`);
+
+      // Skip neutral
+      if (!direction) continue;
+
+      // Skip non-power signals if powerOnly mode
+      if (powerOnly && (tier === 'Buy' || tier === 'Sell')) {
+        console.log(`📅 ${coin}: skipping ${tier} (Power Only mode enabled)`);
+        continue;
+      }
+
+      signals.push({ coin, rsi, tier, direction });
+    } catch(e) {
+      console.error(`📅 Daily RSI error ${coin}:`, e.message?.slice(0, 50));
+    }
+  }
+
+  if (!signals.length) {
+    console.log('📅 Daily bot: no signals today — market neutral');
+    // Save empty signals
+    saveDailySignals({
+      signals: {},
+      lastUpdated: Date.now(),
+      date: new Date().toISOString().split('T')[0]
+    });
+    return;
+  }
+
+  // Sort by signal strength (Power first, then by RSI extremity)
+  signals.sort((a, b) => {
+    const strength = { 'Power Buy': 3, 'Power Sell': 3, 'Buy': 1, 'Sell': 1 };
+    if (strength[b.tier] !== strength[a.tier]) return strength[b.tier] - strength[a.tier];
+    // More extreme RSI = stronger signal
+    const aExtreme = Math.min(a.rsi, 100 - a.rsi);
+    const bExtreme = Math.min(b.rsi, 100 - b.rsi);
+    return aExtreme - bExtreme;
+  });
+
+  // Save daily signals for display
+  const signalMap = {};
+  for (const s of signals) {
+    signalMap[s.coin] = { rsi: s.rsi?.toFixed(2), tier: s.tier, direction: s.direction };
+  }
+  saveDailySignals({
+    signals: signalMap,
+    lastUpdated: Date.now(),
+    date: new Date().toISOString().split('T')[0]
+  });
+
+  // Execute trades for strongest signals
+  const delay = ms => new Promise(r => setTimeout(r, ms));
+  let tradesOpened = 0;
+
+  for (const signal of signals) {
+    if (tradesOpened + openDayTrades.length >= maxTrades) break;
+
+    try {
+      // Get current price
+      const priceStr = await getCryptoPrice(signal.coin.toLowerCase());
+      const priceMatch = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
+      if (!priceMatch) continue;
+      const currentPrice = parseFloat(priceMatch[1].replace(',', ''));
+
+      // Claude makes the final decision with context
+      await delay(1000);
+      const claudeRes = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 200,
+        messages: [{ role: 'user', content: `You are managing a DAILY TRADE for ${signal.coin}.
+
+DAILY RSI SIGNAL:
+Coin: ${signal.coin}
+Daily RSI: ${signal.rsi?.toFixed(2)} (Period: ${period})
+Signal: ${signal.tier}
+Direction: ${signal.direction?.toUpperCase()}
+Current Price: $${currentPrice}
+Fear & Greed: ${fg}
+
+CONTEXT:
+${lessonsCtx || 'No lessons yet'}
+
+This is a DAY TRADE — holds hours to days.
+Use wider TP (5-15%) and SL (2-3%).
+Confirm the signal or reject if market conditions are against it.
+
+JSON only:
+{
+  "execute": true/false,
+  "direction": "${signal.direction}",
+  "entry": ${currentPrice},
+  "target": number,
+  "stopLoss": number,
+  "confidence": 0-100,
+  "reason": "under 12 words"
+}` }]
+      });
+
+      const raw = claudeRes.content[0].text.replace(/```json|```/g, '').trim();
+      const decision = JSON.parse(raw);
+
+      if (!decision.execute) {
+        console.log(`📅 Claude rejected ${signal.coin} day trade: ${decision.reason}`);
+        continue;
+      }
+
+      // Open the day trade
+      const daySignal = {
+        coin: signal.coin,
+        direction: decision.direction,
+        entry: decision.entry || currentPrice,
+        target: decision.target,
+        stopLoss: decision.stopLoss,
+        confidence: decision.confidence,
+        leverage,
+        size,
+        caller: 'Asuka (Daily Trade)',
+        groupName: `Daily Trade | ${signal.tier} | RSI ${signal.rsi?.toFixed(1)}`,
+        messageId: `daily_${Date.now()}`,
+        timestamp: Date.now(),
+        isDayTrade: true,
+        dailyRSI: signal.rsi,
+        dailyTier: signal.tier
+      };
+
+      await openPaperTrade(daySignal);
+      tradesOpened++;
+
+      console.log(`📅 Day trade opened: ${signal.direction?.toUpperCase()} ${signal.coin} | ${signal.tier} | RSI ${signal.rsi?.toFixed(1)} | ${decision.confidence}%`);
+
+      sendIntelEvent({
+        type: 'signal',
+        source: `📅 Daily Trade Bot`,
+        body: `${signal.tier.toUpperCase()}: ${signal.direction?.toUpperCase()} ${signal.coin}`,
+        note: `Daily RSI: ${signal.rsi?.toFixed(1)} | ${decision.reason} | ${decision.confidence}% confidence`,
+        notify: true
+      });
+
+      await delay(2000);
+    } catch(e) {
+      console.error(`📅 Day trade error ${signal.coin}:`, e.message?.slice(0, 80));
+    }
+  }
+
+  if (tradesOpened === 0) {
+    console.log('📅 Daily bot: signals found but Claude rejected all entries');
+  }
+}
+
+// Schedule daily bot at 00:05 UTC
+function scheduleDailyTradeBot() {
+  const now = new Date();
+  const nextRun = new Date();
+  nextRun.setUTCHours(0, 5, 0, 0);
+  if (nextRun <= now) nextRun.setUTCDate(nextRun.getUTCDate() + 1);
+
+  const msUntilRun = nextRun - now;
+  console.log(`📅 Daily Trade Bot scheduled — next run in ${Math.round(msUntilRun/3600000)}h ${Math.round((msUntilRun%3600000)/60000)}m`);
+
+  setTimeout(() => {
+    runDailyTradeBot();
+    // Then run every 24 hours
+    setInterval(runDailyTradeBot, 24 * 60 * 60 * 1000);
+  }, msUntilRun);
+}
+
+// IPC handlers for daily trade bot
+ipcMain.handle('get-daily-signals', () => loadDailySignals());
+
+ipcMain.on('trigger-daily-scan', () => {
+  console.log('📅 Daily trade scan triggered manually');
+  runDailyTradeBot();
+});
+
+ipcMain.handle('trigger-daily-scan-wait', async () => {
+  console.log('📅 Daily trade scan triggered (waiting)');
+  await runDailyTradeBot();
+  return loadDailySignals();
+});
+
+ipcMain.on('set-daily-setting', (e, key, val) => {
+  const s = loadSettings();
+  s[key] = val;
+  saveJSON(SETTINGS_FILE, s);
+});
+
+
 function startPaperTradingMonitor() {
   if (paperTradeInterval) clearInterval(paperTradeInterval);
   paperTradeInterval = setInterval(async () => {
     await checkPaperTrades();
     await runMarketScan();
+    await checkSmartProfitAlerts();
+    await checkScalpExpiry();
+    await checkDCAPlans();
+    await checkSmartPriceAlerts(); // Auto-close expired scalps
   }, 15 * 60 * 1000); // Every 15 minutes
   console.log('📊 Paper trading monitor started');
 }
 
 // IPC handlers for paper trading
+ipcMain.on('set-max-scalps', (e, val) => {
+  const s = loadSettings();
+  s.maxScalpTrades = val;
+  saveJSON(SETTINGS_FILE, s);
+});
+
+ipcMain.on('trigger-scalp-scan', () => {
+  console.log('⚡ Scalp scan triggered manually');
+  runIndependentScalpScan();
+});
+
+ipcMain.on('restart-scanner', () => {
+  startIndependentScanner();
+  console.log('🔄 Scanner restarted with new interval');
+});
+
 ipcMain.on('start-independent-scanner', () => {
   const settings = loadSettings();
   settings.independentScanner = true;
@@ -3284,6 +7851,19 @@ ipcMain.handle('close-paper-trade', async (e, tradeId, currentPrice) => {
   return closePaperTrade(tradeId, currentPrice, 'manual close');
 });
 
+ipcMain.handle('get-binance-status', async () => {
+  if (!isBinanceTestnet()) return { connected: false };
+  try {
+    const balance = await getBinanceBalance();
+    const positions = await getBinancePositions();
+    return { 
+      connected: true, 
+      balance: balance?.toFixed(2) || '0',
+      openPositions: positions.length
+    };
+  } catch(e) { return { connected: false, error: e.message }; }
+});
+
 ipcMain.handle('get-paper-trades', async () => {
   return loadPaperTrades();
 });
@@ -3294,34 +7874,130 @@ ipcMain.handle('reset-paper-trades', async () => {
 });
 
 ipcMain.handle('get-paper-stats', async () => {
+  // If Binance testnet configured — try to read from there with timeout
+  if (isBinanceTestnet()) {
+    try {
+      const binancePromise = Promise.all([
+        getBinancePositions(),
+        binanceTestnetRequest('GET', '/fapi/v2/account', {})
+      ]);
+      
+      // 4 second timeout — if Binance slow, fall back to local
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Binance timeout')), 4000)
+      );
+      
+      const [positions, account] = await Promise.race([binancePromise, timeoutPromise]);
+
+      const balance = parseFloat(account?.totalWalletBalance || 0);
+      const unrealizedPnl = parseFloat(account?.totalUnrealizedProfit || 0);
+      const totalPnl = balance - 100000; // vs starting balance
+
+      // Get trade history from our local JSON for win/loss stats
+      const pd = loadPaperTrades();
+      const closed = pd.trades.filter(t => t.status !== 'open');
+      const winRate = closed.length ? Math.round(pd.stats.wins / closed.length * 100) : 0;
+
+      // Format open positions from Binance
+      const openTrades = await Promise.all(positions.map(async p => {
+        const coin = p.symbol.replace('USDT', '');
+        const direction = parseFloat(p.positionAmt) > 0 ? 'long' : 'short';
+        const entryPrice = parseFloat(p.entryPrice);
+        const currentPrice = parseFloat(p.markPrice);
+        const leverage = parseInt(p.leverage);
+        const unrealized = parseFloat(p.unRealizedProfit);
+        const size = Math.abs(parseFloat(p.positionAmt)) * entryPrice / leverage;
+        const priceDiff = direction === 'long' ? currentPrice - entryPrice : entryPrice - currentPrice;
+        const pnlPct = (priceDiff / entryPrice * leverage * 100);
+
+        // Find matching local trade for extra info
+        const localTrade = pd.trades.find(t => 
+          t.status === 'open' && t.coin === coin && t.direction === direction
+        );
+
+        return {
+          id: p.symbol + Date.now(),
+          coin,
+          direction,
+          entry: entryPrice,
+          currentPrice,
+          target: localTrade?.target || null,
+          stopLoss: localTrade?.stopLoss || null,
+          leverage,
+          size,
+          unrealizedPnl: parseFloat(unrealized.toFixed(2)),
+          unrealizedPct: parseFloat(pnlPct.toFixed(2)),
+          liquidationPrice: parseFloat(p.liquidationPrice),
+          confidence: localTrade?.confidence || 0,
+          caller: localTrade?.caller || 'Binance Testnet',
+          groupName: localTrade?.groupName || '',
+          openTime: localTrade?.openTime || Date.now(),
+          status: 'open',
+          source: 'binance'
+        };
+      }));
+
+      return {
+        balance: parseFloat(balance.toFixed(2)),
+        startBalance: 100000,
+        totalPnl: parseFloat(totalPnl.toFixed(2)),
+        unrealizedPnl: parseFloat(unrealizedPnl.toFixed(2)),
+        wins: pd.stats.wins,
+        losses: pd.stats.losses,
+        winRate,
+        totalTrades: closed.length,
+        openTrades: openTrades.length,
+        trades: [...openTrades, ...closed.slice(-20).reverse()],
+        leverage: loadSettings().paperLeverage || 1,
+        tradeSize: loadSettings().paperTradeSize || null,
+        source: 'binance'
+      };
+    } catch(e) {
+      console.error('Binance stats error:', e.message);
+    }
+  }
+
+  // Fallback to local paper trading
   const pd = loadPaperTrades();
   const settings = loadSettings();
   const closed = pd.trades.filter(t => t.status !== 'open');
   const open = pd.trades.filter(t => t.status === 'open');
   const winRate = closed.length ? Math.round(pd.stats.wins / closed.length * 100) : 0;
 
-  // Get current prices for open trades
   for (const trade of open) {
     try {
       const priceStr = await getCryptoPrice(trade.coin.toLowerCase());
       const priceMatch = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
       if (priceMatch) {
         const currentPrice = parseFloat(priceMatch[1].replace(',', ''));
+        
+        // Sanity check — reject prices that differ too much from entry
+        const diffPct = Math.abs(currentPrice - trade.entry) / trade.entry * 100;
+        const maxDiff = trade.entry < 0.001 ? 90 : 50;
+        if (diffPct > maxDiff) {
+          console.log(`⚠️ P&L sanity skip ${trade.coin}: ${diffPct.toFixed(0)}% price diff`);
+          trade.currentPrice = trade.entry; // Show entry as current
+          trade.unrealizedPnl = 0;
+          trade.unrealizedPct = 0;
+          continue;
+        }
+        
+        const leverage = trade.leverage || 1;
         const priceDiff = trade.direction === 'long'
           ? currentPrice - trade.entry
           : trade.entry - currentPrice;
         const pnlPct = priceDiff / trade.entry;
-        const unrealizedPnl = trade.size * pnlPct * (trade.leverage || 1);
+        const unrealizedPnl = trade.size * pnlPct * leverage;
         trade.currentPrice = currentPrice;
         trade.unrealizedPnl = parseFloat(Math.max(unrealizedPnl, -trade.size).toFixed(2));
-        trade.unrealizedPct = parseFloat((pnlPct * (trade.leverage || 1) * 100).toFixed(2));
+        trade.unrealizedPct = parseFloat((pnlPct * leverage * 100).toFixed(2));
       }
     } catch(e) {}
   }
 
   return {
     balance: pd.balance,
-    startBalance: PAPER_BALANCE,
+    startBalance: 100000,
     totalPnl: pd.stats.totalPnl,
     wins: pd.stats.wins,
     losses: pd.stats.losses,
@@ -3330,7 +8006,8 @@ ipcMain.handle('get-paper-stats', async () => {
     openTrades: open.length,
     trades: [...open, ...closed.slice(-20).reverse()],
     leverage: settings.paperLeverage || 1,
-    tradeSize: settings.paperTradeSize || null
+    tradeSize: settings.paperTradeSize || null,
+    source: 'local'
   };
 });
 
@@ -3751,7 +8428,17 @@ app.whenReady().then(() => {
   createWaifuWindow();
   startAlertMonitor();
   startPaperTradingMonitor();
-  startIndependentScanner(); // Started once here only
+  scheduleDailyTradeBot();
+  scheduleDailySummary();
+  // Check scalps every 5 minutes
+  setInterval(checkScalpExpiry, 5 * 60 * 1000);
+  // Independent scalp scanner every 5 minutes
+  setInterval(runIndependentScalpScan, 5 * 60 * 1000);
+  // Run immediately
+  setTimeout(runIndependentScalpScan, 10000);
+  startIndependentScanner();
+  startTelegramBot(); // Started once here only
+  startNewFeatures(); // Whale alerts, morning briefing
 
   // Auto reconnect Telegram if previously connected
   const td = loadTelegramData();
