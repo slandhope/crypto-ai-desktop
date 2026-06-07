@@ -20,7 +20,12 @@ process.stderr.write = (chunk, ...args) => {
 
 
 const groq      = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const anthropic = new Anthropic({ 
+  apiKey: process.env.ANTHROPIC_API_KEY,
+  defaultHeaders: {
+    'anthropic-beta': 'prompt-caching-2024-07-31'
+  }
+});
 const openai    = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
@@ -127,53 +132,103 @@ function getMonthlyGasSpend() {
 }
 
 // ─── VOICE (TTS) ───────────────────────────────────────────────────────────
-async function getVoiceAudio(text) {
-  if (!text) return null;
-  const cleanText = text.slice(0, 800);
+// Split text into sentences for streaming
+function splitSentences(text) {
+  if (!text) return [];
+  // Split on . ! ? but keep short phrases together
+  const raw = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+  const sentences = [];
+  let current = '';
+  for (const s of raw) {
+    current += s;
+    // Only split if current chunk is long enough (avoid tiny fragments)
+    if (current.trim().length > 20) {
+      sentences.push(current.trim());
+      current = '';
+    }
+  }
+  if (current.trim()) sentences.push(current.trim());
+  return sentences.filter(s => s.length > 2);
+}
+
+// Generate audio for ONE sentence — optimized for speed
+async function getVoiceAudioFast(text) {
+  if (!text?.trim()) return null;
   const apiKey = process.env.ELEVENLABS_API_KEY;
   const voiceId = process.env.VOICE_ID;
+  if (!apiKey || !voiceId) return null;
 
-  // Use ElevenLabs via Node https — regular endpoint, no streaming
-  if (apiKey && voiceId) {
-    try {
-      const https = require('https');
-      const body = JSON.stringify({
-        text: cleanText,
-        model_id: 'eleven_flash_v2_5',
-        output_format: 'mp3_22050_32',
-        voice_settings: { stability: 0.4, similarity_boost: 0.8 }
+  const https = require('https');
+  const body = JSON.stringify({
+    text: text.trim(),
+    model_id: 'eleven_flash_v2_5', // fastest model
+    output_format: 'mp3_22050_32',
+    voice_settings: { stability: 0.4, similarity_boost: 0.8, speed: 1.0 }
+  });
+
+  return new Promise((resolve) => {
+    const req = https.request({
+      hostname: 'api.elevenlabs.io',
+      path: `/v1/text-to-speech/${voiceId}`,
+      method: 'POST',
+      headers: {
+        'xi-api-key': apiKey,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+      timeout: 8000,
+    }, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        if (res.statusCode === 200) resolve(Buffer.concat(chunks).toString('base64'));
+        else { console.error('ElevenLabs status:', res.statusCode); resolve(null); }
       });
-      const result = await new Promise((resolve) => {
-        const req = https.request({
-          hostname: 'api.elevenlabs.io',
-          path: `/v1/text-to-speech/${voiceId}`,
-          method: 'POST',
-          headers: {
-            'xi-api-key': apiKey,
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(body),
-          },
-          timeout: 10000,
-        }, (res) => {
-          const chunks = [];
-          res.on('data', c => chunks.push(c));
-          res.on('end', () => {
-            if (res.statusCode === 200) resolve(Buffer.concat(chunks).toString('base64'));
-            else resolve(null);
-          });
-        });
-        req.on('error', () => resolve(null));
-        req.on('timeout', () => { req.destroy(); resolve(null); });
-        req.write(body);
-        req.end();
+    });
+    req.on('error', (e) => { console.error('ElevenLabs error:', e.message); resolve(null); });
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+    req.write(body);
+    req.end();
+  });
+}
+
+// Legacy function — still used for alerts/notifications (full audio)
+async function getVoiceAudio(text) {
+  return getVoiceAudioFast(text?.slice(0, 800));
+}
+
+// Stream response sentence by sentence to dashboard
+// This is the KEY function for instant response feel
+async function streamVoiceResponse(reply, windowRef) {
+  if (!reply || !windowRef) return;
+  const sentences = splitSentences(reply);
+  if (!sentences.length) return;
+
+  console.log(`🔊 Streaming ${sentences.length} sentences`);
+
+  // Generate and send first sentence IMMEDIATELY
+  // While generating rest in background
+  let firstSent = false;
+  const pending = [];
+
+  for (let i = 0; i < sentences.length; i++) {
+    const sentence = sentences[i];
+    // Generate audio
+    const audio = await getVoiceAudioFast(sentence);
+    if (audio) {
+      // Send chunk to dashboard immediately
+      windowRef.webContents.send('voice-chunk', {
+        text: sentence,
+        audio,
+        index: i,
+        total: sentences.length,
+        isFirst: !firstSent,
+        isLast: i === sentences.length - 1
       });
-      if (result) return result;
-    } catch(e) { console.error('ElevenLabs error:', e.message); }
+      firstSent = true;
+      console.log(`🔊 Sent chunk ${i+1}/${sentences.length}: "${sentence.slice(0,30)}..."`);
+    }
   }
-
-  // Fallback — simple error if ElevenLabs fails
-  console.error('ElevenLabs failed — no audio generated');
-  return null;
 }
 
 // ─── SYSTEM PROMPT ─────────────────────────────────────────────────────────
@@ -2027,6 +2082,70 @@ async function routeCommand(userText) {
   lastActivityTime = Date.now();
   inActivityFired  = false;
 
+  // ── TEXTBOOK / STUDY VOICE COMMANDS ─────────────────────────────────────
+  // "page 161" or "open page 161" or "go to page 161"
+  const pageMatch = lower.match(/(?:page|p\.?|pg\.?)\s*(\d+)/);
+  if (pageMatch) {
+    const pageNum = parseInt(pageMatch[1]);
+    const activeBook = getActiveBook();
+    if (!activeBook) {
+      return "No textbook loaded yet! Drop a PDF on my window and I'll index it for you.";
+    }
+    const page = getBookPage(activeBook.id, pageNum);
+    if (!page) {
+      return `I couldn't find page ${pageNum} in ${activeBook.name}. The book has ${activeBook.pageCount} pages.`;
+    }
+    const explanation = await askAboutBook(page.text, `Please read and explain page ${pageNum}`, activeBook.name, pageNum);
+    return explanation;
+  }
+
+  // "explain lesson 2" or "lesson 2 section 1"
+  const lessonMatch = lower.match(/lesson\s*(\d+)(?:[\s-]*(?:section|part|exercise)?\s*(\d+))?/);
+  if (lessonMatch) {
+    const lessonNum = lessonMatch[1];
+    const sectionNum = lessonMatch[2];
+    const query = sectionNum ? `lesson ${lessonNum} section ${sectionNum}` : `lesson ${lessonNum}`;
+    const activeBook = getActiveBook();
+    if (!activeBook) return "No textbook loaded yet!";
+    const results = searchBooks(query, activeBook.id);
+    if (!results.length) return `I couldn't find ${query} in ${activeBook.name}.`;
+    const page = getBookPage(activeBook.id, results[0].page);
+    if (!page) return `Found a reference to ${query} but couldn't load the page.`;
+    const explanation = await askAboutBook(page.text, `Explain ${query} in detail`, activeBook.name, results[0].page);
+    return explanation;
+  }
+
+  // "read this" or "explain this page" — uses last shown page
+  if ((lower.includes('read this') || lower.includes('explain this') || lower.includes('what does this mean')) && !lower.includes('chart')) {
+    const activeBook = getActiveBook();
+    if (!activeBook) return "No textbook loaded! Drop a PDF on my window first.";
+    if (global._lastBookPage) {
+      const page = getBookPage(activeBook.id, global._lastBookPage);
+      if (page) {
+        const explanation = await askAboutBook(page.text, lower, activeBook.name, global._lastBookPage);
+        return explanation;
+      }
+    }
+    return "Which page would you like me to explain? Say the page number!";
+  }
+
+  // "what book do you have" or "which book"
+  if (lower.includes('which book') || lower.includes('what book') || lower.includes('my book') || lower.includes('show books')) {
+    const index = loadBooksIndex();
+    if (!index.books.length) return "No textbooks loaded yet! Drop a PDF on my window and I'll index it.";
+    const list = index.books.map(b => `📚 ${b.name} (${b.pageCount} pages)`).join('\n');
+    return `I have these textbooks:\n${list}`;
+  }
+
+  // "search for [topic] in textbook"
+  const searchMatch = lower.match(/(?:search|find|look for)\s+(.+?)\s+(?:in|from)\s+(?:the\s+)?(?:book|textbook)/);
+  if (searchMatch) {
+    const query = searchMatch[1];
+    const results = searchBooks(query);
+    if (!results.length) return `Couldn't find "${query}" in any textbook.`;
+    return `Found "${query}" in ${results[0].bookName}, page ${results[0].page}:\n${results[0].preview}`;
+  }
+
   // ── MARKET INTELLIGENCE VOICE COMMANDS ──────────────────────────────────
   if (lower.includes('market intel') || lower.includes('full analysis') || lower.includes('market signals') || lower.includes('what does the market say')) {
     const coinInMsg = Object.keys(COIN_MAP).find(k => lower.includes(k)) || 'btc';
@@ -3249,7 +3368,13 @@ ipcMain.handle('claude-query-legacy', async (e, query) => {
 });
 
 
-ipcMain.handle('get-voice',       async (e, text)    => getVoiceAudio(text));
+ipcMain.handle('get-voice', async (e, text) => getVoiceAudio(text));
+ipcMain.handle('stream-voice-response', async (e, text) => {
+  if (mainWindow && text) {
+    await streamVoiceResponse(text, mainWindow);
+  }
+  return true;
+});
 ipcMain.handle('get-memory',      async ()            => loadMemory());
 ipcMain.handle('save-memory',     async (e, m)        => { saveMemory(m); return true; });
 ipcMain.handle('get-settings',    async ()            => loadSettings());
@@ -3444,6 +3569,23 @@ ipcMain.handle('confirm-news-briefing', async () => {
 
 ipcMain.handle('process-voice-input-text', async (e, text, cameraFrame) => {
   try {
+    // Check voice limit before processing
+    const voiceCheck = checkLimit('voice');
+    if (!voiceCheck.allowed) {
+      // Try auto-extend first
+      const extended = await handleAutoExtend('voice');
+      if (!extended) {
+        const config = loadUserConfig();
+        return {
+          success: true,
+          reply: `You've reached your daily voice limit (${voiceCheck.limit} messages). Get a day pass for $2 or upgrade your plan!`,
+          base64Audio: null,
+          limitReached: true,
+          stripeLinks: STRIPE_LINKS
+        };
+      }
+    }
+    trackUsage('voice');
     console.log('💬 Text:', text);
     
     // If camera frame provided and text is about seeing/looking
@@ -3476,9 +3618,18 @@ ipcMain.handle('process-voice-input-text', async (e, text, cameraFrame) => {
     }
     
     console.log('🤖 Reply:', reply?.slice(0, 80));
-    const audio = await getVoiceAudio(reply);
-    console.log('🔊 Audio:', audio ? 'generated' : 'FAILED');
-    return { success: true, reply, base64Audio: audio };
+    
+    // Stream sentence by sentence for instant response feel
+    if (mainWindow && reply) {
+      // Send text immediately so UI shows response
+      mainWindow.webContents.send('voice-text-ready', { reply });
+      // Stream audio chunks
+      streamVoiceResponse(reply, mainWindow).catch(e => 
+        console.error('Stream error:', e.message)
+      );
+    }
+    
+    return { success: true, reply, base64Audio: null }; // audio sent via stream
   } catch(e) { 
     console.error('❌ Text handler error:', e.message);
     return { success: false, error: e.message }; 
@@ -3816,6 +3967,7 @@ async function applyTrailingStop(trade, currentPrice) {
 
 // ─── INDEPENDENT MARKET SCANNER ───────────────────────────────────────────
 async function runIndependentScan() {
+  if (_globalPauseMain) { console.log('⏸️ Main scanner paused by dev'); return; }
   const settings = loadSettings();
   if (!settings.independentScanner) return;
   if (!settings.autoPaperTrade) return;
@@ -4522,16 +4674,31 @@ async function openBinancePosition(signal) {
   const symbol = `${signal.coin}USDT`;
   const side = signal.direction === 'long' ? 'BUY' : 'SELL';
 
-  // Set leverage first — get ACTUAL leverage Binance accepts
+  // Binance futures quantity precision per coin
+  const futuresPrecision = {
+    BTC: 3, ETH: 3, SOL: 0, BNB: 2, XRP: 0,
+    DOGE: 0, AVAX: 1, LINK: 1, ARB: 0,
+    PEPE: 0, OP: 0, MATIC: 0, ADA: 0
+  };
+
+  // Set leverage first
   const actualLeverage = await setBinanceLeverage(symbol, leverage);
   
-  // Use actual leverage for quantity calculation
   const priceStr = await getCryptoPrice(signal.coin.toLowerCase());
   const priceMatch = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
   const currentPrice = priceMatch ? parseFloat(priceMatch[1].replace(',', '')) : signal.entry;
   const pd = loadPaperTrades();
   const size = settings.paperTradeSize || (pd.balance * 0.05);
-  const quantity = parseFloat((size / currentPrice).toFixed(3));
+  const precision = futuresPrecision[signal.coin] ?? 2;
+  const rawQty = size / currentPrice;
+  const quantity = precision === 0
+    ? Math.floor(rawQty)
+    : parseFloat(rawQty.toFixed(precision));
+
+  if (quantity <= 0) {
+    console.error(`Binance: quantity ${quantity} too small for ${signal.coin}`);
+    return null;
+  }
 
   const order = await binanceTestnetRequest('POST', '/fapi/v1/order', {
     symbol,
@@ -4637,7 +4804,7 @@ async function runIndependentScalpScan() {
   if (!settings.autoPaperTrade) return;
 
   const pd = loadPaperTrades();
-  const coins = settings.tradingCoins || ['BTC', 'ETH', 'SOL'];
+  const coins = settings.scalpCoins || settings.tradingCoins || ['BTC', 'ETH', 'SOL'];
   const scalpLeverage = settings.scalpLeverage || 10;
   const scalpSize = settings.scalpSize || 50;
   const scalpDuration = settings.scalpDuration || 30;
@@ -7514,6 +7681,217 @@ ipcMain.on('resume-trading', () => { _tradingPausedUntil = 0; });
 ipcMain.handle('is-trading-paused', () => isTradingPaused());
 
 
+
+// ─── TEXTBOOK / PDF LEARNING SYSTEM ──────────────────────────────────────
+
+const BOOKS_DIR = path.join(DATA_DIR, 'books');
+const BOOKS_INDEX_FILE = path.join(DATA_DIR, 'books-index.json');
+
+// Create books directory
+if (!fs.existsSync(BOOKS_DIR)) fs.mkdirSync(BOOKS_DIR, { recursive: true });
+
+function loadBooksIndex() {
+  return loadJSON(BOOKS_INDEX_FILE, { books: [] });
+}
+function saveBooksIndex(data) { saveJSON(BOOKS_INDEX_FILE, data); }
+
+// Parse PDF and extract pages
+async function parsePDF(pdfPath) {
+  try {
+    const pdfParse = require('pdf-parse');
+    const dataBuffer = fs.readFileSync(pdfPath);
+    const data = await pdfParse(dataBuffer);
+    
+    // Split into pages
+    const fullText = data.text;
+    const pageCount = data.numpages;
+    
+    // Try to split by page markers
+    let pages = [];
+    
+    // Method 1: Split by form feed character (common in PDFs)
+    if (fullText.includes('')) {
+      pages = fullText.split('').map((p, i) => ({
+        page: i + 1,
+        text: p.trim()
+      })).filter(p => p.text.length > 10);
+    }
+    
+    // Method 2: If no form feeds, split by estimated page size
+    if (pages.length < 2) {
+      const charsPerPage = Math.ceil(fullText.length / pageCount);
+      pages = [];
+      for (let i = 0; i < pageCount; i++) {
+        const start = i * charsPerPage;
+        const end = Math.min(start + charsPerPage, fullText.length);
+        const text = fullText.slice(start, end).trim();
+        if (text.length > 10) {
+          pages.push({ page: i + 1, text });
+        }
+      }
+    }
+    
+    return { pages, pageCount, totalChars: fullText.length };
+  } catch(e) {
+    console.error('PDF parse error:', e.message);
+    return null;
+  }
+}
+
+// Index a book — extract all pages and store
+async function indexBook(pdfPath, bookName, subject = 'general') {
+  console.log(`📚 Indexing book: ${bookName}...`);
+  
+  const parsed = await parsePDF(pdfPath);
+  if (!parsed) return { success: false, error: 'Could not parse PDF' };
+  
+  const bookId = 'book_' + Date.now();
+  const bookFile = path.join(BOOKS_DIR, `${bookId}.json`);
+  
+  // Store pages
+  const bookData = {
+    id: bookId,
+    name: bookName,
+    subject,
+    pdfPath,
+    pageCount: parsed.pageCount,
+    pages: parsed.pages,
+    indexedAt: Date.now()
+  };
+  
+  saveJSON(bookFile, bookData);
+  
+  // Add to index
+  const index = loadBooksIndex();
+  index.books.push({
+    id: bookId,
+    name: bookName,
+    subject,
+    pageCount: parsed.pageCount,
+    file: bookFile,
+    indexedAt: Date.now()
+  });
+  saveBooksIndex(index);
+  
+  console.log(`📚 Indexed "${bookName}": ${parsed.pageCount} pages, ${parsed.pages.length} text pages`);
+  return { 
+    success: true, 
+    bookId, 
+    pageCount: parsed.pageCount,
+    textPages: parsed.pages.length,
+    name: bookName
+  };
+}
+
+// Get specific page from book
+function getBookPage(bookId, pageNum) {
+  try {
+    const index = loadBooksIndex();
+    const bookMeta = index.books.find(b => b.id === bookId);
+    if (!bookMeta) return null;
+    
+    const bookData = loadJSON(bookMeta.file, { pages: [] });
+    const page = bookData.pages.find(p => p.page === pageNum);
+    return page || bookData.pages[pageNum - 1] || null;
+  } catch(e) { return null; }
+}
+
+// Search across all books
+function searchBooks(query, bookId = null) {
+  try {
+    const index = loadBooksIndex();
+    const results = [];
+    
+    const booksToSearch = bookId 
+      ? index.books.filter(b => b.id === bookId)
+      : index.books;
+    
+    for (const bookMeta of booksToSearch) {
+      const bookData = loadJSON(bookMeta.file, { pages: [] });
+      for (const page of bookData.pages) {
+        if (page.text.toLowerCase().includes(query.toLowerCase())) {
+          results.push({
+            bookId: bookMeta.id,
+            bookName: bookMeta.name,
+            page: page.page,
+            preview: page.text.slice(0, 200)
+          });
+          if (results.length >= 5) break;
+        }
+      }
+    }
+    return results;
+  } catch(e) { return []; }
+}
+
+// Get active book (most recently used)
+function getActiveBook() {
+  const index = loadBooksIndex();
+  if (!index.books.length) return null;
+  return index.books[index.books.length - 1];
+}
+
+// Ask Asuka about book content
+async function askAboutBook(pageText, question, bookName, pageNum) {
+  const res = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 500,
+    system: buildSystemPrompt(),
+    messages: [{
+      role: 'user',
+      content: `You are Asuka, helping the user study from their textbook "${bookName}".
+
+PAGE ${pageNum} CONTENT:
+${pageText}
+
+USER QUESTION: ${question}
+
+Explain this content clearly and helpfully. If it's Japanese language content:
+- Explain grammar points clearly
+- Give examples
+- Break down vocabulary
+- Use simple English unless asked to respond in Japanese
+Keep response natural and conversational, like a tutor.`
+    }]
+  });
+  return res.content[0].text;
+}
+
+// IPC handlers
+ipcMain.handle('index-book', async (e, { pdfPath, name, subject }) => {
+  return indexBook(pdfPath, name, subject);
+});
+
+ipcMain.handle('get-books', () => {
+  return loadBooksIndex();
+});
+
+ipcMain.handle('get-book-page', (e, bookId, pageNum) => {
+  return getBookPage(bookId, pageNum);
+});
+
+ipcMain.handle('delete-book', (e, bookId) => {
+  const index = loadBooksIndex();
+  const book = index.books.find(b => b.id === bookId);
+  if (book) {
+    try { fs.unlinkSync(book.file); } catch(e) {}
+    index.books = index.books.filter(b => b.id !== bookId);
+    saveBooksIndex(index);
+  }
+  return { success: true };
+});
+
+ipcMain.handle('search-books', (e, query, bookId) => {
+  return searchBooks(query, bookId);
+});
+
+// Handle book PDF drop from Electron
+ipcMain.on('drop-book-pdf', async (e, { filePath, name }) => {
+  const result = await indexBook(filePath, name || path.basename(filePath, '.pdf'), 'study');
+  mainWindow?.webContents.send('book-indexed', result);
+});
+
+
 // ─── DAILY TRADE BOT ──────────────────────────────────────────────────────────
 
 // Daily RSI signal storage
@@ -7564,7 +7942,7 @@ async function runDailyTradeBot() {
 
   console.log('📅 Running Daily Trade Bot...');
 
-  const coins = settings.tradingCoins || ['BTC', 'ETH', 'SOL', 'DOGE', 'BNB'];
+  const coins = settings.dayTradeCoins || settings.tradingCoins || ['BTC', 'ETH', 'SOL', 'DOGE', 'BNB'];
   const period = settings.dailyRSIPeriod || 14;
   const powerOnly = settings.dailyPowerOnly !== false; // default true
   const leverage = settings.dailyLeverage || 3;
@@ -7783,6 +8161,355 @@ ipcMain.on('set-daily-setting', (e, key, val) => {
   s[key] = val;
   saveJSON(SETTINGS_FILE, s);
 });
+
+
+
+// ─── DEV DASHBOARD ────────────────────────────────────────────────────────
+
+// Dev password stored in settings
+const DEV_PASSWORD_KEY = 'devPassword'
+const DEFAULT_DEV_PASSWORD = 'Asuka2026!'
+
+let _devCostToday = 0
+let _devCostMonth = 0
+let _devApiCallCount = { haiku: 0, sonnet: 0 }
+let _devApiCallTime = Date.now()
+let _devErrors = []
+let _globalCoinOverride = null
+let _globalScanIntervalOverride = null
+let _globalPauseScalp = false
+let _globalPauseMain = false
+
+// Track API calls for cost estimation
+const HAIKU_COST_PER_CALL = 0.000292
+const SONNET_COST_PER_CALL = 0.009
+
+function trackAPICall(model) {
+  const cost = model === 'haiku' ? HAIKU_COST_PER_CALL : SONNET_COST_PER_CALL
+  _devCostToday += cost
+  _devCostMonth += cost
+  _devApiCallCount[model] = (_devApiCallCount[model] || 0) + 1
+}
+
+function logDevError(error) {
+  _devErrors.unshift({
+    time: new Date().toLocaleTimeString(),
+    msg: error?.message || String(error)
+  })
+  if (_devErrors.length > 50) _devErrors = _devErrors.slice(0, 50)
+}
+
+// Override original anthropic.messages.create to track costs
+const _origAnthropicCreate = anthropic.messages.create.bind(anthropic.messages)
+anthropic.messages.create = async function(params) {
+  const isHaiku = params.model?.includes('haiku')
+  trackAPICall(isHaiku ? 'haiku' : 'sonnet')
+  try {
+    return await _origAnthropicCreate(params)
+  } catch(e) {
+    logDevError(e)
+    throw e
+  }
+}
+
+// IPC handlers
+ipcMain.handle('dev-verify-password', (e, pwd) => {
+  const settings = loadSettings()
+  const stored = settings[DEV_PASSWORD_KEY] || DEFAULT_DEV_PASSWORD
+  return pwd === stored
+})
+
+ipcMain.handle('dev-change-password', (e, newPwd) => {
+  if (!newPwd || newPwd.length < 8) return false
+  const settings = loadSettings()
+  settings[DEV_PASSWORD_KEY] = newPwd
+  saveJSON(SETTINGS_FILE, settings)
+  return true
+})
+
+ipcMain.handle('dev-get-stats', () => {
+  const pd = loadPaperTrades()
+  const openTrades = pd.trades.filter(t => t.status === 'open')
+  const today = new Date().toDateString()
+  const todayTrades = pd.trades.filter(t =>
+    t.closeTime && new Date(t.closeTime).toDateString() === today
+  )
+  const todayPnl = todayTrades.reduce((s, t) => s + (t.pnl || 0), 0)
+  const wins = todayTrades.filter(t => t.pnl > 0)
+  const winRate = todayTrades.length > 0 ? Math.round(wins.length / todayTrades.length * 100) : 0
+
+  const settings = loadSettings()
+
+  return {
+    costToday: _devCostToday,
+    costMonth: _devCostMonth,
+    haikiCalls: _devApiCallCount.haiku || 0,
+    sonnetCalls: _devApiCallCount.sonnet || 0,
+    openTrades: openTrades.length,
+    todayPnl,
+    winRate,
+    errors: _devErrors.slice(0, 20),
+    scannerRunning: !!independentScanInterval,
+    scalpPaused: _globalPauseScalp,
+    mainPaused: _globalPauseMain,
+    coinOverride: _globalCoinOverride,
+    intervalOverride: _globalScanIntervalOverride,
+    tradingCoins: settings.tradingCoins || [],
+    scalpCoins: settings.scalpCoins || [],
+  }
+})
+
+ipcMain.on('dev-set-coin-override', (e, val) => {
+  _globalCoinOverride = val === 'all' ? null : parseInt(val)
+  console.log(`🔧 Dev: coin override = ${_globalCoinOverride || 'all'}`)
+})
+
+ipcMain.on('dev-set-interval-override', (e, min) => {
+  _globalScanIntervalOverride = min === 0 ? null : min
+  console.log(`🔧 Dev: interval override = ${_globalScanIntervalOverride || 'user setting'}`)
+})
+
+ipcMain.on('dev-pause-all', () => {
+  _globalPauseScalp = true
+  _globalPauseMain = true
+  _tradingPausedUntil = Date.now() + 24 * 60 * 60 * 1000
+  console.log('🔧 Dev: ALL trading paused')
+  sendTelegramNotification('🚨 Dev: All trading paused by admin')
+})
+
+ipcMain.on('dev-resume-all', () => {
+  _globalPauseScalp = false
+  _globalPauseMain = false
+  _tradingPausedUntil = 0
+  console.log('🔧 Dev: ALL trading resumed')
+})
+
+ipcMain.on('dev-pause-scalp', () => { _globalPauseScalp = true; console.log('🔧 Dev: scalp paused') })
+ipcMain.on('dev-pause-main', () => { _globalPauseMain = true; console.log('🔧 Dev: main paused') })
+ipcMain.on('dev-clear-errors', () => { _devErrors = [] })
+
+
+
+// ─── DEV SERVER ────────────────────────────────────────────────────────────
+function startDevServer() {
+  const devServerPath = require('path').join(__dirname, 'dev-server.js');
+  if (!require('fs').existsSync(devServerPath)) {
+    console.log('⚙️ dev-server.js not found — skipping');
+    return;
+  }
+  const { spawn } = require('child_process');
+  const devProc = spawn('node', [devServerPath], { detached: false, stdio: 'pipe' });
+  devProc.stdout?.on('data', d => console.log('[DEV]', d.toString().trim()));
+  devProc.stderr?.on('data', d => console.error('[DEV ERR]', d.toString().trim()));
+  console.log('⚙️ Dev panel: http://localhost:3001');
+}
+
+// ─── USER TIER & LIMITS SYSTEM ────────────────────────────────────────────
+const TIERS = {
+  starter: { name:'Starter', price_annual:149, voice_per_day:50, scan_interval:30, scalp_enabled:false, mirofish_agents:10 },
+  pro:     { name:'Pro',     price_annual:249, voice_per_day:200, scan_interval:15, scalp_enabled:true, mirofish_agents:20 },
+  degen:   { name:'Degen',   price_annual:399, voice_per_day:999999, scan_interval:5, scalp_enabled:true, mirofish_agents:30 },
+};
+
+const STRIPE_LINKS = {
+  day_pass: 'https://buy.stripe.com/daypass',
+  message_pack: 'https://buy.stripe.com/messagepack',
+  upgrade_pro: 'https://buy.stripe.com/pro',
+  upgrade_degen: 'https://buy.stripe.com/degen',
+};
+
+const USAGE_FILE = path.join(DATA_DIR, 'usage-tracking.json');
+const USER_CONFIG_FILE = path.join(DATA_DIR, 'user-config.json');
+
+function loadUsage() {
+  const data = loadJSON(USAGE_FILE, {});
+  const today = new Date().toDateString();
+  if (data.date !== today) {
+    data.date = today;
+    data.voice = 0;
+    data.notified = {};
+    saveJSON(USAGE_FILE, data);
+  }
+  return data;
+}
+function saveUsage(data) { saveJSON(USAGE_FILE, data); }
+
+function loadUserConfig() {
+  return loadJSON(USER_CONFIG_FILE, { tier:'pro', auto_extend:false, extra_voice:0, day_pass_until:null });
+}
+function saveUserConfig(data) { saveJSON(USER_CONFIG_FILE, data); }
+
+function getUserTier() {
+  const config = loadUserConfig();
+  if (config.day_pass_until && Date.now() < config.day_pass_until) return { ...TIERS.degen, isDayPass:true };
+  return TIERS[config.tier] || TIERS.pro;
+}
+
+function checkLimit(type) {
+  const usage = loadUsage();
+  const config = loadUserConfig();
+  const tier = getUserTier();
+  if (type !== 'voice') return { allowed:true, remaining:999, pct:0 };
+  const limit = tier.voice_per_day + (config.extra_voice || 0);
+  if (limit >= 999999) return { allowed:true, remaining:999999, pct:0 };
+  const used = usage.voice || 0;
+  const remaining = Math.max(0, limit - used);
+  return { allowed:remaining > 0, remaining, used, limit, pct:Math.round(used/limit*100) };
+}
+
+function trackUsage(type) {
+  const usage = loadUsage();
+  usage[type] = (usage[type] || 0) + 1;
+  saveUsage(usage);
+  return checkLimit(type);
+}
+
+async function sendLimitNotification(type, pct, check) {
+  let msg = '';
+  if (pct >= 100) msg = `🛑 Daily Voice Limit Reached!
+Used: ${check.used}/${check.limit}
+Day Pass ($2): ${STRIPE_LINKS.day_pass}
++500 Messages ($5): ${STRIPE_LINKS.message_pack}`;
+  else if (pct >= 90) msg = `⚠️ Voice Almost Full!
+${check.remaining} remaining today`;
+  else if (pct >= 70) msg = `📊 Voice Update: ${check.used}/${check.limit} used today`;
+  if (msg) await sendTelegramNotification(msg).catch(() => {});
+}
+
+async function handleAutoExtend(type) {
+  const config = loadUserConfig();
+  if (!config.auto_extend) return false;
+  if (type === 'voice') {
+    config.extra_voice = (config.extra_voice || 0) + 100;
+    saveUserConfig(config);
+    await sendTelegramNotification('✅ Auto-Extended! +100 voice messages added').catch(() => {});
+    return true;
+  }
+  return false;
+}
+
+// ─── COST TRACKING ─────────────────────────────────────────────────────────
+const COST_LOG_FILE = path.join(DATA_DIR, 'api-cost-log.json');
+function loadCostLog() {
+  const log = loadJSON(COST_LOG_FILE, { today:0, month:0, calls:{haiku:0,sonnet:0}, lastReset:new Date().toDateString() });
+  if (log.lastReset !== new Date().toDateString()) {
+    log.today = 0; log.calls = {haiku:0,sonnet:0}; log.lastReset = new Date().toDateString();
+    saveJSON(COST_LOG_FILE, log);
+  }
+  return log;
+}
+function trackCost(model) {
+  const cost = model === 'haiku' ? 0.000292 : 0.009;
+  const log = loadCostLog();
+  log.today = (log.today||0) + cost;
+  log.month = (log.month||0) + cost;
+  log.calls[model] = (log.calls[model]||0) + 1;
+  saveJSON(COST_LOG_FILE, log);
+}
+
+// Wrap anthropic to track costs
+const _origCreate = anthropic.messages.create.bind(anthropic.messages);
+anthropic.messages.create = async function(params) {
+  trackCost(params.model?.includes('haiku') ? 'haiku' : 'sonnet');
+  return _origCreate(params);
+};
+
+// ─── IPC HANDLERS FOR LIMITS & TIER ───────────────────────────────────────
+ipcMain.handle('get-usage-stats', () => {
+  const usage = loadUsage();
+  const config = loadUserConfig();
+  const tier = getUserTier();
+  const limit = tier.voice_per_day + (config.extra_voice||0);
+  const used = usage.voice || 0;
+  return {
+    usage, config, tier,
+    tierName: config.tier,
+    limits: {
+      voice: { used, limit, pct: limit >= 999999 ? 0 : Math.round(used/limit*100), remaining: Math.max(0,limit-used) }
+    },
+    stripeLinks: STRIPE_LINKS,
+    costLog: loadCostLog(),
+  };
+});
+
+ipcMain.on('set-user-tier', (e, tier) => {
+  const config = loadUserConfig(); config.tier = tier; saveUserConfig(config);
+});
+ipcMain.on('set-auto-extend', (e, val) => {
+  const config = loadUserConfig(); config.auto_extend = val; saveUserConfig(config);
+});
+ipcMain.on('add-day-pass', () => {
+  const config = loadUserConfig();
+  config.day_pass_until = Date.now() + 24*60*60*1000;
+  saveUserConfig(config);
+  sendTelegramNotification('🎫 Day Pass activated! Unlimited for 24 hours').catch(() => {});
+});
+ipcMain.on('add-message-pack', (e, amount=500) => {
+  const config = loadUserConfig();
+  config.extra_voice = (config.extra_voice||0) + amount;
+  saveUserConfig(config);
+});
+ipcMain.handle('check-limit', (e, type) => checkLimit(type));
+ipcMain.handle('open-url', async (e, url) => {
+  const { shell } = require('electron');
+  await shell.openExternal(url);
+});
+
+// ─── COIN ANALYTICS ────────────────────────────────────────────────────────
+const ANALYTICS_FILE = path.join(DATA_DIR, 'coin-analytics.json');
+const MASTER_COINS_FILE = path.join(DATA_DIR, 'master-coins.json');
+
+function loadAnalytics() { return loadJSON(ANALYTICS_FILE, { users:{}, coinStats:{}, totalUsers:0, lastUpdated:null }); }
+function saveAnalytics(d) { saveJSON(ANALYTICS_FILE, d); }
+function loadMasterCoins() {
+  return loadJSON(MASTER_COINS_FILE, {
+    main:['BTC','ETH','SOL','BNB','XRP','DOGE','AVAX','LINK','ARB','PEPE'],
+    scalp:['BTC','ETH','SOL','BNB','XRP','DOGE','AVAX','LINK','ARB','PEPE'],
+    day:['BTC','ETH','SOL','BNB','XRP','DOGE','AVAX','LINK','ARB','PEPE'],
+    disabled:{ main:[], scalp:[], day:[] }
+  });
+}
+function saveMasterCoins(d) { saveJSON(MASTER_COINS_FILE, d); }
+
+function trackCoinSelection(userId, type, coins) {
+  const analytics = loadAnalytics();
+  if (!analytics.users[userId]) analytics.users[userId] = { main:[], scalp:[], day:[], lastSeen:null };
+  analytics.users[userId][type] = coins;
+  analytics.users[userId].lastSeen = Date.now();
+  const totalUsers = Object.keys(analytics.users).length;
+  analytics.coinStats = analytics.coinStats || {};
+  ['main','scalp','day'].forEach(t => {
+    analytics.coinStats[t] = {};
+    const allCoins = new Set();
+    Object.values(analytics.users).forEach(u => (u[t]||[]).forEach(c => allCoins.add(c)));
+    allCoins.forEach(coin => {
+      const count = Object.values(analytics.users).filter(u => (u[t]||[]).includes(coin)).length;
+      analytics.coinStats[t][coin] = { count, pct: Math.round(count/totalUsers*100) };
+    });
+  });
+  analytics.totalUsers = totalUsers;
+  analytics.lastUpdated = Date.now();
+  saveAnalytics(analytics);
+}
+
+ipcMain.handle('get-coin-analytics', () => ({ analytics: loadAnalytics(), master: loadMasterCoins() }));
+ipcMain.on('set-master-coins', (e, { type, coins, disabled }) => {
+  const master = loadMasterCoins();
+  if (coins) master[type] = coins;
+  if (disabled !== undefined) master.disabled[type] = disabled;
+  saveMasterCoins(master);
+});
+ipcMain.on('track-coin-selection', (e, { userId, type, coins }) => {
+  trackCoinSelection(userId || 'user_default', type, coins);
+});
+
+function initAnalytics() {
+  const settings = loadSettings();
+  const userId = 'dev_' + require('os').hostname();
+  if (settings.tradingCoins) trackCoinSelection(userId, 'main', settings.tradingCoins);
+  if (settings.scalpCoins) trackCoinSelection(userId, 'scalp', settings.scalpCoins);
+  if (settings.dayTradeCoins) trackCoinSelection(userId, 'day', settings.dayTradeCoins);
+}
 
 
 function startPaperTradingMonitor() {
@@ -8429,6 +9156,8 @@ app.whenReady().then(() => {
   startAlertMonitor();
   startPaperTradingMonitor();
   scheduleDailyTradeBot();
+  try { startDevServer(); } catch(e) { console.log('Dev server skipped:', e.message); }
+  try { initAnalytics(); } catch(e) {}
   scheduleDailySummary();
   // Check scalps every 5 minutes
   setInterval(checkScalpExpiry, 5 * 60 * 1000);

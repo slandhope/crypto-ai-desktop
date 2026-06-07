@@ -183,6 +183,45 @@
     padding: 16px;
   }
 
+  /* Trading sub-tabs */
+  .trade-tab {
+    flex: 1;
+    padding: 10px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text2);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .trade-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .trade-tab-content {
+    display: none;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .trade-tab-content.active {
+    display: block;
+  }
+  #trading-page {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Details/summary styling */
+  details > summary {
+    list-style: none;
+  }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] > summary::after { content: ' ▴'; }
+  details > summary::after { content: ' ▾'; }
+
   .tg-section-title {
     font-size: 11px;
     font-weight: 600;
@@ -1210,6 +1249,8 @@
     <div class="page-tab active" data-page="1">Dashboard</div>
     <div class="page-tab" data-page="2">📡 Telegram</div>
     <div class="page-tab" data-page="3">📊 Trading</div>
+    <div class="page-tab" data-page="5">🌸 Others</div>
+    <!-- Dev tab removed — access via Settings -->
   </div>
   <div id="topbar-right">
     <div class="tb-btn" id="settings-open-btn">Settings</div>
@@ -1306,6 +1347,8 @@
     </div>
   </div>
 </div>
+
+
 <!-- END PAGE 1 -->
 </div>
 
@@ -1511,736 +1554,1141 @@
 </div>
 </div>
 
-<!-- PAGE 3 — PAPER TRADING -->
-<!-- PAGE 3 — PAPER TRADING -->
-<div class="page" id="trading-page">
+<!-- PAGE 3 — TRADING -->
+<div class="page" id="trading-page" data-page-id="3">
 
-  <!-- Binance Testnet Status -->
-  <div id="binance-status-bar" style="display:none;background:rgba(240,185,11,0.1);border:1px solid rgba(240,185,11,0.3);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;display:flex;justify-content:space-between;align-items:center;">
-    <span>🔗 Binance Testnet</span>
-    <span>Balance: <b id="binance-balance">--</b> | Positions: <b id="binance-positions">0</b></span>
+  <!-- Trading Sub-Nav -->
+  <div id="trade-subnav" style="display:flex;gap:0;border-bottom:1px solid var(--border);flex-shrink:0;">
+    <button class="trade-tab active" data-tab="overview">📊 Overview</button>
+    <button class="trade-tab" data-tab="daytrade">📅 Day</button>
+    <button class="trade-tab" data-tab="maintrade">📈 Main</button>
+    <button class="trade-tab" data-tab="scalp">⚡ Scalp</button>
+    <button class="trade-tab" data-tab="spot">🟢 Spot</button>
   </div>
 
-  <!-- ━━━ DAILY TRADE BOT ━━━ -->
-  <div class="tg-section">
-    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">📅 Daily Trade Bot</div>
+  <!-- ══════ OVERVIEW TAB ══════ -->
+  <div class="trade-tab-content active" id="tab-overview">
 
-    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Fires once at 00:05 UTC using Daily RSI — like your friend's bot</div>
-
-    <div class="auto-trade-toggle" style="margin-bottom:10px;">
-      <div><div class="toggle-label">Enable Daily Trade Bot</div><div class="caller-stats">Opens 1 trade per day at RSI extremes</div></div>
-      <div class="toggle-switch" id="daily-trade-toggle"></div>
-    </div>
-
-    <div class="auto-trade-toggle" style="margin-bottom:12px;">
-      <div><div class="toggle-label">Power Signals Only</div><div class="caller-stats">Only trade RSI extremes (more accurate)</div></div>
-      <div class="toggle-switch on" id="daily-power-only-toggle"></div>
-    </div>
-
-    <!-- RSI Period -->
-    <div style="margin-bottom:12px;">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">RSI Period</div>
-      <div style="display:flex;gap:6px;">
-        <button class="leverage-btn daily-period-btn" data-val="7">7</button>
-        <button class="leverage-btn daily-period-btn active" data-val="14">14</button>
-        <button class="leverage-btn daily-period-btn" data-val="21">21</button>
+    <!-- Stats hero -->
+    <div class="trading-hero" style="margin:12px 0 8px;">
+      <div class="trading-stat">
+        <div class="trading-stat-label">Win Rate</div>
+        <div class="trading-stat-val" id="pt-winrate">0%</div>
+      </div>
+      <div class="trading-stat">
+        <div class="trading-stat-label">Total P&L</div>
+        <div class="trading-stat-val" id="pt-pnl">$0</div>
+      </div>
+      <div class="trading-stat">
+        <div class="trading-stat-label">Trades</div>
+        <div class="trading-stat-val" id="pt-total">0</div>
       </div>
     </div>
-
-    <!-- RSI Thresholds -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-      <div>
-        <div style="font-size:11px;color:var(--green);margin-bottom:4px;">Power Buy RSI ≤</div>
-        <div style="display:flex;gap:4px;">
-          <button class="leverage-btn daily-pbuy-btn" data-val="15">15</button>
-          <button class="leverage-btn daily-pbuy-btn active" data-val="20">20</button>
-          <button class="leverage-btn daily-pbuy-btn" data-val="25">25</button>
-        </div>
-      </div>
-      <div>
-        <div style="font-size:11px;color:var(--green);margin-bottom:4px;">Buy RSI ≤</div>
-        <div style="display:flex;gap:4px;">
-          <button class="leverage-btn daily-buy-btn" data-val="25">25</button>
-          <button class="leverage-btn daily-buy-btn active" data-val="30">30</button>
-          <button class="leverage-btn daily-buy-btn" data-val="35">35</button>
-        </div>
-      </div>
-      <div>
-        <div style="font-size:11px;color:var(--red);margin-bottom:4px;">Sell RSI ≥</div>
-        <div style="display:flex;gap:4px;">
-          <button class="leverage-btn daily-sell-btn" data-val="65">65</button>
-          <button class="leverage-btn daily-sell-btn active" data-val="70">70</button>
-          <button class="leverage-btn daily-sell-btn" data-val="75">75</button>
-        </div>
-      </div>
-      <div>
-        <div style="font-size:11px;color:var(--red);margin-bottom:4px;">Power Sell RSI ≥</div>
-        <div style="display:flex;gap:4px;">
-          <button class="leverage-btn daily-psell-btn" data-val="75">75</button>
-          <button class="leverage-btn daily-psell-btn active" data-val="80">80</button>
-          <button class="leverage-btn daily-psell-btn" data-val="85">85</button>
-        </div>
-      </div>
+    <div style="text-align:center;font-size:12px;color:var(--text2);margin-bottom:12px;">
+      Balance: <span id="pt-balance" style="color:var(--accent);font-weight:600;">$100,000</span>
     </div>
 
-    <!-- Leverage + Size -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-      <div>
-        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Leverage</div>
-        <div style="display:flex;gap:4px;">
-          <button class="leverage-btn daily-lev-btn" data-val="1">1x</button>
-          <button class="leverage-btn daily-lev-btn" data-val="2">2x</button>
-          <button class="leverage-btn daily-lev-btn active" data-val="3">3x</button>
-          <button class="leverage-btn daily-lev-btn" data-val="5">5x</button>
-        </div>
-      </div>
-      <div>
-        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Max Open Trades</div>
-        <div style="display:flex;gap:4px;">
-          <button class="leverage-btn daily-max-btn active" data-val="1">1</button>
-          <button class="leverage-btn daily-max-btn" data-val="2">2</button>
-          <button class="leverage-btn daily-max-btn" data-val="3">3</button>
-        </div>
-      </div>
-    </div>
-
-    <div style="margin-bottom:12px;">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Position Size ($)</div>
-      <div style="display:flex;gap:8px;">
-        <input class="tg-input" id="daily-size-input" placeholder="e.g. 1000" type="number" style="margin:0;flex:1;">
-        <button class="tg-add-btn" id="save-daily-size-btn">Save</button>
-      </div>
-    </div>
-
-    <!-- Today's signals display -->
-    <div style="border-top:1px solid var(--border2);padding-top:10px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <div style="font-size:12px;font-weight:600;">Today's Daily RSI Signals</div>
-        <button class="tg-add-btn" id="refresh-daily-signals-btn" style="font-size:11px;padding:4px 10px;">Scan Now</button>
-      </div>
-      <div id="daily-signals-list" style="font-size:12px;color:var(--text2);">Loading...</div>
-    </div>
-  </div>
-
-  <!-- ━━━ TRADING ENGINE ━━━ -->
-  <div class="tg-section">
-    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">🤖 Trading Engine</div>
-
-    <div class="auto-trade-toggle" style="margin-bottom:10px;">
-      <div><div class="toggle-label">Auto Trading</div><div class="caller-stats">She opens/closes trades automatically</div></div>
-      <div class="toggle-switch" id="auto-trade-toggle"></div>
-    </div>
-
-    <div class="auto-trade-toggle" style="margin-bottom:10px;">
-      <div><div class="toggle-label">Independent Scanner</div><div class="caller-stats">Scans market every interval</div></div>
-      <div class="toggle-switch" id="independent-scanner-toggle"></div>
-    </div>
-
-    <div style="margin-bottom:10px;">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Scan Interval</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <button class="leverage-btn interval-btn" data-min="15">15m</button>
-        <button class="leverage-btn interval-btn active" data-min="30">30m</button>
-        <button class="leverage-btn interval-btn" data-min="60">1hr</button>
-        <button class="leverage-btn interval-btn" data-min="120">2hr</button>
-        <button class="leverage-btn interval-btn" data-min="240">4hr</button>
-      </div>
-    </div>
-
-    <div>
-      <div style="font-size:11px;display:flex;justify-content:space-between;color:var(--text2);margin-bottom:6px;">
-        <span>🪙 Coins to Trade</span>
-        <span id="coin-counter" style="color:var(--text2);">0 coins</span>
-      </div>
-      <div id="coin-selector" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
-        <button class="coin-btn" data-coin="BTC">₿ BTC</button>
-        <button class="coin-btn" data-coin="ETH">Ξ ETH</button>
-        <button class="coin-btn" data-coin="SOL">◎ SOL</button>
-        <button class="coin-btn" data-coin="BNB">⬡ BNB</button>
-        <button class="coin-btn" data-coin="XRP">✕ XRP</button>
-        <button class="coin-btn" data-coin="DOGE">Ð DOGE</button>
-        <button class="coin-btn" data-coin="AVAX">▲ AVAX</button>
-        <button class="coin-btn" data-coin="LINK">⬡ LINK</button>
-        <button class="coin-btn" data-coin="ARB">◆ ARB</button>
-        <button class="coin-btn" data-coin="PEPE">🐸 PEPE</button>
-      </div>
-      <div style="display:flex;gap:8px;">
-        <input class="tg-input" id="custom-coin-input" placeholder="Add custom coin..." style="margin:0;flex:1;">
-        <button class="tg-add-btn" id="add-custom-coin-btn">Add</button>
-      </div>
-      <div id="custom-coins-list" style="margin-top:6px;"></div>
-    </div>
-  </div>
-
-  <!-- ━━━ MAIN TRADE SETTINGS ━━━ -->
-  <div class="tg-section">
-    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">📈 Main Trade Settings</div>
-
-    <div style="margin-bottom:12px;">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Leverage</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <button class="leverage-btn lev-btn" data-lev="1">1x</button>
-        <button class="leverage-btn lev-btn" data-lev="3">3x</button>
-        <button class="leverage-btn lev-btn active" data-lev="5">5x</button>
-        <button class="leverage-btn lev-btn" data-lev="10">10x</button>
-        <button class="leverage-btn lev-btn" data-lev="20">20x</button>
-        <button class="leverage-btn lev-btn" data-lev="50">50x</button>
-        <button class="leverage-btn lev-btn" data-lev="100">100x</button>
-      </div>
-      <div id="lev-warning" style="font-size:10px;color:var(--red);margin-top:4px;"></div>
-    </div>
-
-    <div style="margin-bottom:12px;">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Position Size ($)</div>
-      <div style="display:flex;gap:8px;">
-        <input class="tg-input" id="trade-size-input" placeholder="e.g. 500" type="number" style="margin:0;flex:1;">
-        <button class="tg-add-btn" id="save-size-btn">Save</button>
-      </div>
-    </div>
-
-    <div style="margin-bottom:12px;">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Max Drawdown (%)</div>
-      <div style="display:flex;gap:8px;">
-        <input class="tg-input" id="max-drawdown-input" placeholder="e.g. 5" type="number" min="0" max="100" style="margin:0;width:80px;">
-        <button class="tg-add-btn" id="save-drawdown-btn">Save</button>
-        <span id="drawdown-display" style="font-size:11px;color:var(--text2);align-self:center;"></span>
-      </div>
-    </div>
-
-    <div style="margin-bottom:8px;">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Confidence Threshold</div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-        <div style="display:flex;gap:6px;">
-          <button class="leverage-btn active" id="conf-manual-btn">Manual</button>
-          <button class="leverage-btn" id="conf-auto-btn">Auto</button>
-        </div>
-        <div style="font-size:20px;font-weight:700;color:var(--accent);" id="conf-threshold-val">60%</div>
-      </div>
-      <div class="trust-dots" data-key="tradeThreshold" data-val="6" style="gap:6px;"></div>
-    </div>
-
-    <div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">TP/SL Mode</div>
-      <div style="display:flex;gap:6px;margin-bottom:8px;">
-        <button class="leverage-btn active" id="tpsl-auto-btn">⚡ Auto</button>
-        <button class="leverage-btn" id="tpsl-ratio-btn">📊 Ratio</button>
-        <button class="leverage-btn" id="tpsl-manual-btn">✏️ Manual</button>
-      </div>
-      <div id="tpsl-auto-panel" style="font-size:11px;color:var(--text2);">Market-based TP/SL. Min 1:1 ratio enforced.</div>
-      <div id="tpsl-ratio-panel" style="display:none;">
-        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">
-          <button class="leverage-btn ratio-btn" data-ratio="1">1:1</button>
-          <button class="leverage-btn ratio-btn active" data-ratio="1.5">1:1.5</button>
-          <button class="leverage-btn ratio-btn" data-ratio="2">1:2</button>
-          <button class="leverage-btn ratio-btn" data-ratio="2.5">1:2.5</button>
-          <button class="leverage-btn ratio-btn" data-ratio="3">1:3</button>
-        </div>
-        <div id="ratio-preview" style="font-size:11px;color:var(--text2);">Example: SL 1% → TP 1.5%</div>
-      </div>
-      <div id="tpsl-manual-panel" style="display:none;">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-          <div>
-            <div style="font-size:10px;color:var(--green);margin-bottom:4px;">Take Profit %</div>
-            <input class="tg-input" id="custom-tp-input" placeholder="e.g. 2" type="number" step="0.1" style="margin:0;">
-          </div>
-          <div>
-            <div style="font-size:10px;color:var(--red);margin-bottom:4px;">Stop Loss %</div>
-            <input class="tg-input" id="custom-sl-input" placeholder="e.g. 1" type="number" step="0.1" style="margin:0;">
-          </div>
-        </div>
-        <button class="tg-add-btn" id="save-tpsl-btn" style="width:100%;">Save TP/SL</button>
-        <div id="tpsl-hint" style="font-size:11px;color:var(--text2);margin-top:4px;">TP must be ≥ SL</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ━━━ SCALP SETTINGS ━━━ -->
-  <div class="tg-section">
-    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">⚡ Scalp Trading</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Quick trades using Haiku Scout → 5 Agents → Sonnet pipeline</div>
-
-    <div class="auto-trade-toggle" style="margin-bottom:10px;">
-      <div><div class="toggle-label">Enable Scalp Trades</div><div class="caller-stats">Runs every 2 min independently</div></div>
-      <div class="toggle-switch" id="scalp-toggle"></div>
-    </div>
-
-    <div id="scalp-settings-panel" style="display:none;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-        <div>
-          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Scalp Leverage</div>
-          <div style="display:flex;gap:4px;flex-wrap:wrap;">
-            <button class="leverage-btn scalp-lev-btn" data-lev="5">5x</button>
-            <button class="leverage-btn scalp-lev-btn" data-lev="10">10x</button>
-            <button class="leverage-btn scalp-lev-btn active" data-lev="20">20x</button>
-            <button class="leverage-btn scalp-lev-btn" data-lev="50">50x</button>
-          </div>
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Auto-close After</div>
-          <div style="display:flex;gap:4px;flex-wrap:wrap;">
-            <button class="leverage-btn scalp-dur-btn" data-min="15">15m</button>
-            <button class="leverage-btn scalp-dur-btn active" data-min="30">30m</button>
-            <button class="leverage-btn scalp-dur-btn" data-min="60">1hr</button>
-          </div>
-        </div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-        <div>
-          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Scalp Size ($)</div>
-          <div style="display:flex;gap:6px;">
-            <input class="tg-input" id="scalp-size-input" placeholder="e.g. 50" type="number" style="margin:0;flex:1;">
-            <button class="tg-add-btn" id="save-scalp-btn">Save</button>
-          </div>
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Max Open Scalps</div>
-          <div style="display:flex;gap:4px;">
-            <button class="leverage-btn scalp-max-btn active" data-val="3">3</button>
-            <button class="leverage-btn scalp-max-btn" data-val="5">5</button>
-            <button class="leverage-btn scalp-max-btn" data-val="10">10</button>
-          </div>
-        </div>
-      </div>
-
-      <div style="margin-bottom:8px;">
-        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Scalp Confidence Threshold</div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <div class="trust-dots" data-key="scalpThreshold" data-val="5" style="gap:6px;"></div>
-          <div style="font-size:18px;font-weight:700;color:#fbbf24;" id="scalp-threshold-val">50%</div>
-        </div>
-      </div>
-
-      <div style="border-top:1px solid var(--border2);padding-top:10px;margin-top:4px;">
-        <div style="font-size:11px;font-weight:600;margin-bottom:8px;">Scalp Indicators (15m)</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
-            <div><div style="font-size:11px;font-weight:600;">RSI 15m</div></div>
-            <div class="toggle-switch on" id="scalp-rsi-toggle"></div>
-          </div>
-          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
-            <div><div style="font-size:11px;font-weight:600;">Bollinger Bands</div></div>
-            <div class="toggle-switch on" id="scalp-bb-toggle"></div>
-          </div>
-          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
-            <div><div style="font-size:11px;font-weight:600;">Support/Resist</div></div>
-            <div class="toggle-switch on" id="scalp-sr-toggle"></div>
-          </div>
-          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
-            <div><div style="font-size:11px;font-weight:600;">Order Book</div></div>
-            <div class="toggle-switch on" id="scalp-ob-toggle"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ━━━ INTELLIGENCE ━━━ -->
-  <div class="tg-section is-collapsed">
-    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">🧠 Intelligence Settings</div>
-
-    <!-- Chart Analysis -->
-    <div class="auto-trade-toggle" style="margin-bottom:12px;">
-      <div><div class="toggle-label">Chart Analysis</div><div class="caller-stats">Analyze chart images from TG</div></div>
-      <div class="toggle-switch" id="chart-analysis-toggle"></div>
-    </div>
-
-    <!-- MAIN TRADE INDICATORS -->
-    <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text);">📈 Main Trade Indicators</div>
-    <div id="main-indicators-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;">
-
-      <!-- Each indicator: toggle + advanced btn -->
-      ${[
-        {id:'ta-rsi-toggle', label:'RSI', desc:'Overbought/oversold', advId:'adv-rsi'},
-        {id:'ta-ma-toggle', label:'Moving Avg', desc:'EMA9/SMA20/200', advId:'adv-ma'},
-        {id:'ta-macd-toggle', label:'MACD', desc:'Momentum shifts', advId:'adv-macd'},
-        {id:'ta-bb-toggle', label:'Bollinger Bands', desc:'Volatility squeezes', advId:'adv-bb'},
-        {id:'ta-sr-toggle', label:'Support/Resist', desc:'Key price levels', advId:'adv-sr'},
-        {id:'ta-ob-toggle', label:'Order Book', desc:'Buy/sell walls', advId:'adv-ob'},
-        {id:'ta-ichimoku-toggle', label:'Ichimoku Cloud', desc:'Trend + momentum', advId:'adv-ichi'},
-        {id:'ta-atr-toggle', label:'ATR', desc:'Smart TP/SL sizing', advId:'adv-atr'},
-        {id:'ta-vwap-toggle', label:'VWAP', desc:'Intraday bias', advId:'adv-vwap'},
-        {id:'ta-stochrsi-toggle', label:'Stoch RSI', desc:'Precise turn detection', advId:'adv-stochrsi'},
-        {id:'ta-emacross-toggle', label:'EMA Cross', desc:'Momentum crossovers', advId:'adv-emacross'},
-        {id:'ta-fundingextreme-toggle', label:'Funding Extremes', desc:'Squeeze risk detection', advId:'adv-funding'},
-        {id:'ta-pivots-toggle', label:'Pivot Points', desc:'Daily key levels', advId:'adv-pivots'},
-        {id:'ta-corr-toggle', label:'Correlation', desc:'BTC lag for alts', advId:'adv-corr'},
-        {id:'ta-time-toggle', label:'Time Filter', desc:'Best trading hours', advId:'adv-time'},
-      ].map(i => ``).join('')}
-
-    </div>
-
-    <!-- Built via JS below -->
-    <div id="main-indicators-built"></div>
-
-    <!-- SCALP INDICATORS -->
-    <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text);border-top:1px solid var(--border2);padding-top:12px;">⚡ Scalp Indicators (15m)</div>
-    <div id="scalp-indicators-built"></div>
-
-    <!-- Advanced Settings Panel (hidden by default) -->
-    <div id="advanced-settings-panel" style="display:none;margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;border:1px solid var(--border2);">
+    <!-- Usage Stats -->
+    <div class="tg-section" style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div style="font-size:12px;font-weight:600;" id="adv-panel-title">Advanced Settings</div>
-        <button onclick="document.getElementById('advanced-settings-panel').style.display='none'" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:16px;">✕</button>
+        <div style="font-size:12px;font-weight:700;">📊 Daily Usage</div>
+        <span id="user-tier-badge" style="font-size:10px;padding:3px 8px;border-radius:12px;background:rgba(0,212,255,0.2);color:#00d4ff;font-weight:700;">PRO</span>
       </div>
-      <div id="adv-panel-content"></div>
-    </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
-            <div><div style="font-size:11px;font-weight:600;">RSI</div><div style="font-size:10px;color:var(--text2);">1h + 4h</div></div>
-            <div class="toggle-switch on" id="ta-rsi-toggle"></div>
-          </div>
-          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
-            <div><div style="font-size:11px;font-weight:600;">Moving Avg</div><div style="font-size:10px;color:var(--text2);">EMA9/SMA20/200</div></div>
-            <div class="toggle-switch on" id="ta-ma-toggle"></div>
-          </div>
-          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
-            <div><div style="font-size:11px;font-weight:600;">MACD</div><div style="font-size:10px;color:var(--text2);">Momentum</div></div>
-            <div class="toggle-switch on" id="ta-macd-toggle"></div>
-          </div>
-          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
-            <div><div style="font-size:11px;font-weight:600;">Bollinger Bands</div><div style="font-size:10px;color:var(--text2);">Squeezes</div></div>
-            <div class="toggle-switch on" id="ta-bb-toggle"></div>
-          </div>
-          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
-            <div><div style="font-size:11px;font-weight:600;">Support/Resist</div><div style="font-size:10px;color:var(--text2);">Key levels</div></div>
-            <div class="toggle-switch on" id="ta-sr-toggle"></div>
-          </div>
-          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
-            <div><div style="font-size:11px;font-weight:600;">Order Book</div><div style="font-size:10px;color:var(--text2);">Buy/sell walls</div></div>
-            <div class="toggle-switch on" id="ta-ob-toggle"></div>
-          </div>
-          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
-            <div><div style="font-size:11px;font-weight:600;">Ichimoku Cloud</div><div style="font-size:10px;color:var(--text2);">Trend + momentum</div></div>
-            <div class="toggle-switch on" id="ta-ichimoku-toggle"></div>
-          </div>
-          <div class="auto-trade-toggle" style="padding:6px 8px;background:var(--bg3);border-radius:6px;">
-            <div><div style="font-size:11px;font-weight:600;">ATR</div><div style="font-size:10px;color:var(--text2);">Smart TP/SL sizing</div></div>
-            <div class="toggle-switch on" id="ta-atr-toggle"></div>
-  </div>
 
-  <!-- ━━━ PROTECTION ━━━ -->
-  <div class="tg-section is-collapsed">
-    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">🛡️ Protection</div>
-
-    <!-- Daily Loss Limit -->
-    <div style="margin-bottom:12px;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:6px;">🛑 Daily Loss Limit</div>
-      <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;">
-        <button class="leverage-btn daily-loss-btn active" data-val="0">Off</button>
-        <button class="leverage-btn daily-loss-btn" data-val="100">$100</button>
-        <button class="leverage-btn daily-loss-btn" data-val="250">$250</button>
-        <button class="leverage-btn daily-loss-btn" data-val="500">$500</button>
-        <button class="leverage-btn daily-loss-btn" data-val="1000">$1000</button>
-      </div>
-      <div style="display:flex;gap:6px;">
-        <input class="tg-input" id="custom-loss-limit" placeholder="Custom $" type="number" style="margin:0;flex:1;">
-        <button class="tg-add-btn" id="save-loss-limit-btn">Set</button>
-      </div>
-      <div style="font-size:10px;color:var(--text2);margin-top:4px;">Auto stops ALL trading if daily loss exceeds limit</div>
-    </div>
-
-    <!-- Max Concurrent Positions -->
-    <div style="margin-bottom:12px;border-top:1px solid var(--border2);padding-top:10px;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:6px;">📊 Max Open Positions</div>
-      <div style="display:flex;gap:6px;">
-        <button class="leverage-btn max-pos-btn active" data-val="0">Unlimited</button>
-        <button class="leverage-btn max-pos-btn" data-val="3">3</button>
-        <button class="leverage-btn max-pos-btn" data-val="5">5</button>
-        <button class="leverage-btn max-pos-btn" data-val="10">10</button>
-        <button class="leverage-btn max-pos-btn" data-val="20">20</button>
-      </div>
-      <div style="font-size:10px;color:var(--text2);margin-top:4px;">Total open trades across all types</div>
-    </div>
-
-    <!-- Trading Status -->
-    <div style="margin-bottom:12px;border-top:1px solid var(--border2);padding-top:10px;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:6px;">⏸️ Trading Control</div>
-      <div id="trading-status" style="font-size:12px;color:var(--green);margin-bottom:8px;">✅ Trading Active</div>
-      <div style="display:flex;gap:8px;">
-        <button class="tg-add-btn" style="background:rgba(239,68,68,0.2);color:var(--red);flex:1;" id="pause-trading-btn">⏸️ Pause 1hr</button>
-        <button class="tg-add-btn" style="background:rgba(52,211,153,0.2);color:var(--green);flex:1;" id="resume-trading-btn">▶️ Resume</button>
-      </div>
-    </div>
-
-    <!-- Rage Trade Lock -->
-    <div style="border-top:1px solid var(--border2);padding-top:10px;margin-bottom:10px;">
-      <div class="auto-trade-toggle" style="margin-bottom:10px;">
-        <div><div class="toggle-label">Rage Trade Lock</div><div class="caller-stats">Auto-lock after consecutive losses</div></div>
-        <div class="toggle-switch" id="rage-lock-toggle"></div>
-      </div>
-      <div id="rage-lock-settings" style="display:none;">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <div>
-            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Lock After X Losses</div>
-            <div style="display:flex;gap:4px;">
-              <button class="leverage-btn rage-thresh-btn" data-val="2">2</button>
-              <button class="leverage-btn rage-thresh-btn active" data-val="3">3</button>
-              <button class="leverage-btn rage-thresh-btn" data-val="5">5</button>
-            </div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Lock Duration</div>
-            <div style="display:flex;gap:4px;">
-              <button class="leverage-btn rage-dur-btn" data-min="15">15m</button>
-              <button class="leverage-btn rage-dur-btn active" data-min="30">30m</button>
-              <button class="leverage-btn rage-dur-btn" data-min="60">1hr</button>
-            </div>
-          </div>
+      <!-- Voice Messages -->
+      <div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;">
+          <span style="color:var(--text2);">🎙️ Voice Messages</span>
+          <span id="voice-usage-text" style="font-weight:600;">0/200</span>
+        </div>
+        <div style="background:var(--bg3);border-radius:4px;height:6px;">
+          <div id="voice-usage-bar" style="height:6px;border-radius:4px;background:var(--green);width:0%;transition:width 0.3s;"></div>
         </div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:8px;">
-        <button class="tg-add-btn" style="background:rgba(239,68,68,0.2);color:var(--red);flex:1;" id="manual-lock-btn">🔒 Lock Now</button>
-        <button class="tg-add-btn" style="background:rgba(52,211,153,0.2);color:var(--green);flex:1;" id="manual-unlock-btn">🔓 Unlock</button>
+
+<!-- Limit Alert -->
+      <div id="limit-alert" style="display:none;padding:8px;border-radius:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);margin-bottom:8px;">
+        <div style="font-size:11px;color:var(--red);font-weight:600;margin-bottom:6px;" id="limit-alert-msg">Daily limit reached!</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="tg-add-btn" id="buy-day-pass-btn" style="font-size:10px;padding:4px 10px;background:rgba(0,212,255,0.2);color:#00d4ff;">🎫 Day Pass $2</button>
+          <button class="tg-add-btn" id="buy-msg-pack-btn" style="font-size:10px;padding:4px 10px;background:rgba(52,211,153,0.2);color:var(--green);">📦 +500 msgs $5</button>
+          <button class="tg-add-btn" id="upgrade-plan-btn" style="font-size:10px;padding:4px 10px;">⬆️ Upgrade</button>
+        </div>
       </div>
-    </div>
-  </div>
 
-  <!-- ━━━ DCA & ALERTS ━━━ -->
-  <div class="tg-section is-collapsed">
-    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">🤖 DCA & Price Alerts</div>
-
-    <!-- DCA Plans -->
-    <div style="margin-bottom:14px;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">💰 DCA Automation</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Auto-buy at set intervals</div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+      <!-- Auto extend -->
+      <div class="auto-trade-toggle">
         <div>
-          <div style="font-size:10px;color:var(--text2);margin-bottom:3px;">Coin</div>
-          <select id="dca-coin" class="tg-input" style="margin:0;">
-            <option value="BTC">BTC</option><option value="ETH">ETH</option>
-            <option value="SOL">SOL</option><option value="BNB">BNB</option>
-          </select>
+          <div style="font-size:11px;font-weight:600;">Auto-Extend</div>
+          <div style="font-size:10px;color:var(--text2);">Auto-charge when limit hit</div>
         </div>
-        <div>
-          <div style="font-size:10px;color:var(--text2);margin-bottom:3px;">Amount ($)</div>
-          <input class="tg-input" id="dca-amount" placeholder="e.g. 50" type="number" style="margin:0;">
-        </div>
+        <div class="toggle-switch" id="auto-extend-toggle"></div>
       </div>
-      <div style="margin-bottom:8px;">
-        <div style="font-size:10px;color:var(--text2);margin-bottom:4px;">Interval</div>
-        <div style="display:flex;gap:4px;">
-          <button class="leverage-btn dca-interval-btn" data-val="daily">Daily</button>
-          <button class="leverage-btn dca-interval-btn active" data-val="weekly">Weekly</button>
-          <button class="leverage-btn dca-interval-btn" data-val="biweekly">2 Weeks</button>
-          <button class="leverage-btn dca-interval-btn" data-val="monthly">Monthly</button>
-        </div>
-      </div>
-      <button class="tg-add-btn" id="add-dca-btn" style="width:100%;margin-bottom:8px;">Add DCA Plan</button>
-      <div id="dca-plans-list" style="font-size:12px;"></div>
-    </div>
-
-    <!-- Smart Price Alerts -->
-    <div style="border-top:1px solid var(--border2);padding-top:12px;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">🎯 Smart Price Alerts</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Alert with AI market context when price hits level</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
-        <div>
-          <div style="font-size:10px;color:var(--text2);margin-bottom:3px;">Coin</div>
-          <select id="alert-coin" class="tg-input" style="margin:0;">
-            <option value="BTC">BTC</option><option value="ETH">ETH</option>
-            <option value="SOL">SOL</option><option value="BNB">BNB</option>
-            <option value="DOGE">DOGE</option>
-          </select>
-        </div>
-        <div>
-          <div style="font-size:10px;color:var(--text2);margin-bottom:3px;">Price ($)</div>
-          <input class="tg-input" id="alert-price" placeholder="e.g. 60000" type="number" style="margin:0;">
-        </div>
-      </div>
-      <div style="display:flex;gap:6px;margin-bottom:6px;">
-        <button class="leverage-btn alert-dir-btn active" data-val="above">Above</button>
-        <button class="leverage-btn alert-dir-btn" data-val="below">Below</button>
-      </div>
-      <button class="tg-add-btn" id="add-alert-btn" style="width:100%;margin-bottom:8px;">Set Alert</button>
-      <div id="alerts-list" style="font-size:12px;"></div>
-    </div>
-  </div>
-
-  <!-- ━━━ INSIGHTS ━━━ -->
-  <div class="tg-section is-collapsed">
-    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">💡 Insights & Tools</div>
-
-    <!-- Psychology Score -->
-    <div style="margin-bottom:14px;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">🧠 Trading Psychology</div>
-      <div id="psych-score-display" style="text-align:center;padding:12px 0;">
-        <div style="font-size:42px;font-weight:800;" id="psych-score-num">--</div>
-        <div style="font-size:12px;color:var(--text2);">Score / 100</div>
-        <div style="font-size:16px;font-weight:700;margin-top:4px;" id="psych-grade">-</div>
-      </div>
-      <div id="psych-issues" style="font-size:11px;"></div>
-      <button class="tg-add-btn" style="width:100%;margin-top:6px;" id="refresh-psych-btn">Refresh Score</button>
     </div>
 
     <!-- Market Regime -->
-    <div style="border-top:1px solid var(--border2);padding-top:12px;margin-bottom:14px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+    <div class="tg-section" style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
         <div style="font-size:12px;font-weight:600;">🌍 Market Regime</div>
-        <button class="tg-add-btn" id="refresh-regime-btn" style="font-size:11px;padding:4px 10px;">Refresh</button>
+        <button class="tg-add-btn" id="refresh-regime-btn" style="font-size:11px;padding:3px 8px;">Refresh</button>
       </div>
-      <div id="regime-display" style="font-size:12px;color:var(--text2);padding:8px;background:var(--bg3);border-radius:6px;">Loading...</div>
+      <div id="regime-display" style="font-size:12px;color:var(--text2);">Loading...</div>
     </div>
 
-    <!-- Trade Analytics -->
-    <div style="border-top:1px solid var(--border2);padding-top:12px;margin-bottom:14px;">
+    <!-- Daily RSI Signals -->
+    <div class="tg-section" style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:12px;font-weight:600;">📅 Daily RSI Signals</div>
+        <button class="tg-add-btn" id="refresh-daily-signals-btn" style="font-size:11px;padding:3px 8px;">Scan</button>
+      </div>
+      <div id="daily-signals-list" style="font-size:12px;color:var(--text2);">Loading...</div>
+    </div>
+
+    <!-- Trading Control -->
+    <div class="tg-section" style="margin-bottom:8px;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">⚙️ Controls</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <button class="tg-add-btn" style="background:rgba(239,68,68,0.2);color:var(--red);flex:1;" id="pause-trading-btn">⏸️ Pause 1hr</button>
+        <button class="tg-add-btn" style="background:rgba(52,211,153,0.2);color:var(--green);flex:1;" id="resume-trading-btn">▶️ Resume</button>
+      </div>
+      <div id="trading-status" style="font-size:11px;color:var(--green);text-align:center;">✅ Trading Active</div>
+    </div>
+
+    <!-- Analytics -->
+    <div class="tg-section" style="margin-bottom:8px;">
       <div style="font-size:12px;font-weight:600;margin-bottom:8px;">📊 Performance Analytics</div>
       <div id="analytics-display" style="font-size:12px;color:var(--text2);">Loading...</div>
     </div>
 
-    <!-- Advanced Settings -->
-    <div style="border-top:1px solid var(--border2);padding-top:12px;margin-bottom:14px;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">⚙️ Advanced Trading</div>
+    <!-- All Open Positions -->
+    <div class="tg-section">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">🟡 All Open Positions</div>
+      <div id="pt-open-list"><div style="font-size:12px;color:var(--text2);text-align:center;padding:16px;">No open positions</div></div>
+    </div>
+  </div>
 
-      <div class="auto-trade-toggle" style="margin-bottom:8px;">
-        <div><div class="toggle-label">Kelly Criterion Sizing</div><div class="caller-stats">Auto-sizes based on win rate</div></div>
-        <div class="toggle-switch" id="kelly-toggle"></div>
+  <!-- ══════ DAY TRADE TAB ══════ -->
+  <div class="trade-tab-content" id="tab-daytrade">
+    <div style="padding:12px;">
+
+      <!-- Day Trade Stats -->
+      <div class="trading-hero" style="margin-bottom:12px;">
+        <div class="trading-stat"><div class="trading-stat-label">Day Trades</div><div class="trading-stat-val" id="day-total">0</div></div>
+        <div class="trading-stat"><div class="trading-stat-label">P&L</div><div class="trading-stat-val" id="day-pnl">$0</div></div>
+        <div class="trading-stat"><div class="trading-stat-label">Win Rate</div><div class="trading-stat-val" id="day-wr">0%</div></div>
       </div>
 
-      <div style="margin-bottom:8px;">
-        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Loss Cooldown (min per coin)</div>
-        <div style="display:flex;gap:6px;">
-          <button class="leverage-btn cooldown-btn active" data-val="0">Off</button>
-          <button class="leverage-btn cooldown-btn" data-val="15">15m</button>
-          <button class="leverage-btn cooldown-btn" data-val="30">30m</button>
-          <button class="leverage-btn cooldown-btn" data-val="60">1hr</button>
+      <!-- Day Trade Settings -->
+      <div class="tg-section">
+        <div style="font-size:12px;font-weight:700;margin-bottom:10px;">⚙️ Settings</div>
+
+        <div class="auto-trade-toggle" style="margin-bottom:10px;">
+          <div><div class="toggle-label">Enable Day Trade Bot</div><div class="caller-stats">Fires at 00:05 UTC using Daily RSI</div></div>
+          <div class="toggle-switch" id="daily-trade-toggle"></div>
         </div>
-        <div style="font-size:10px;color:var(--text2);margin-top:3px;">Pause trading after loss on specific coin</div>
-      </div>
 
-      <div style="margin-bottom:8px;">
-        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Multi-Timeframe Confirmation</div>
-        <div style="display:flex;gap:6px;">
-          <button class="leverage-btn mtf-btn active" data-val="off">Off</button>
-          <button class="leverage-btn mtf-btn" data-val="soft">Soft (inject)</button>
-          <button class="leverage-btn mtf-btn" data-val="hard">Hard (require)</button>
+        <div class="auto-trade-toggle" style="margin-bottom:10px;">
+          <div><div class="toggle-label">Power Signals Only</div><div class="caller-stats">RSI < 20 or > 80 only (more accurate)</div></div>
+          <div class="toggle-switch on" id="daily-power-only-toggle"></div>
         </div>
-        <div style="font-size:10px;color:var(--text2);margin-top:3px;">Require 1h+4h+1d to agree before trading</div>
-      </div>
-    </div>
 
-    <!-- Second Brain -->
-    <div style="border-top:1px solid var(--border2);padding-top:12px;margin-bottom:14px;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">🧠 Second Brain</div>
-      <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <input class="tg-input" id="memory-input" placeholder="Remember anything..." style="margin:0;flex:1;">
-        <button class="tg-add-btn" id="save-memory-btn">Save</button>
-      </div>
-      <div id="memories-list" style="font-size:11px;"></div>
-    </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Leverage</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+              <button class="leverage-btn daily-lev-btn" data-val="1">1x</button>
+              <button class="leverage-btn daily-lev-btn" data-val="2">2x</button>
+              <button class="leverage-btn daily-lev-btn active" data-val="3">3x</button>
+              <button class="leverage-btn daily-lev-btn" data-val="5">5x</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Max Open</div>
+            <div style="display:flex;gap:4px;">
+              <button class="leverage-btn daily-max-btn active" data-val="1">1</button>
+              <button class="leverage-btn daily-max-btn" data-val="2">2</button>
+              <button class="leverage-btn daily-max-btn" data-val="3">3</button>
+            </div>
+          </div>
+        </div>
 
-    <!-- Morning Briefing -->
-    <div style="border-top:1px solid var(--border2);padding-top:12px;">
-      <div class="auto-trade-toggle">
-        <div><div class="toggle-label">🌅 Morning Briefing</div><div class="caller-stats">Daily 8am market summary</div></div>
-        <div class="toggle-switch" id="morning-briefing-toggle"></div>
+
+        <!-- Day Trade Coins -->
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <div style="font-size:11px;color:var(--text2);">🪙 Day Trade Coins</div>
+            <span id="day-coin-counter" style="font-size:10px;color:var(--text2);">3/999 coins</span>
+          </div>
+          <div id="day-coin-selector" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">
+            <button class="coin-btn day-coin-btn" data-coin="BTC">₿ BTC</button>
+            <button class="coin-btn day-coin-btn" data-coin="ETH">Ξ ETH</button>
+            <button class="coin-btn day-coin-btn" data-coin="SOL">◎ SOL</button>
+            <button class="coin-btn day-coin-btn" data-coin="BNB">⬡ BNB</button>
+            <button class="coin-btn day-coin-btn" data-coin="XRP">✕ XRP</button>
+            <button class="coin-btn day-coin-btn" data-coin="DOGE">Ð DOGE</button>
+            <button class="coin-btn day-coin-btn" data-coin="AVAX">▲ AVAX</button>
+            <button class="coin-btn day-coin-btn" data-coin="LINK">⬡ LINK</button>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:4px;">
+            <input class="tg-input" id="day-custom-coin-input" placeholder="Add coin e.g. BONK" style="margin:0;flex:1;text-transform:uppercase;">
+            <button class="tg-add-btn" id="day-add-coin-btn">Add</button>
+          </div>
+          <div id="day-custom-coins-list" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Position Size ($)</div>
+          <div style="display:flex;gap:6px;">
+            <input class="tg-input" id="daily-size-input" placeholder="e.g. 1000" type="number" style="margin:0;flex:1;">
+            <button class="tg-add-btn" id="save-daily-size-btn">Save</button>
+          </div>
+        </div>
+
+        <!-- Advanced Settings (collapsed) -->
+        <details style="margin-top:8px;">
+          <summary style="font-size:11px;color:var(--text2);cursor:pointer;padding:6px 0;">⚙️ Advanced RSI Settings</summary>
+          <div style="padding-top:10px;">
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">RSI Period</div>
+            <div style="display:flex;gap:4px;margin-bottom:10px;">
+              <button class="leverage-btn daily-period-btn" data-val="7">7</button>
+              <button class="leverage-btn daily-period-btn active" data-val="14">14</button>
+              <button class="leverage-btn daily-period-btn" data-val="21">21</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div>
+                <div style="font-size:10px;color:var(--green);margin-bottom:3px;">Power Buy ≤</div>
+                <div style="display:flex;gap:3px;">
+                  <button class="leverage-btn daily-pbuy-btn" data-val="15">15</button>
+                  <button class="leverage-btn daily-pbuy-btn active" data-val="20">20</button>
+                  <button class="leverage-btn daily-pbuy-btn" data-val="25">25</button>
+                </div>
+              </div>
+              <div>
+                <div style="font-size:10px;color:var(--green);margin-bottom:3px;">Buy ≤</div>
+                <div style="display:flex;gap:3px;">
+                  <button class="leverage-btn daily-buy-btn" data-val="25">25</button>
+                  <button class="leverage-btn daily-buy-btn active" data-val="30">30</button>
+                  <button class="leverage-btn daily-buy-btn" data-val="35">35</button>
+                </div>
+              </div>
+              <div>
+                <div style="font-size:10px;color:var(--red);margin-bottom:3px;">Sell ≥</div>
+                <div style="display:flex;gap:3px;">
+                  <button class="leverage-btn daily-sell-btn" data-val="65">65</button>
+                  <button class="leverage-btn daily-sell-btn active" data-val="70">70</button>
+                  <button class="leverage-btn daily-sell-btn" data-val="75">75</button>
+                </div>
+              </div>
+              <div>
+                <div style="font-size:10px;color:var(--red);margin-bottom:3px;">Power Sell ≥</div>
+                <div style="display:flex;gap:3px;">
+                  <button class="leverage-btn daily-psell-btn" data-val="75">75</button>
+                  <button class="leverage-btn daily-psell-btn active" data-val="80">80</button>
+                  <button class="leverage-btn daily-psell-btn" data-val="85">85</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <!-- Day Trade Positions -->
+      <div class="tg-section">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🟡 Open Day Trades</div>
+        <div id="day-open-list"><div style="font-size:12px;color:var(--text2);text-align:center;padding:12px;">No open day trades</div></div>
+      </div>
+
+      <!-- Day Trade History -->
+      <div class="tg-section">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📋 History</div>
+        <div id="day-history-list"><div style="font-size:12px;color:var(--text2);text-align:center;padding:12px;">No history yet</div></div>
       </div>
     </div>
   </div>
 
-  <!-- ━━━ PERFORMANCE ━━━ -->
-  <div class="trading-hero">
-    <div class="trading-stat">
-      <div class="trading-stat-label">Win Rate</div>
-      <div class="trading-stat-val" id="pt-winrate">0%</div>
+  <!-- ══════ MAIN TRADE TAB ══════ -->
+  <div class="trade-tab-content" id="tab-maintrade">
+    <div style="padding:12px;">
+
+      <!-- Main Trade Stats -->
+      <div class="trading-hero" style="margin-bottom:12px;">
+        <div class="trading-stat"><div class="trading-stat-label">Main Trades</div><div class="trading-stat-val" id="main-total">0</div></div>
+        <div class="trading-stat"><div class="trading-stat-label">P&L</div><div class="trading-stat-val" id="main-pnl">$0</div></div>
+        <div class="trading-stat"><div class="trading-stat-label">Win Rate</div><div class="trading-stat-val" id="main-wr">0%</div></div>
+      </div>
+
+      <!-- Engine Settings -->
+      <div class="tg-section">
+        <div style="font-size:12px;font-weight:700;margin-bottom:10px;">⚙️ Settings</div>
+
+        <div class="auto-trade-toggle" style="margin-bottom:10px;">
+          <div><div class="toggle-label">Auto Trading</div><div class="caller-stats">Opens trades automatically</div></div>
+          <div class="toggle-switch" id="auto-trade-toggle"></div>
+        </div>
+
+        <div class="auto-trade-toggle" style="margin-bottom:10px;">
+          <div><div class="toggle-label">Independent Scanner</div><div class="caller-stats">Scans market every interval</div></div>
+          <div class="toggle-switch" id="independent-scanner-toggle"></div>
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Scan Interval</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button class="leverage-btn interval-btn" data-min="15">15m</button>
+            <button class="leverage-btn interval-btn active" data-min="30">30m</button>
+            <button class="leverage-btn interval-btn" data-min="60">1hr</button>
+            <button class="leverage-btn interval-btn" data-min="120">2hr</button>
+            <button class="leverage-btn interval-btn" data-min="240">4hr</button>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Leverage</div>
+            <div style="display:flex;gap:3px;flex-wrap:wrap;">
+              <button class="leverage-btn lev-btn" data-lev="1">1x</button>
+              <button class="leverage-btn lev-btn" data-lev="3">3x</button>
+              <button class="leverage-btn lev-btn active" data-lev="5">5x</button>
+              <button class="leverage-btn lev-btn" data-lev="10">10x</button>
+              <button class="leverage-btn lev-btn" data-lev="20">20x</button>
+            </div>
+            <div id="lev-warning" style="font-size:10px;color:var(--red);margin-top:3px;"></div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Position Size ($)</div>
+            <div style="display:flex;gap:4px;">
+              <input class="tg-input" id="trade-size-input" placeholder="e.g. 500" type="number" style="margin:0;flex:1;">
+              <button class="tg-add-btn" id="save-size-btn">Save</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Confidence Threshold</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="trust-dots" data-key="paperTradeThreshold" data-val="6" style="gap:5px;"></div>
+            <div style="font-size:18px;font-weight:700;color:var(--accent);" id="conf-threshold-val">65%</div>
+          </div>
+        </div>
+
+        <!-- TP/SL -->
+        <div style="margin-bottom:8px;">
+          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">TP/SL Mode</div>
+          <div style="display:flex;gap:4px;margin-bottom:6px;">
+            <button class="leverage-btn active" id="tpsl-auto-btn">⚡ Auto</button>
+            <button class="leverage-btn" id="tpsl-ratio-btn">📊 Ratio</button>
+            <button class="leverage-btn" id="tpsl-manual-btn">✏️ Manual</button>
+          </div>
+          <div id="tpsl-auto-panel" style="font-size:10px;color:var(--text2);">Market-adaptive. Min 1:1 enforced.</div>
+          <div id="tpsl-ratio-panel" style="display:none;">
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px;">
+              <button class="leverage-btn ratio-btn" data-ratio="1">1:1</button>
+              <button class="leverage-btn ratio-btn active" data-ratio="1.5">1:1.5</button>
+              <button class="leverage-btn ratio-btn" data-ratio="2">1:2</button>
+              <button class="leverage-btn ratio-btn" data-ratio="2.5">1:2.5</button>
+              <button class="leverage-btn ratio-btn" data-ratio="3">1:3</button>
+            </div>
+            <div id="ratio-preview" style="font-size:10px;color:var(--text2);">SL 1% → TP 1.5%</div>
+          </div>
+          <div id="tpsl-manual-panel" style="display:none;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+              <div>
+                <div style="font-size:10px;color:var(--green);">TP %</div>
+                <input class="tg-input" id="custom-tp-input" placeholder="e.g. 2" type="number" step="0.1" style="margin:0;">
+              </div>
+              <div>
+                <div style="font-size:10px;color:var(--red);">SL %</div>
+                <input class="tg-input" id="custom-sl-input" placeholder="e.g. 1" type="number" step="0.1" style="margin:0;">
+              </div>
+            </div>
+            <button class="tg-add-btn" id="save-tpsl-btn" style="width:100%;">Save</button>
+            <div id="tpsl-hint" style="font-size:10px;color:var(--text2);margin-top:3px;">TP must be ≥ SL</div>
+          </div>
+        </div>
+
+<!-- Main Trade Coins Coins -->
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <div style="font-size:11px;color:var(--text2);">🪙 Main Trade Coins</div>
+            <span id="main-coin-counter" style="font-size:10px;color:var(--text2);">3/999 coins</span>
+          </div>
+          <div id="main-coin-selector" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">
+            <button class="coin-btn main-coin-btn" data-coin="BTC">₿ BTC</button>
+            <button class="coin-btn main-coin-btn" data-coin="ETH">Ξ ETH</button>
+            <button class="coin-btn main-coin-btn" data-coin="SOL">◎ SOL</button>
+            <button class="coin-btn main-coin-btn" data-coin="BNB">⬡ BNB</button>
+            <button class="coin-btn main-coin-btn" data-coin="XRP">✕ XRP</button>
+            <button class="coin-btn main-coin-btn" data-coin="DOGE">Ð DOGE</button>
+            <button class="coin-btn main-coin-btn" data-coin="AVAX">▲ AVAX</button>
+            <button class="coin-btn main-coin-btn" data-coin="LINK">⬡ LINK</button>
+            <button class="coin-btn main-coin-btn" data-coin="ARB">◆ ARB</button>
+            <button class="coin-btn main-coin-btn" data-coin="PEPE">🐸 PEPE</button>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:4px;">
+            <input class="tg-input" id="main-custom-coin-input" placeholder="Add coin e.g. BONK" style="margin:0;flex:1;text-transform:uppercase;">
+            <button class="tg-add-btn" id="main-add-coin-btn">Add</button>
+          </div>
+          <div id="main-custom-coins-list" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
+        </div>
+
+        <!-- Advanced -->
+        <details style="margin-top:8px;">
+          <summary style="font-size:11px;color:var(--text2);cursor:pointer;padding:6px 0;">⚙️ Advanced (Indicators, Protection)</summary>
+          <div style="padding-top:10px;">
+
+            <!-- Indicators -->
+            <div style="font-size:11px;font-weight:600;margin-bottom:6px;">Technical Indicators</div>
+            <div id="main-indicators-built" style="margin-bottom:12px;"></div>
+
+            <!-- Max Drawdown -->
+            <div style="margin-bottom:10px;">
+              <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Max Drawdown (%)</div>
+              <div style="display:flex;gap:6px;">
+                <input class="tg-input" id="max-drawdown-input" placeholder="e.g. 5" type="number" style="margin:0;width:80px;">
+                <button class="tg-add-btn" id="save-drawdown-btn">Save</button>
+                <span id="drawdown-display" style="font-size:11px;color:var(--text2);align-self:center;"></span>
+              </div>
+            </div>
+
+            <!-- Daily Loss Limit -->
+            <div style="margin-bottom:10px;">
+              <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Daily Loss Limit ($)</div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px;">
+                <button class="leverage-btn daily-loss-btn active" data-val="0">Off</button>
+                <button class="leverage-btn daily-loss-btn" data-val="100">$100</button>
+                <button class="leverage-btn daily-loss-btn" data-val="250">$250</button>
+                <button class="leverage-btn daily-loss-btn" data-val="500">$500</button>
+              </div>
+            </div>
+
+            <!-- Max positions -->
+            <div style="margin-bottom:10px;">
+              <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Max Open Positions</div>
+              <div style="display:flex;gap:4px;">
+                <button class="leverage-btn max-pos-btn active" data-val="0">Unlimited</button>
+                <button class="leverage-btn max-pos-btn" data-val="3">3</button>
+                <button class="leverage-btn max-pos-btn" data-val="5">5</button>
+                <button class="leverage-btn max-pos-btn" data-val="10">10</button>
+              </div>
+            </div>
+
+            <!-- Kelly + Cooldown -->
+            <div class="auto-trade-toggle" style="margin-bottom:8px;">
+              <div><div style="font-size:11px;font-weight:600;">Kelly Criterion</div><div style="font-size:10px;color:var(--text2);">Auto-size by win rate</div></div>
+              <div class="toggle-switch" id="kelly-toggle"></div>
+            </div>
+            <div style="margin-bottom:8px;">
+              <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Loss Cooldown</div>
+              <div style="display:flex;gap:4px;">
+                <button class="leverage-btn cooldown-btn active" data-val="0">Off</button>
+                <button class="leverage-btn cooldown-btn" data-val="15">15m</button>
+                <button class="leverage-btn cooldown-btn" data-val="30">30m</button>
+                <button class="leverage-btn cooldown-btn" data-val="60">1hr</button>
+              </div>
+            </div>
+
+            <!-- Rage Lock -->
+            <div class="auto-trade-toggle" style="margin-bottom:8px;">
+              <div><div style="font-size:11px;font-weight:600;">Rage Trade Lock</div><div style="font-size:10px;color:var(--text2);">Lock after consecutive losses</div></div>
+              <div class="toggle-switch" id="rage-lock-toggle"></div>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <!-- Main Open Positions -->
+      <div class="tg-section">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🟡 Open Positions</div>
+        <div id="main-open-list"><div style="font-size:12px;color:var(--text2);text-align:center;padding:12px;">No open positions</div></div>
+      </div>
+
+      <!-- Main History -->
+      <div class="tg-section">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📋 Trade History</div>
+        <div id="main-history-list"><div style="font-size:12px;color:var(--text2);text-align:center;padding:12px;">No history yet</div></div>
+      </div>
+
+      <!-- Lessons -->
+      <div class="tg-section">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🧠 What She Learned</div>
+        <div id="pt-lessons-list"></div>
+      </div>
     </div>
-    <div class="trading-stat">
-      <div class="trading-stat-label">Total P&L</div>
-      <div class="trading-stat-val" id="pt-pnl">$0</div>
-    </div>
-    <div class="trading-stat">
-      <div class="trading-stat-label">Trades</div>
-      <div class="trading-stat-val" id="pt-total">0</div>
-    </div>
-  </div>
-  <div style="text-align:center;font-size:12px;color:var(--text2);margin-top:-8px;margin-bottom:12px;">
-    Balance: <span id="pt-balance" style="color:var(--accent);font-weight:600;">$100,000</span>
-    <span style="color:#f0b90b;font-size:10px;"> • Binance only</span>
   </div>
 
-  <!-- Spot Trading -->
-  <div class="tg-section is-collapsed">
-    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">🟢 Spot Trading</div>
-    <div style="margin-bottom:10px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-        <div style="font-size:12px;font-weight:600;">Wallet Holdings</div>
-        <button class="tg-add-btn" id="refresh-spot-btn" style="padding:4px 10px;font-size:11px;">Refresh</button>
+  <!-- ══════ SCALP TAB ══════ -->
+  <div class="trade-tab-content" id="tab-scalp">
+    <div style="padding:12px;">
+
+      <!-- Scalp Stats -->
+      <div class="trading-hero" style="margin-bottom:12px;">
+        <div class="trading-stat"><div class="trading-stat-label">Scalps</div><div class="trading-stat-val" id="scalp-total">0</div></div>
+        <div class="trading-stat"><div class="trading-stat-label">P&L</div><div class="trading-stat-val" id="scalp-pnl">$0</div></div>
+        <div class="trading-stat"><div class="trading-stat-label">Win Rate</div><div class="trading-stat-val" id="scalp-wr">0%</div></div>
       </div>
-      <div id="spot-balances-list" style="font-size:12px;color:var(--text2);">Loading...</div>
+
+      <!-- Scalp Settings -->
+      <div class="tg-section">
+        <div style="font-size:12px;font-weight:700;margin-bottom:10px;">⚙️ Settings</div>
+
+        <div class="auto-trade-toggle" style="margin-bottom:10px;">
+          <div><div class="toggle-label">Enable Scalp Trading</div><div class="caller-stats">Haiku Scout → 5 Agents → Sonnet</div></div>
+          <div class="toggle-switch" id="scalp-toggle"></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Leverage</div>
+            <div style="display:flex;gap:3px;flex-wrap:wrap;">
+              <button class="leverage-btn scalp-lev-btn" data-lev="5">5x</button>
+              <button class="leverage-btn scalp-lev-btn" data-lev="10">10x</button>
+              <button class="leverage-btn scalp-lev-btn active" data-lev="20">20x</button>
+              <button class="leverage-btn scalp-lev-btn" data-lev="50">50x</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Auto-close After</div>
+            <div style="display:flex;gap:3px;flex-wrap:wrap;">
+              <button class="leverage-btn scalp-dur-btn" data-min="15">15m</button>
+              <button class="leverage-btn scalp-dur-btn active" data-min="30">30m</button>
+              <button class="leverage-btn scalp-dur-btn" data-min="60">1hr</button>
+            </div>
+          </div>
+        </div>
+
+<!-- Scalp Coins Coins -->
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <div style="font-size:11px;color:var(--text2);">🪙 Scalp Coins</div>
+            <span id="scalp-coin-counter" style="font-size:10px;color:var(--text2);">3/999 coins</span>
+          </div>
+          <div id="scalp-coin-selector" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">
+            <button class="coin-btn scalp-coin-btn" data-coin="BTC">₿ BTC</button>
+            <button class="coin-btn scalp-coin-btn" data-coin="ETH">Ξ ETH</button>
+            <button class="coin-btn scalp-coin-btn" data-coin="SOL">◎ SOL</button>
+            <button class="coin-btn scalp-coin-btn" data-coin="BNB">⬡ BNB</button>
+            <button class="coin-btn scalp-coin-btn" data-coin="XRP">✕ XRP</button>
+            <button class="coin-btn scalp-coin-btn" data-coin="DOGE">Ð DOGE</button>
+            <button class="coin-btn scalp-coin-btn" data-coin="AVAX">▲ AVAX</button>
+            <button class="coin-btn scalp-coin-btn" data-coin="LINK">⬡ LINK</button>
+            <button class="coin-btn scalp-coin-btn" data-coin="ARB">◆ ARB</button>
+            <button class="coin-btn scalp-coin-btn" data-coin="PEPE">🐸 PEPE</button>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:4px;">
+            <input class="tg-input" id="scalp-custom-coin-input" placeholder="Add coin e.g. BONK" style="margin:0;flex:1;text-transform:uppercase;">
+            <button class="tg-add-btn" id="scalp-add-coin-btn">Add</button>
+          </div>
+          <div id="scalp-custom-coins-list" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Size ($)</div>
+            <div style="display:flex;gap:4px;">
+              <input class="tg-input" id="scalp-size-input" placeholder="e.g. 50" type="number" style="margin:0;flex:1;">
+              <button class="tg-add-btn" id="save-scalp-btn">Save</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Max Open</div>
+            <div style="display:flex;gap:4px;">
+              <button class="leverage-btn scalp-max-btn active" data-val="3">3</button>
+              <button class="leverage-btn scalp-max-btn" data-val="5">5</button>
+              <button class="leverage-btn scalp-max-btn" data-val="10">10</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:8px;">
+          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Confidence Threshold</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="trust-dots" data-key="scalpThreshold" data-val="5" style="gap:5px;"></div>
+            <div style="font-size:18px;font-weight:700;color:#fbbf24;" id="scalp-threshold-val">50%</div>
+          </div>
+        </div>
+
+        <!-- Advanced Scalp -->
+        <details style="margin-top:8px;">
+          <summary style="font-size:11px;color:var(--text2);cursor:pointer;padding:6px 0;">⚙️ Advanced (Scalp Indicators)</summary>
+          <div style="padding-top:10px;" id="scalp-indicators-built"></div>
+        </details>
+      </div>
+
+      <!-- Scalp Open -->
+      <div class="tg-section">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;">⚡ Open Scalps</div>
+        <div id="scalp-open-list"><div style="font-size:12px;color:var(--text2);text-align:center;padding:12px;">No open scalps</div></div>
+      </div>
+
+      <!-- Scalp History -->
+      <div class="tg-section">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📋 Scalp History</div>
+        <div id="scalp-history-list"><div style="font-size:12px;color:var(--text2);text-align:center;padding:12px;">No history yet</div></div>
+      </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
-      <div>
-        <div style="font-size:11px;color:var(--green);margin-bottom:4px;">Market Buy</div>
-        <div style="display:flex;gap:4px;">
+  </div>
+
+  <!-- ══════ SPOT TAB ══════ -->
+  <div class="trade-tab-content" id="tab-spot">
+    <div style="padding:12px;">
+
+      <!-- Spot Stats -->
+      <div class="tg-section" style="margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-size:12px;font-weight:700;">💼 Holdings</div>
+          <button class="tg-add-btn" id="refresh-spot-btn" style="padding:4px 10px;font-size:11px;">Refresh</button>
+        </div>
+        <div id="spot-balances-list" style="font-size:12px;color:var(--text2);">Loading...</div>
+      </div>
+
+      <!-- Buy -->
+      <div class="tg-section" style="margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🟢 Market Buy</div>
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
           <select id="spot-buy-coin" class="tg-input" style="margin:0;flex:1;">
             <option value="BTC">BTC</option><option value="ETH">ETH</option>
             <option value="BNB">BNB</option><option value="SOL">SOL</option>
             <option value="XRP">XRP</option><option value="DOGE">DOGE</option>
           </select>
-        </div>
-        <div style="display:flex;gap:4px;margin-top:4px;">
           <input class="tg-input" id="spot-buy-amount" placeholder="Amount $" type="number" style="margin:0;flex:1;">
           <button class="tg-add-btn" id="spot-buy-btn" style="background:rgba(52,211,153,0.2);color:var(--green);">Buy</button>
         </div>
       </div>
-      <div>
-        <div style="font-size:11px;color:var(--red);margin-bottom:4px;">Market Sell</div>
-        <div style="display:flex;gap:4px;">
-          <select id="spot-sell-coin" class="tg-input" style="margin:0;flex:1;">
+
+      <!-- Sell -->
+      <div class="tg-section" style="margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🔴 Market Sell</div>
+        <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;">
+          <select id="spot-sell-coin" class="tg-input" style="margin:0;flex:1;min-width:80px;">
             <option value="BTC">BTC</option><option value="ETH">ETH</option>
             <option value="BNB">BNB</option><option value="SOL">SOL</option>
-            <option value="XRP">XRP</option><option value="DOGE">DOGE</option>
           </select>
-        </div>
-        <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;">
-          <button class="leverage-btn spot-sell-pct-btn active" data-pct="25" style="padding:3px 6px;font-size:10px;">25%</button>
-          <button class="leverage-btn spot-sell-pct-btn" data-pct="50" style="padding:3px 6px;font-size:10px;">50%</button>
-          <button class="leverage-btn spot-sell-pct-btn" data-pct="100" style="padding:3px 6px;font-size:10px;">All</button>
-          <button class="tg-add-btn" id="spot-sell-btn" style="background:rgba(239,68,68,0.2);color:var(--red);padding:4px 8px;">Sell</button>
+          <div style="display:flex;gap:3px;">
+            <button class="leverage-btn spot-sell-pct-btn active" data-pct="25">25%</button>
+            <button class="leverage-btn spot-sell-pct-btn" data-pct="50">50%</button>
+            <button class="leverage-btn spot-sell-pct-btn" data-pct="100">All</button>
+          </div>
+          <button class="tg-add-btn" id="spot-sell-btn" style="background:rgba(239,68,68,0.2);color:var(--red);">Sell</button>
         </div>
       </div>
+
+      <!-- Limit -->
+      <div class="tg-section" style="margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📋 Limit Order</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <select id="spot-limit-coin" class="tg-input" style="margin:0;width:70px;">
+            <option value="BTC">BTC</option><option value="ETH">ETH</option>
+            <option value="BNB">BNB</option><option value="SOL">SOL</option>
+          </select>
+          <input class="tg-input" id="spot-limit-price" placeholder="Price $" type="number" style="margin:0;flex:1;">
+          <input class="tg-input" id="spot-limit-amount" placeholder="Amount $" type="number" style="margin:0;flex:1;">
+          <button class="tg-add-btn" id="spot-limit-buy-btn" style="background:rgba(52,211,153,0.15);color:var(--green);font-size:11px;">Buy</button>
+        </div>
+        <div id="open-limit-orders-list" style="font-size:11px;color:var(--text2);margin-top:8px;">No limit orders</div>
+      </div>
+
+      <div id="spot-status" style="font-size:11px;padding:0 0 8px;"></div>
+
+      <!-- DCA -->
+      <div class="tg-section" style="margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🔄 DCA Plans</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+          <select id="dca-coin" class="tg-input" style="margin:0;">
+            <option value="BTC">BTC</option><option value="ETH">ETH</option>
+            <option value="SOL">SOL</option><option value="BNB">BNB</option>
+          </select>
+          <input class="tg-input" id="dca-amount" placeholder="Amount $" type="number" style="margin:0;">
+        </div>
+        <div style="display:flex;gap:4px;margin-bottom:6px;">
+          <button class="leverage-btn dca-interval-btn" data-val="daily">Daily</button>
+          <button class="leverage-btn dca-interval-btn active" data-val="weekly">Weekly</button>
+          <button class="leverage-btn dca-interval-btn" data-val="biweekly">2 Weeks</button>
+          <button class="leverage-btn dca-interval-btn" data-val="monthly">Monthly</button>
+        </div>
+        <button class="tg-add-btn" id="add-dca-btn" style="width:100%;margin-bottom:8px;">Add DCA Plan</button>
+        <div id="dca-plans-list" style="font-size:12px;"></div>
+      </div>
+
+      <!-- Price Alerts -->
+      <div class="tg-section">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🎯 Smart Price Alerts</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+          <select id="alert-coin" class="tg-input" style="margin:0;">
+            <option value="BTC">BTC</option><option value="ETH">ETH</option>
+            <option value="SOL">SOL</option><option value="DOGE">DOGE</option>
+          </select>
+          <input class="tg-input" id="alert-price" placeholder="Price $" type="number" style="margin:0;">
+        </div>
+        <div style="display:flex;gap:4px;margin-bottom:6px;">
+          <button class="leverage-btn alert-dir-btn active" data-val="above">Above</button>
+          <button class="leverage-btn alert-dir-btn" data-val="below">Below</button>
+        </div>
+        <button class="tg-add-btn" id="add-alert-btn" style="width:100%;margin-bottom:6px;">Set Alert</button>
+        <div id="alerts-list" style="font-size:12px;"></div>
+      </div>
     </div>
-    <div style="border-top:1px solid var(--border2);padding-top:8px;">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Limit Order</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <select id="spot-limit-coin" class="tg-input" style="margin:0;width:70px;">
-          <option value="BTC">BTC</option><option value="ETH">ETH</option><option value="BNB">BNB</option><option value="SOL">SOL</option>
+  </div>
+
+  <!-- Advanced settings panel (shared) -->
+  <div id="advanced-settings-panel" style="display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);padding:16px;z-index:500;max-height:60vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:700;" id="adv-panel-title">Advanced Settings</div>
+      <button onclick="document.getElementById('advanced-settings-panel').style.display='none'" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px;">✕</button>
+    </div>
+    <div id="adv-panel-content"></div>
+  </div>
+
+</div><!-- end trading page -->
+
+
+<!-- PAGE 5 — OTHERS -->
+<div class="page" id="page-5">
+<div style="overflow-y:auto;height:100%;padding:12px;">
+
+  <!-- Sub tabs -->
+  <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:12px;flex-shrink:0;">
+    <button class="trade-tab active" data-others-tab="study">📚 Study</button>
+    <button class="trade-tab" data-others-tab="tools">🛠️ Tools</button>
+    <button class="trade-tab" data-others-tab="memory">🧠 Memory</button>
+    <button class="trade-tab" data-others-tab="life">🌸 Life</button>
+  </div>
+
+  <!-- ══ STUDY TAB ══ -->
+  <div class="others-tab-content active" id="others-study">
+
+    <!-- Books section -->
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;">📚 Textbooks</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Upload textbooks — Asuka reads any page on command</div>
+
+      <!-- Drop zone -->
+      <div id="book-drop-zone" style="border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;cursor:pointer;margin-bottom:10px;transition:.2s;"
+        onclick="document.getElementById('book-file-input').click()"
+        ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+        ondragleave="this.style.borderColor='var(--border)'"
+        ondrop="handleBookDrop(event)">
+        <div style="font-size:32px;margin-bottom:6px;">📄</div>
+        <div style="font-size:12px;font-weight:600;">Drop PDF here or tap to upload</div>
+        <div style="font-size:10px;color:var(--text2);margin-top:4px;">Japanese textbook, manga, study guides...</div>
+      </div>
+      <input type="file" id="book-file-input" accept=".pdf" style="display:none;" onchange="handleBookFile(this)">
+
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <input class="tg-input" id="book-name-input" placeholder="Book name e.g. Genki 1" style="margin:0;flex:1;">
+        <select id="book-subject" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;font-size:12px;">
+          <option value="japanese">🇯🇵 Japanese</option>
+          <option value="general">📖 General</option>
+          <option value="math">📐 Math</option>
+          <option value="science">🔬 Science</option>
+          <option value="history">📜 History</option>
         </select>
-        <input class="tg-input" id="spot-limit-price" placeholder="Price $" type="number" style="margin:0;flex:1;">
-        <input class="tg-input" id="spot-limit-amount" placeholder="Amount $" type="number" style="margin:0;flex:1;">
-        <button class="tg-add-btn" id="spot-limit-buy-btn" style="background:rgba(52,211,153,0.15);color:var(--green);font-size:11px;">Limit Buy</button>
       </div>
-      <div id="open-limit-orders-list" style="font-size:11px;color:var(--text2);margin-top:8px;">No limit orders</div>
+
+      <div id="book-index-status" style="display:none;padding:8px;background:var(--bg3);border-radius:8px;margin-bottom:8px;font-size:12px;"></div>
+
+      <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;">YOUR BOOKS</div>
+      <div id="books-list" style="margin-bottom:12px;"><div style="color:var(--text2);font-size:12px;text-align:center;padding:12px;">No textbooks yet</div></div>
+
+      <!-- Page viewer -->
+      <div style="border-top:1px solid var(--border2);padding-top:10px;">
+        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;">PAGE VIEWER</div>
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
+          <input class="tg-input" id="page-jump-input" type="number" placeholder="e.g. 161" style="margin:0;flex:1;">
+          <button class="tg-add-btn" id="page-jump-btn">Go to Page</button>
+        </div>
+        <div id="page-content-display" style="display:none;font-size:11px;color:var(--text2);background:var(--bg3);border-radius:8px;padding:10px;max-height:200px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;"></div>
+      </div>
     </div>
-    <div id="spot-status" style="font-size:11px;margin-top:8px;"></div>
+
+    <!-- Voice study commands -->
+    <div class="tg-section">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🎙️ Study Voice Commands</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${[
+          ['"Page 161"', 'Reads and explains page 161'],
+          ['"Lesson 2"', 'Explains lesson 2 content'],
+          ['"Explain lesson 2 section 1-1"', 'Specific section'],
+          ['"Read this page"', 'Explains current page'],
+          ['"Search grammar"', 'Finds grammar sections'],
+          ['"What books do you have?"', 'Lists your books'],
+          ['"Translate this sentence"', 'Translates any text'],
+          ['"Quiz me on lesson 3"', 'Creates a quiz'],
+        ].map(([cmd, desc]) => `
+          <div style="padding:8px;background:var(--bg3);border-radius:8px;">
+            <div style="font-size:11px;font-weight:600;color:var(--accent);">${cmd}</div>
+            <div style="font-size:10px;color:var(--text2);">${desc}</div>
+          </div>`).join('')}
+      </div>
+    </div>
   </div>
 
-  <!-- Open Positions -->
-  <div class="tg-section">
-    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">🟡 Open Positions</div>
-    <div id="pt-open-list"><div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No open positions</div></div>
+  <!-- ══ TOOLS TAB ══ -->
+  <div class="others-tab-content" id="others-tools">
+
+    <!-- Calculator -->
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🧮 Smart Calculator</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Ask Asuka to calculate anything by voice</div>
+      <div style="display:flex;gap:6px;">
+        <input class="tg-input" id="calc-input" placeholder="e.g. 15% of 8500 or convert 1000 JPY" style="margin:0;flex:1;">
+        <button class="tg-add-btn" id="calc-btn">Ask</button>
+      </div>
+      <div id="calc-result" style="font-size:14px;font-weight:700;color:var(--accent);margin-top:8px;"></div>
+    </div>
+
+    <!-- Currency converter -->
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">💱 Currency Converter</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
+        <input class="tg-input" id="conv-amount" placeholder="Amount" type="number" style="margin:0;">
+        <select id="conv-from" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;font-size:11px;">
+          <option value="USD">USD 🇺🇸</option>
+          <option value="JPY">JPY 🇯🇵</option>
+          <option value="EUR">EUR 🇪🇺</option>
+          <option value="GBP">GBP 🇬🇧</option>
+          <option value="MYR">MYR 🇲🇾</option>
+          <option value="SGD">SGD 🇸🇬</option>
+        </select>
+        <select id="conv-to" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;font-size:11px;">
+          <option value="JPY">JPY 🇯🇵</option>
+          <option value="USD">USD 🇺🇸</option>
+          <option value="EUR">EUR 🇪🇺</option>
+          <option value="MYR">MYR 🇲🇾</option>
+          <option value="SGD">SGD 🇸🇬</option>
+          <option value="GBP">GBP 🇬🇧</option>
+        </select>
+      </div>
+      <button class="tg-add-btn" style="width:100%;" id="conv-btn">Convert</button>
+      <div id="conv-result" style="font-size:16px;font-weight:700;color:var(--green);text-align:center;margin-top:8px;"></div>
+    </div>
+
+    <!-- Timer -->
+    <div class="tg-section">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">⏱️ Study Timer</div>
+      <div style="text-align:center;margin-bottom:12px;">
+        <div style="font-size:48px;font-weight:800;font-family:monospace;" id="timer-display">25:00</div>
+        <div style="font-size:11px;color:var(--text2);" id="timer-label">Pomodoro Focus</div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <button class="leverage-btn timer-preset-btn active" data-min="25">25m Focus</button>
+        <button class="leverage-btn timer-preset-btn" data-min="5">5m Break</button>
+        <button class="leverage-btn timer-preset-btn" data-min="15">15m Break</button>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="tg-add-btn" style="flex:1;background:rgba(52,211,153,0.2);color:var(--green);" id="timer-start-btn">▶ Start</button>
+        <button class="tg-add-btn" style="flex:1;background:rgba(239,68,68,0.2);color:var(--red);" id="timer-reset-btn">↺ Reset</button>
+      </div>
+    </div>
   </div>
 
-  <!-- Trade History -->
-  <div class="tg-section is-collapsed">
-    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">📋 Trade History</div>
-    <div id="pt-history-list"></div>
+  <!-- ══ MEMORY TAB ══ -->
+  <div class="others-tab-content" id="others-memory">
+
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🧠 Second Brain</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Tell Asuka anything to remember — she'll use it in conversations</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <input class="tg-input" id="memory-input" placeholder="Remember that I have Japanese class on Tuesdays..." style="margin:0;flex:1;">
+        <button class="tg-add-btn" id="save-memory-btn">Save</button>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Or say <span style="color:var(--accent);">"Remember that..."</span> by voice</div>
+      <div id="memories-list" style="font-size:11px;"></div>
+    </div>
+
+    <!-- Notes -->
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📝 Quick Notes</div>
+      <textarea id="quick-note" placeholder="Write anything here..." style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:12px;resize:vertical;min-height:100px;font-family:inherit;"></textarea>
+      <button class="tg-add-btn" style="width:100%;margin-top:6px;" id="save-note-btn">Save Note</button>
+      <div id="notes-list" style="margin-top:8px;font-size:11px;"></div>
+    </div>
+
+    <!-- Journal -->
+    <div class="tg-section">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📔 Trading Journal</div>
+      <div id="pt-lessons-list" style="font-size:11px;"></div>
+    </div>
   </div>
 
-  <!-- Lessons -->
-  <div class="tg-section is-collapsed">
-    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">🧠 What She Learned</div>
-    <div id="pt-lessons-list"></div>
+  <!-- ══ LIFE TAB ══ -->
+  <div class="others-tab-content" id="others-life">
+
+    <!-- Morning briefing -->
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div class="auto-trade-toggle" style="margin-bottom:8px;">
+        <div><div class="toggle-label">🌅 Morning Briefing</div><div class="caller-stats">Daily 8am market + weather summary</div></div>
+        <div class="toggle-switch" id="morning-briefing-toggle"></div>
+      </div>
+      <div style="font-size:11px;color:var(--text2);">Asuka sends you a morning briefing via TG every day at 8am with market summary, your open trades, and daily RSI signals</div>
+    </div>
+
+    <!-- Personality -->
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">💬 Asuka Personality</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;" id="personality-grid">
+        <div class="opt-card active" data-personality="chill">
+          <div class="opt-emoji">😊</div>
+          <div class="opt-name">Chill</div>
+          <div class="opt-desc">Warm & caring</div>
+        </div>
+        <div class="opt-card" data-personality="degen">
+          <div class="opt-emoji">🔥</div>
+          <div class="opt-name">Degen</div>
+          <div class="opt-desc">Hype & fun</div>
+        </div>
+        <div class="opt-card" data-personality="sensei">
+          <div class="opt-emoji">🎓</div>
+          <div class="opt-name">Sensei</div>
+          <div class="opt-desc">Wise & formal</div>
+        </div>
+        <div class="opt-card" data-personality="analyst">
+          <div class="opt-emoji">📊</div>
+          <div class="opt-name">Analyst</div>
+          <div class="opt-desc">Data precise</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Voice settings -->
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🔊 Voice Settings</div>
+      <div style="margin-bottom:10px;">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Speech Speed</div>
+        <div style="display:flex;gap:4px;">
+          <button class="leverage-btn speed-btn" data-speed="0.8">Slow</button>
+          <button class="leverage-btn speed-btn active" data-speed="1.0">Normal</button>
+          <button class="leverage-btn speed-btn" data-speed="1.2">Fast</button>
+          <button class="leverage-btn speed-btn" data-speed="1.5">Turbo</button>
+        </div>
+      </div>
+      <div class="auto-trade-toggle">
+        <div><div class="toggle-label">Auto-speak responses</div><div class="caller-stats">Asuka speaks every reply</div></div>
+        <div class="toggle-switch on" id="auto-speak-toggle"></div>
+      </div>
+    </div>
+
+    <!-- Subscription -->
+    <div class="tg-section">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">💳 Subscription</div>
+      <div style="padding:12px;background:var(--bg3);border-radius:10px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:14px;font-weight:800;" id="sub-tier-name">PRO</div>
+            <div style="font-size:10px;color:var(--text2);" id="sub-tier-price">$249/year</div>
+          </div>
+          <span id="sub-tier-badge" style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(0,212,255,0.2);color:#00d4ff;">ACTIVE</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <button class="tg-add-btn" style="background:rgba(251,191,36,0.15);color:#fbbf24;" onclick="window._stripeLinks && window.open(window._stripeLinks.upgrade_degen)">⬆️ Upgrade to Degen $399/yr</button>
+        <button class="tg-add-btn" style="background:rgba(0,212,255,0.1);color:#00d4ff;" onclick="window._stripeLinks && window.open(window._stripeLinks.day_pass)">🎫 Buy Day Pass $2</button>
+        <button class="tg-add-btn" style="background:rgba(52,211,153,0.1);color:var(--green);" onclick="window._stripeLinks && window.open(window._stripeLinks.message_pack)">📦 +500 Voice msgs $5</button>
+      </div>
+    </div>
   </div>
 
-  <!-- Leaderboard -->
-  <div class="tg-section is-collapsed">
-    <div class="tg-section-title collapsible" onclick="var s=this.closest('.tg-section');s.classList.toggle('is-collapsed')">🏆 Caller Leaderboard</div>
-    <div id="tg-callers-list"></div>
+</div>
+</div><!-- end others page -->
+
+<!-- PAGE 4 — DEV DASHBOARD -->
+<div class="page" id="page-4">
+
+  <!-- Dev Lock Screen -->
+  <div id="dev-lock-screen" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:30px;">
+    <div style="font-size:40px;margin-bottom:12px;">🔒</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px;">Dev Access Required</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:20px;text-align:center;">Enter your developer password to access controls</div>
+    <input type="password" id="dev-password-input" placeholder="Enter dev password"
+      style="width:100%;max-width:260px;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px;text-align:center;margin-bottom:10px;">
+    <button id="dev-unlock-btn" class="tg-add-btn" style="width:100%;max-width:260px;padding:12px;font-size:14px;">Unlock</button>
+    <div id="dev-lock-error" style="color:var(--red);font-size:12px;margin-top:8px;"></div>
+    <div style="font-size:10px;color:var(--text2);margin-top:16px;text-align:center;">Triple-tap the Dev tab to show password hint</div>
   </div>
 
-</div><!-- end page 3 -->
+  <!-- Dev Dashboard (hidden until unlocked) -->
+  <div id="dev-dashboard" style="display:none;overflow-y:auto;height:100%;padding:12px;">
+
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div>
+        <div style="font-size:14px;font-weight:800;color:var(--accent);">⚙️ Dev Control Center</div>
+        <div style="font-size:10px;color:var(--text2);" id="dev-last-refresh">Loading...</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="tg-add-btn" id="dev-refresh-btn" style="padding:4px 10px;font-size:11px;">🔄 Refresh</button>
+        <button class="tg-add-btn" id="dev-lock-btn" style="padding:4px 10px;font-size:11px;background:rgba(239,68,68,0.2);color:var(--red);">🔒 Lock</button>
+      </div>
+    </div>
+
+    <!-- Cost Monitor -->
+    <div class="tg-section" style="margin-bottom:8px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;">💰 API Cost Monitor</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+        <div style="padding:10px;background:var(--bg3);border-radius:8px;text-align:center;">
+          <div style="font-size:10px;color:var(--text2);">Today</div>
+          <div style="font-size:20px;font-weight:800;color:var(--accent);" id="dev-cost-today">$0.00</div>
+        </div>
+        <div style="padding:10px;background:var(--bg3);border-radius:8px;text-align:center;">
+          <div style="font-size:10px;color:var(--text2);">This Month</div>
+          <div style="font-size:20px;font-weight:800;" id="dev-cost-month">$0.00</div>
+        </div>
+        <div style="padding:10px;background:var(--bg3);border-radius:8px;text-align:center;">
+          <div style="font-size:10px;color:var(--text2);">Per Day Avg</div>
+          <div style="font-size:16px;font-weight:700;" id="dev-cost-avg">$0.00</div>
+        </div>
+        <div style="padding:10px;background:var(--bg3);border-radius:8px;text-align:center;">
+          <div style="font-size:10px;color:var(--text2);">Projected/Month</div>
+          <div style="font-size:16px;font-weight:700;color:var(--red);" id="dev-cost-projected">$0.00</div>
+        </div>
+      </div>
+
+      <!-- Rate Limits -->
+      <div style="font-size:11px;font-weight:600;margin-bottom:6px;">Rate Limits</div>
+      <div style="margin-bottom:4px;">
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">
+          <span>Haiku Requests/min</span>
+          <span id="dev-haiku-pct" style="color:var(--red);">--</span>
+        </div>
+        <div style="background:var(--bg3);border-radius:4px;height:6px;">
+          <div id="dev-haiku-bar" style="background:var(--red);height:6px;border-radius:4px;width:0%;transition:width 0.3s;"></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">
+          <span>Sonnet Requests/min</span>
+          <span id="dev-sonnet-pct" style="color:var(--accent);">--</span>
+        </div>
+        <div style="background:var(--bg3);border-radius:4px;height:6px;">
+          <div id="dev-sonnet-bar" style="background:var(--accent);height:6px;border-radius:4px;width:0%;transition:width 0.3s;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Status -->
+    <div class="tg-section" style="margin-bottom:8px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;">🔧 System Status</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;" id="dev-system-status">
+        <div style="padding:8px;background:var(--bg3);border-radius:6px;">
+          <div style="font-size:10px;color:var(--text2);">Main Scanner</div>
+          <div style="font-size:12px;font-weight:700;" id="dev-scanner-status">--</div>
+        </div>
+        <div style="padding:8px;background:var(--bg3);border-radius:6px;">
+          <div style="font-size:10px;color:var(--text2);">Scalp Scanner</div>
+          <div style="font-size:12px;font-weight:700;" id="dev-scalp-status">--</div>
+        </div>
+        <div style="padding:8px;background:var(--bg3);border-radius:6px;">
+          <div style="font-size:10px;color:var(--text2);">Daily Bot</div>
+          <div style="font-size:12px;font-weight:700;" id="dev-daily-status">--</div>
+        </div>
+        <div style="padding:8px;background:var(--bg3);border-radius:6px;">
+          <div style="font-size:10px;color:var(--text2);">Telegram Bot</div>
+          <div style="font-size:12px;font-weight:700;" id="dev-tg-status">--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Global Coin Override -->
+    <div class="tg-section" style="margin-bottom:8px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px;">🪙 Global Coin Override</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Force all users to scan fewer coins (cost control)</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+        <button class="leverage-btn dev-coin-override-btn active" data-coins="all">All User Coins</button>
+        <button class="leverage-btn dev-coin-override-btn" data-coins="5">Max 5</button>
+        <button class="leverage-btn dev-coin-override-btn" data-coins="3">Max 3</button>
+        <button class="leverage-btn dev-coin-override-btn" data-coins="2">BTC+ETH only</button>
+        <button class="leverage-btn dev-coin-override-btn" data-coins="1">BTC only</button>
+      </div>
+      <div style="font-size:10px;color:var(--text2);" id="dev-coin-cost-hint">Current: scanning all user coins</div>
+    </div>
+
+    <!-- Scan Interval Override -->
+    <div class="tg-section" style="margin-bottom:8px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px;">⏱️ Scan Interval Override</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Force slower scanning to reduce costs</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="leverage-btn dev-interval-btn active" data-min="0">User Setting</button>
+        <button class="leverage-btn dev-interval-btn" data-min="30">30 min</button>
+        <button class="leverage-btn dev-interval-btn" data-min="60">1 hr</button>
+        <button class="leverage-btn dev-interval-btn" data-min="120">2 hr</button>
+        <button class="leverage-btn dev-interval-btn" data-min="240">4 hr</button>
+      </div>
+    </div>
+
+    <!-- Emergency Controls -->
+    <div class="tg-section" style="margin-bottom:8px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;">🚨 Emergency Controls</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button class="tg-add-btn" id="dev-pause-all-btn"
+          style="background:rgba(239,68,68,0.2);color:var(--red);padding:12px;font-size:12px;">
+          ⏸️ Pause ALL Trading
+        </button>
+        <button class="tg-add-btn" id="dev-resume-all-btn"
+          style="background:rgba(52,211,153,0.2);color:var(--green);padding:12px;font-size:12px;">
+          ▶️ Resume ALL Trading
+        </button>
+        <button class="tg-add-btn" id="dev-pause-scalp-btn"
+          style="background:rgba(251,191,36,0.2);color:#fbbf24;padding:10px;font-size:11px;">
+          ⚡ Pause Scalp Only
+        </button>
+        <button class="tg-add-btn" id="dev-pause-main-btn"
+          style="background:rgba(251,191,36,0.2);color:#fbbf24;padding:10px;font-size:11px;">
+          📈 Pause Main Only
+        </button>
+      </div>
+      <div id="dev-emergency-status" style="font-size:11px;color:var(--green);text-align:center;margin-top:8px;">✅ All systems running</div>
+    </div>
+
+    <!-- Trade Stats -->
+    <div class="tg-section" style="margin-bottom:8px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;">📊 Live Trade Stats</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
+        <div style="padding:8px;background:var(--bg3);border-radius:6px;text-align:center;">
+          <div style="font-size:10px;color:var(--text2);">Open Trades</div>
+          <div style="font-size:18px;font-weight:800;color:#fbbf24;" id="dev-open-trades">0</div>
+        </div>
+        <div style="padding:8px;background:var(--bg3);border-radius:6px;text-align:center;">
+          <div style="font-size:10px;color:var(--text2);">Today P&L</div>
+          <div style="font-size:18px;font-weight:800;" id="dev-today-pnl">$0</div>
+        </div>
+        <div style="padding:8px;background:var(--bg3);border-radius:6px;text-align:center;">
+          <div style="font-size:10px;color:var(--text2);">Win Rate</div>
+          <div style="font-size:18px;font-weight:800;color:var(--green);" id="dev-win-rate">0%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dev Settings -->
+    <div class="tg-section" style="margin-bottom:8px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;">🔑 Dev Settings</div>
+
+      <div style="margin-bottom:10px;">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Change Dev Password</div>
+        <div style="display:flex;gap:6px;">
+          <input type="password" id="dev-new-password" placeholder="New password (min 8 chars)"
+            class="tg-input" style="margin:0;flex:1;">
+          <button class="tg-add-btn" id="dev-change-pwd-btn">Save</button>
+        </div>
+        <div id="dev-pwd-msg" style="font-size:10px;margin-top:4px;"></div>
+      </div>
+
+      <div class="auto-trade-toggle">
+        <div><div style="font-size:11px;font-weight:600;">Dev Mode Logs</div><div style="font-size:10px;color:var(--text2);">Extra console output</div></div>
+        <div class="toggle-switch on" id="dev-logs-toggle"></div>
+      </div>
+    </div>
+
+    <!-- Error Log -->
+    <div class="tg-section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:700;">📋 Recent Errors</div>
+        <button class="tg-add-btn" id="dev-clear-errors-btn" style="font-size:10px;padding:3px 8px;">Clear</button>
+      </div>
+      <div id="dev-error-log" style="font-size:11px;color:var(--text2);max-height:150px;overflow-y:auto;">No errors</div>
+    </div>
+
+  </div>
+</div><!-- end dev page -->
+
 </div><!-- end pages-wrapper -->
 
 <!-- EDIT PAGE -->
@@ -2397,6 +2845,59 @@
         <button class="s-btn s-btn-purple" id="import-btn">Restore Backup</button>
       </div>
     </div>
+
+    <!-- Dev Access Section -->
+    <div class="s-section" id="dev-settings-section">
+      <div class="s-title">⚙️ Developer Access</div>
+      
+      <!-- Lock state -->
+      <div id="dev-lock-state">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Password protected — default: <span style="color:var(--accent);font-family:monospace;">Asuka2026!</span></div>
+        <div style="display:flex;gap:6px;">
+          <input type="password" id="dev-pwd-input" placeholder="Dev password" class="s-input" style="flex:1;">
+          <button class="s-btn s-btn-primary" id="dev-unlock-btn" style="padding:8px 14px;white-space:nowrap;">Unlock</button>
+        </div>
+        <div id="dev-unlock-err" style="font-size:11px;color:#ef4444;margin-top:4px;"></div>
+      </div>
+
+      <!-- Unlocked controls -->
+      <div id="dev-unlocked-state" style="display:none;">
+        <div style="font-size:11px;color:var(--green);margin-bottom:10px;">✅ Dev access granted</div>
+
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;">🚨 Emergency</div>
+        <div style="display:flex;gap:6px;margin-bottom:12px;">
+          <button class="s-btn" style="flex:1;background:rgba(239,68,68,0.2);color:#ef4444;border:1px solid rgba(239,68,68,0.3);" id="dev-pause-all-btn">⏸️ Pause ALL</button>
+          <button class="s-btn" style="flex:1;background:rgba(52,211,153,0.2);color:#34d399;border:1px solid rgba(52,211,153,0.3);" id="dev-resume-all-btn">▶️ Resume ALL</button>
+        </div>
+
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;">🪙 Coin Override</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;">
+          <button class="leverage-btn dev-coin-btn" data-val="all">All</button>
+          <button class="leverage-btn dev-coin-btn" data-val="3">3 coins</button>
+          <button class="leverage-btn dev-coin-btn" data-val="2">2 coins</button>
+          <button class="leverage-btn dev-coin-btn" data-val="1">BTC only</button>
+        </div>
+
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;">⏱️ Scan Interval</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;">
+          <button class="leverage-btn dev-interval-btn" data-val="0">User Setting</button>
+          <button class="leverage-btn dev-interval-btn" data-val="30">30m</button>
+          <button class="leverage-btn dev-interval-btn" data-val="60">1hr</button>
+          <button class="leverage-btn dev-interval-btn" data-val="120">2hr</button>
+        </div>
+
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;">🔑 Change Dev Password</div>
+        <div style="display:flex;gap:6px;margin-bottom:12px;">
+          <input type="password" id="dev-new-pwd" placeholder="New password (min 8 chars)" class="s-input" style="flex:1;">
+          <button class="s-btn s-btn-primary" id="dev-save-pwd-btn" style="padding:8px 14px;">Save</button>
+        </div>
+
+        <div style="font-size:11px;color:var(--text2);text-align:center;">Full dev panel: <span style="color:#00d4ff;">http://localhost:3001</span></div>
+
+        <button class="s-btn s-btn-ghost" id="dev-lock-again-btn" style="width:100%;margin-top:10px;">🔒 Lock Dev Access</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -2478,6 +2979,50 @@ async function playAudio(b64) {
     return new Promise(r=>{ src.onended=()=>{ if(waifuModel) try{waifuModel.internalModel.coreModel.setParameterValueById('ParamMouthOpenY',0)}catch(e){} r() } })
   } catch(e){}
 }
+
+// ── Streaming Voice Chunk Handler ─────────────────────────────────────────
+// Queue for sequential audio playback
+let _audioQueue = []
+let _isPlayingQueue = false
+let _currentFullText = ''
+
+async function processAudioQueue() {
+  if (_isPlayingQueue) return
+  _isPlayingQueue = true
+  while (_audioQueue.length > 0) {
+    const chunk = _audioQueue.shift()
+    await playAudio(chunk.audio)
+  }
+  _isPlayingQueue = false
+}
+
+// Listen for streaming voice chunks from main process
+ipcRenderer.on('voice-chunk', async (e, chunk) => {
+  // Show text immediately on first chunk
+  if (chunk.isFirst) {
+    _currentFullText = ''
+    botIsSpeaking = true
+    setStatus && setStatus('"' + chunk.text.slice(0,50) + '..."')
+  }
+  _currentFullText += ' ' + chunk.text
+  
+  // Add to queue and process
+  _audioQueue.push(chunk)
+  processAudioQueue()
+  
+  // Update chat history when last chunk arrives
+  if (chunk.isLast) {
+    addToHistory && addToHistory('asuka', _currentFullText.trim())
+    botIsSpeaking = false
+  }
+})
+
+// Listen for text ready (shows immediately before audio)
+ipcRenderer.on('voice-text-ready', (e, { reply }) => {
+  if (reply) {
+    setStatus && setStatus('"' + reply.slice(0,55) + '"')
+  }
+})
 
 // ── Waifu ──
 async function initWaifu() {
@@ -2579,7 +3124,7 @@ function renderPrices() {
   }))
 }
 
-document.getElementById('add-coin-btn').addEventListener('click',async()=>{
+document.getElementById('add-coin-btn')?.addEventListener('click',async()=>{
   const coin=document.getElementById('add-coin-input').value.trim().toLowerCase()
   if (!coin||watchlist.includes(coin)) return
   watchlist.push(coin); settings.watchlist=watchlist
@@ -2587,7 +3132,7 @@ document.getElementById('add-coin-btn').addEventListener('click',async()=>{
   document.getElementById('add-coin-input').value=''
   await loadPrices()
 })
-document.getElementById('add-coin-input').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('add-coin-btn').click() })
+document.getElementById('add-coin-input')?.addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('add-coin-btn').click() })
 
 // ── Alerts ──
 function renderAlerts() {
@@ -2604,7 +3149,7 @@ function renderAlerts() {
     await ipcRenderer.invoke('save-alerts',alerts); renderAlerts()
   }))
 }
-document.getElementById('add-alert-btn').addEventListener('click',async()=>{
+document.getElementById('add-alert-btn')?.addEventListener('click',async()=>{
   const coin=document.getElementById('alert-coin-input').value.trim().toLowerCase()
   const price=document.getElementById('alert-price-input').value.trim()
   const dir=document.getElementById('alert-dir-select').value
@@ -2639,7 +3184,7 @@ function renderTracked() {
     await ipcRenderer.invoke('save-settings',settings); renderTracked()
   }))
 }
-document.getElementById('add-track-btn').addEventListener('click',async()=>{
+document.getElementById('add-track-btn')?.addEventListener('click',async()=>{
   const addr=document.getElementById('tracked-addr-input').value.trim()
   if (!addr) return
   // Detect chain and set auto label
@@ -2661,14 +3206,14 @@ function openWalletDetail(w) {
   `
   document.getElementById('wallet-detail').classList.add('open')
 }
-document.getElementById('wd-back').addEventListener('click',()=>document.getElementById('wallet-detail').classList.remove('open'))
+document.getElementById('wd-back')?.addEventListener('click',()=>document.getElementById('wallet-detail').classList.remove('open'))
 
 // Manage wallets
-document.getElementById('manage-wallets-pill').addEventListener('click', () => {
+document.getElementById('manage-wallets-pill')?.addEventListener('click', () => {
   renderManageWallets()
   document.getElementById('manage-wallets-modal').style.display = 'flex'
 })
-document.getElementById('manage-wallets-close').addEventListener('click', () => {
+document.getElementById('manage-wallets-close')?.addEventListener('click', () => {
   document.getElementById('manage-wallets-modal').style.display = 'none'
 })
 
@@ -2698,9 +3243,9 @@ async function removeWallet(index) {
 }
 
 // ── Add wallet modal ──
-document.getElementById('add-wallet-pill').addEventListener('click',()=>document.getElementById('wallet-modal').classList.add('open'))
-document.getElementById('wallet-modal-cancel').addEventListener('click',()=>document.getElementById('wallet-modal').classList.remove('open'))
-document.getElementById('wallet-add-confirm').addEventListener('click',async()=>{
+document.getElementById('add-wallet-pill')?.addEventListener('click',()=>document.getElementById('wallet-modal').classList.add('open'))
+document.getElementById('wallet-modal-cancel')?.addEventListener('click',()=>document.getElementById('wallet-modal').classList.remove('open'))
+document.getElementById('wallet-add-confirm')?.addEventListener('click',async()=>{
   const addr=document.getElementById('wallet-addr-input').value.trim()
   const chain=document.getElementById('wallet-chain-select').value
   const label=document.getElementById('wallet-label-input').value.trim()||'My Wallet'
@@ -2725,15 +3270,42 @@ document.getElementById('wallet-add-confirm').addEventListener('click',async()=>
 // ── Page Navigation ──
 const pagesWrapper = document.getElementById('pages-wrapper')
 
+// Map page numbers to element IDs
+const PAGE_IDS = { 1: 'page-1', 2: 'page-2', 3: 'trading-page', 4: 'page-4', 5: 'page-5' }
+
+function navigateToPage(pageNum) {
+  // Always close ALL overlays first
+  document.querySelectorAll('.overlay').forEach(o => o.classList.remove('open'))
+
+  // Update active tab
+  document.querySelectorAll('.page-tab').forEach(t => {
+    t.classList.toggle('active', parseInt(t.dataset.page) === pageNum)
+  })
+
+  // Show correct page using ID map
+  document.querySelectorAll('.page').forEach(p => p.style.display = 'none')
+  const pageId = PAGE_IDS[pageNum] || ('page-' + pageNum)
+  const pageEl = document.getElementById(pageId)
+  if (pageEl) pageEl.style.display = 'flex'
+
+  // Load page content
+  if (pageNum === 2) setTimeout(loadTelegramUI, 300)
+  if (pageNum === 3) setTimeout(() => { try { loadTradingUI() } catch(e) { console.error('loadTradingUI:', e) } }, 300)
+  if (pageNum === 5) {
+    setTimeout(() => { if(typeof loadBooks === 'function') loadBooks() }, 200)
+    setTimeout(() => { if(typeof loadUsageStats === 'function') loadUsageStats() }, 300)
+  }
+}
+
 document.querySelectorAll('.page-tab').forEach(tab => {
   tab.addEventListener('click', () => {
-    document.querySelectorAll('.page-tab').forEach(t => t.classList.remove('active'))
-    tab.classList.add('active')
-    const pageNum = parseInt(tab.dataset.page)
-    pagesWrapper.scrollTo({ left: (pageNum - 1) * pagesWrapper.offsetWidth, behavior: 'smooth' })
-    if (pageNum === 2) setTimeout(loadTelegramUI, 300)
-    if (pageNum === 3) setTimeout(loadTradingUI, 300)
+    navigateToPage(parseInt(tab.dataset.page))
   })
+})
+
+// Init: show page 1, hide others
+document.querySelectorAll('.page').forEach(p => {
+  p.style.display = p.id === 'page-1' ? 'flex' : 'none'
 })
 
 // Update active tab on scroll
@@ -2882,7 +3454,7 @@ async function removeCaller(caller) {
 }
 
 // Connect Telegram — Step 1: Send phone
-document.getElementById('tg-connect-btn').addEventListener('click', async () => {
+document.getElementById('tg-connect-btn')?.addEventListener('click', async () => {
   const phone = document.getElementById('tg-phone').value.trim()
   if (!phone) return
   document.getElementById('tg-connect-btn').textContent = 'Sending code...'
@@ -2903,7 +3475,7 @@ ipcRenderer.on('telegram-needs-code', () => {
 })
 
 // Step 2: Submit code
-document.getElementById('tg-verify-btn').addEventListener('click', async () => {
+document.getElementById('tg-verify-btn')?.addEventListener('click', async () => {
   const code = document.getElementById('tg-code').value.trim()
   if (!code) return
   document.getElementById('tg-verify-btn').textContent = 'Connecting...'
@@ -2931,7 +3503,7 @@ async function loadBotStatus() {
   }
 }
 
-document.getElementById('bot-connect-btn').addEventListener('click', async () => {
+document.getElementById('bot-connect-btn')?.addEventListener('click', async () => {
   const code = document.getElementById('bot-auth-code').value.trim().toUpperCase()
   if (!code || code.length < 8) {
     document.getElementById('bot-auth-error').textContent = 'Enter the full code (e.g. ASK-1234)'
@@ -2950,7 +3522,7 @@ document.getElementById('bot-connect-btn').addEventListener('click', async () =>
   }
 })
 
-document.getElementById('bot-disconnect-btn').addEventListener('click', async () => {
+document.getElementById('bot-disconnect-btn')?.addEventListener('click', async () => {
   const settings = await ipcRenderer.invoke('get-settings')
   settings.telegramBotChatId = null
   await ipcRenderer.invoke('save-settings', settings)
@@ -2960,12 +3532,12 @@ document.getElementById('bot-disconnect-btn').addEventListener('click', async ()
 })
 
 // Change notification contact
-document.getElementById('tg-change-contact').addEventListener('click', () => {
+document.getElementById('tg-change-contact')?.addEventListener('click', () => {
   const form = document.getElementById('tg-contact-form')
   form.style.display = form.style.display === 'none' ? 'flex' : 'none'
 })
 
-document.getElementById('tg-save-contact-btn').addEventListener('click', () => {
+document.getElementById('tg-save-contact-btn')?.addEventListener('click', () => {
   const contact = document.getElementById('tg-contact-input').value.trim()
   if (!contact) return
   document.getElementById('tg-notify-contact').textContent = contact
@@ -2975,13 +3547,13 @@ document.getElementById('tg-save-contact-btn').addEventListener('click', () => {
 })
 
 // Disconnect
-document.getElementById('tg-disconnect-btn').addEventListener('click', async () => {
+document.getElementById('tg-disconnect-btn')?.addEventListener('click', async () => {
   await ipcRenderer.invoke('telegram-disconnect')
   loadTelegramUI()
 })
 
 // Add group
-document.getElementById('tg-add-group-btn').addEventListener('click', async () => {
+document.getElementById('tg-add-group-btn')?.addEventListener('click', async () => {
   const picker = document.getElementById('tg-group-picker')
   picker.style.display = picker.style.display === 'none' ? 'block' : 'none'
   if (picker.style.display === 'block') {
@@ -3006,13 +3578,13 @@ async function addGroup(group) {
 }
 
 // Add caller
-document.getElementById('tg-add-caller-btn').addEventListener('click', () => {
+document.getElementById('tg-add-caller-btn')?.addEventListener('click', () => {
   document.getElementById('tg-add-caller-form').style.display = 'block'
 })
-document.getElementById('tg-cancel-caller-btn').addEventListener('click', () => {
+document.getElementById('tg-cancel-caller-btn')?.addEventListener('click', () => {
   document.getElementById('tg-add-caller-form').style.display = 'none'
 })
-document.getElementById('tg-save-caller-btn').addEventListener('click', async () => {
+document.getElementById('tg-save-caller-btn')?.addEventListener('click', async () => {
   const caller = document.getElementById('tg-caller-input').value.trim()
   if (!caller) return
   await ipcRenderer.invoke('telegram-add-caller', caller.startsWith('@') ? caller : '@' + caller)
@@ -3072,7 +3644,7 @@ document.querySelector('.trust-dots[data-key="tradeThreshold"]')?.addEventListen
 })
 
 // Auto/Manual toggle
-document.getElementById('conf-manual-btn').addEventListener('click', () => {
+document.getElementById('conf-manual-btn')?.addEventListener('click', () => {
   document.getElementById('conf-manual-btn').classList.add('active')
   document.getElementById('conf-auto-btn').classList.remove('active')
   document.getElementById('conf-manual-section').style.display = 'block'
@@ -3080,7 +3652,7 @@ document.getElementById('conf-manual-btn').addEventListener('click', () => {
   ipcRenderer.send('set-setting', 'autoThreshold', false)
 })
 
-document.getElementById('conf-auto-btn').addEventListener('click', async () => {
+document.getElementById('conf-auto-btn')?.addEventListener('click', async () => {
   document.getElementById('conf-auto-btn').classList.add('active')
   document.getElementById('conf-manual-btn').classList.remove('active')
   document.getElementById('conf-manual-section').style.display = 'none'
@@ -3185,6 +3757,141 @@ async function restoreConfidenceSettings() {
   if (mainDisp) mainDisp.textContent = `${mainThreshold}%`
   if (scalpDisp) scalpDisp.textContent = `${scalpThreshold}%`
 }
+
+// ── Coin Selectors (separate per trade type) ─────────────────────────────
+
+const coinState = {
+  main:  { selected: ['BTC','ETH','SOL'], custom: [] },
+  day:   { selected: ['BTC','ETH','SOL'], custom: [] },
+  scalp: { selected: ['BTC','ETH','SOL'], custom: [] },
+}
+
+const FREE_COIN_LIMIT = 999
+
+function setupCoinSelector(prefix, settingKey) {
+  function updateCounter() {
+    const counter = document.getElementById(`${prefix}-coin-counter`)
+    if (counter) counter.textContent = `${coinState[prefix].selected.length}/999 coins`
+  }
+
+  function renderCustom() {
+    const list = document.getElementById(`${prefix}-custom-coins-list`)
+    if (!list) return
+    list.innerHTML = coinState[prefix].custom.map(coin => `
+      <div style="display:flex;align-items:center;gap:3px;background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.3);border-radius:6px;padding:3px 8px;">
+        <span style="font-size:11px;font-weight:600;">${coin}</span>
+        <button onclick="removeCustomCoin('${prefix}','${coin}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0 0 0 4px;">✕</button>
+      </div>`).join('')
+  }
+
+  function toggleCoin(coin, btn) {
+    const sel = coinState[prefix].selected
+    if (sel.includes(coin)) {
+      if (sel.length <= 1) return
+      coinState[prefix].selected = sel.filter(c => c !== coin)
+      btn.classList.remove('active')
+    } else {
+      coinState[prefix].selected.push(coin)
+      btn.classList.add('active')
+    }
+    ipcRenderer.send('set-setting', settingKey, coinState[prefix].selected)
+    updateCounter()
+  }
+
+  // Bind buttons
+  document.querySelectorAll(`.${prefix}-coin-btn`).forEach(btn => {
+    btn.addEventListener('click', () => toggleCoin(btn.dataset.coin, btn))
+  })
+
+  // Add custom coin
+  document.getElementById(`${prefix}-add-coin-btn`)?.addEventListener('click', () => {
+    const input = document.getElementById(`${prefix}-custom-coin-input`)
+    const coin = input?.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+    if (!coin) return
+    if (!coinState[prefix].custom.includes(coin)) {
+      coinState[prefix].custom.push(coin)
+      coinState[prefix].selected.push(coin)
+      ipcRenderer.send('set-setting', settingKey, coinState[prefix].selected)
+      ipcRenderer.send('set-setting', `${settingKey}Custom`, coinState[prefix].custom)
+      renderCustom()
+      updateCounter()
+    }
+    if (input) input.value = ''
+  })
+
+  document.getElementById(`${prefix}-custom-coin-input`)?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById(`${prefix}-add-coin-btn`)?.click()
+  })
+
+  updateCounter()
+  renderCustom()
+}
+
+function removeCustomCoin(prefix, coin) {
+  coinState[prefix].custom = coinState[prefix].custom.filter(c => c !== coin)
+  coinState[prefix].selected = coinState[prefix].selected.filter(c => c !== coin)
+  const settingKey = prefix === 'main' ? 'tradingCoins' : prefix === 'day' ? 'dayTradeCoins' : 'scalpCoins'
+  ipcRenderer.send('set-setting', settingKey, coinState[prefix].selected)
+  ipcRenderer.send('set-setting', `${settingKey}Custom`, coinState[prefix].custom)
+  // Re-render
+  const list = document.getElementById(`${prefix}-custom-coins-list`)
+  if (list) {
+    list.innerHTML = coinState[prefix].custom.map(c => `
+      <div style="display:flex;align-items:center;gap:3px;background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.3);border-radius:6px;padding:3px 8px;">
+        <span style="font-size:11px;font-weight:600;">${c}</span>
+        <button onclick="removeCustomCoin('${prefix}','${c}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0 0 0 4px;">✕</button>
+      </div>`).join('')
+  }
+  // Update counter
+  const counter = document.getElementById(`${prefix}-coin-counter`)
+  if (counter) counter.textContent = `${coinState[prefix].selected.length}/999 coins`
+}
+
+// Initialize all 3 selectors
+setupCoinSelector('main', 'tradingCoins')
+setupCoinSelector('day', 'dayTradeCoins')
+setupCoinSelector('scalp', 'scalpCoins')
+
+// Restore coin selections from settings
+async function restoreCoinSelections(settings) {
+  const restore = (prefix, settingKey, defaultCoins) => {
+    const saved = settings?.[settingKey] || defaultCoins
+    const savedCustom = settings?.[`${settingKey}Custom`] || []
+    coinState[prefix].selected = saved
+    coinState[prefix].custom = savedCustom
+
+    // Update button states
+    document.querySelectorAll(`.${prefix}-coin-btn`).forEach(btn => {
+      btn.classList.toggle('active', saved.includes(btn.dataset.coin))
+    })
+
+    // Update counter
+    const counter = document.getElementById(`${prefix}-coin-counter`)
+    if (counter) counter.textContent = `${saved.length}/999 coins`
+
+    // Render custom
+    const list = document.getElementById(`${prefix}-custom-coins-list`)
+    if (list && savedCustom.length) {
+      list.innerHTML = savedCustom.map(coin => `
+        <div style="display:flex;align-items:center;gap:3px;background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.3);border-radius:6px;padding:3px 8px;">
+          <span style="font-size:11px;font-weight:600;">${coin}</span>
+          <button onclick="removeCustomCoin('${prefix}','${coin}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0 0 0 4px;">✕</button>
+        </div>`).join('')
+    }
+  }
+
+  restore('main', 'tradingCoins', ['BTC','ETH','SOL'])
+  restore('day', 'dayTradeCoins', ['BTC','ETH','SOL'])
+  restore('scalp', 'scalpCoins', ['BTC','ETH','SOL'])
+}
+
+// Legacy compat
+function updateCoinCounter() {
+  const counter = document.getElementById('main-coin-counter')
+  if (counter) counter.textContent = `${coinState.main.selected.length} selected`
+}
+let selectedCoins = coinState.main.selected
+let customCoins = coinState.main.custom
 
 // ── Daily Loss Limit ─────────────────────────────────────────────────────
 document.querySelectorAll('.daily-loss-btn').forEach(btn => {
@@ -3308,22 +4015,108 @@ async function loadAlerts() {
 function removeAlert(idx) { ipcRenderer.send('remove-price-alert', idx); setTimeout(loadAlerts, 300) }
 
 // Load DCA and alerts when trading page opens
-const _origApplySettings = applySettingsToUI
-async function applySettingsToUI(settings) {
-  await _origApplySettings(settings)
-  loadDCAPlans()
-  loadAlerts()
+// DCA/alerts loaded in applySettingsToUI below
 
-  // Restore daily loss limit
-  if (settings?.dailyLossLimit) {
-    const matchBtn = [...document.querySelectorAll('.daily-loss-btn')].find(b => parseFloat(b.dataset.val) === settings.dailyLossLimit)
-    if (matchBtn) { document.querySelectorAll('.daily-loss-btn').forEach(b => b.classList.remove('active')); matchBtn.classList.add('active') }
-    else document.getElementById('custom-loss-limit').value = settings.dailyLossLimit
-  }
-  if (settings?.maxOpenPositions !== undefined) {
-    document.querySelectorAll('.max-pos-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.val) === settings.maxOpenPositions))
-  }
+// ── Usage Stats & Limits ─────────────────────────────────────────────────
+
+async function loadUsageStats() {
+  try {
+    const stats = await ipcRenderer.invoke('get-usage-stats')
+    if (!stats) return
+
+    const tier = stats.tierName || 'pro'
+    const tierNames = { starter: 'STARTER', pro: 'PRO', degen: 'DEGEN' }
+    const tierColors = { starter: '#fbbf24', pro: '#00d4ff', degen: '#a78bfa' }
+
+    // Tier badge
+    const badge = document.getElementById('user-tier-badge')
+    if (badge) {
+      badge.textContent = tierNames[tier] || 'PRO'
+      badge.style.color = tierColors[tier] || '#00d4ff'
+      badge.style.background = `${tierColors[tier]}22`
+    }
+
+    // Voice usage
+    const voiceLimits = stats.limits?.voice || { used: 0, limit: 200, pct: 0 }
+    const voiceText = document.getElementById('voice-usage-text')
+    const voiceBar = document.getElementById('voice-usage-bar')
+    if (voiceText) {
+      if (voiceLimits.limit >= 999999) {
+        voiceText.textContent = `${voiceLimits.used} (unlimited)`
+      } else {
+        voiceText.textContent = `${voiceLimits.used}/${voiceLimits.limit}`
+      }
+      voiceText.style.color = voiceLimits.pct >= 90 ? 'var(--red)' : voiceLimits.pct >= 70 ? '#fbbf24' : 'var(--text)'
+    }
+    if (voiceBar) {
+      const pct = Math.min(100, voiceLimits.pct || 0)
+      voiceBar.style.width = pct + '%'
+      voiceBar.style.background = pct >= 90 ? 'var(--red)' : pct >= 70 ? '#fbbf24' : 'var(--green)'
+    }
+
+// Show alert if any limit hit
+    const limitAlert = document.getElementById('limit-alert')
+    const limitMsg = document.getElementById('limit-alert-msg')
+    if (limitAlert && limitMsg) {
+      const voiceHit = voiceLimits.limit < 999999 && voiceLimits.pct >= 100
+      const voiceWarn = voiceLimits.limit < 999999 && voiceLimits.pct >= 70
+
+      if (voiceHit) {
+        limitAlert.style.display = 'block'
+        limitMsg.textContent = '🛑 Voice limit reached!'
+        limitAlert.style.borderColor = 'rgba(239,68,68,0.3)'
+        limitAlert.style.background = 'rgba(239,68,68,0.1)'
+      } else if (voiceWarn) {
+        limitAlert.style.display = 'block'
+        limitMsg.textContent = `⚠️ ${voiceLimits.remaining} voice messages left today`
+        limitAlert.style.borderColor = 'rgba(251,191,36,0.3)'
+        limitAlert.style.background = 'rgba(251,191,36,0.1)'
+        limitMsg.style.color = '#fbbf24'
+      } else {
+        limitAlert.style.display = 'none'
+      }
+    }
+
+    // Auto extend toggle
+    const autoToggle = document.getElementById('auto-extend-toggle')
+    if (autoToggle && stats.config?.auto_extend) autoToggle.classList.add('on')
+
+    // Store stripe links
+    window._stripeLinks = stats.stripeLinks || {}
+
+  } catch(e) { console.error('Usage stats error:', e) }
 }
+
+// Limit action buttons
+document.getElementById('buy-day-pass-btn')?.addEventListener('click', () => {
+  ipcRenderer.send('add-day-pass')
+  if (window._stripeLinks?.day_pass) {
+    ipcRenderer.invoke('open-url', window._stripeLinks.day_pass).catch(() => {})
+  }
+  setTimeout(loadUsageStats, 500)
+})
+
+document.getElementById('buy-msg-pack-btn')?.addEventListener('click', () => {
+  ipcRenderer.send('add-message-pack', 500)
+  if (window._stripeLinks?.message_pack) {
+    ipcRenderer.invoke('open-url', window._stripeLinks.message_pack).catch(() => {})
+  }
+  setTimeout(loadUsageStats, 500)
+})
+
+document.getElementById('upgrade-plan-btn')?.addEventListener('click', () => {
+  if (window._stripeLinks?.upgrade_degen) {
+    ipcRenderer.invoke('open-url', window._stripeLinks.upgrade_degen).catch(() => {})
+  }
+})
+
+document.getElementById('auto-extend-toggle')?.addEventListener('click', function() {
+  this.classList.toggle('on')
+  ipcRenderer.send('set-auto-extend', this.classList.contains('on'))
+})
+
+// Refresh usage every 30 seconds
+setInterval(loadUsageStats, 30000)
 
 // ── Analytics + Regime + Advanced Settings ───────────────────────────────
 
@@ -3396,12 +4189,7 @@ document.querySelectorAll('.mtf-btn').forEach(btn => {
 })
 
 // Load analytics when trading tab opens
-const _origLoadTradingUI = loadTradingUI
-async function loadTradingUI() {
-  await _origLoadTradingUI()
-  setTimeout(loadMarketRegime, 1000)
-  setTimeout(loadTradeAnalytics, 1500)
-}
+// regime/analytics loaded inline below
 
 // ── Analytics + Regime restore ────────────────────────────────────────────
 function restoreAdvancedSettings(settings) {
@@ -3419,23 +4207,8 @@ function restoreAdvancedSettings(settings) {
   }
 }
 
-// ── Technical Indicators ──────────────────────────────────────────────────
-document.getElementById('ta-auto-btn').addEventListener('click', () => {
-  document.getElementById('ta-auto-btn').classList.add('active')
-  document.getElementById('ta-manual-btn').classList.remove('active')
-  document.getElementById('ta-manual-panel').style.display = 'none'
-  ipcRenderer.send('set-setting', 'taMode', 'auto')
-  // Enable all indicators
-  const all = { rsi: true, ma: true, macd: true, bb: true, sr: true, ob: true, corr: true, time: true }
-  ipcRenderer.send('set-setting', 'enabledIndicators', all)
-})
-
-document.getElementById('ta-manual-btn').addEventListener('click', () => {
-  document.getElementById('ta-manual-btn').classList.add('active')
-  document.getElementById('ta-auto-btn').classList.remove('active')
-  document.getElementById('ta-manual-panel').style.display = 'block'
-  ipcRenderer.send('set-setting', 'taMode', 'manual')
-})
+// ── Technical Indicators (handled by buildIndicatorSections) ─────────────
+// ta-auto-btn and ta-manual-btn removed — now using inline toggles per indicator
 
 // Individual indicator toggles
 const taToggles = {
@@ -3482,6 +4255,7 @@ Object.entries(scalpToggles).forEach(([id, key]) => {
 })
 
 // ── TP/SL Settings ───────────────────────────────────────────────────────
+
 let currentTpSlMode = 'auto'
 
 function showTpSlPanel(mode) {
@@ -3495,9 +4269,9 @@ function showTpSlPanel(mode) {
   ipcRenderer.send('set-setting', 'tpSlMode', mode)
 }
 
-document.getElementById('tpsl-auto-btn').addEventListener('click', () => showTpSlPanel('auto'))
-document.getElementById('tpsl-ratio-btn').addEventListener('click', () => showTpSlPanel('ratio'))
-document.getElementById('tpsl-manual-btn').addEventListener('click', () => showTpSlPanel('manual'))
+document.getElementById('tpsl-auto-btn')?.addEventListener('click', () => showTpSlPanel('auto'))
+document.getElementById('tpsl-ratio-btn')?.addEventListener('click', () => showTpSlPanel('ratio'))
+document.getElementById('tpsl-manual-btn')?.addEventListener('click', () => showTpSlPanel('manual'))
 
 // Ratio buttons
 document.querySelectorAll('.ratio-btn').forEach(btn => {
@@ -3511,7 +4285,7 @@ document.querySelectorAll('.ratio-btn').forEach(btn => {
 })
 
 // Manual save
-document.getElementById('save-tpsl-btn').addEventListener('click', () => {
+document.getElementById('save-tpsl-btn')?.addEventListener('click', () => {
   const tp = parseFloat(document.getElementById('custom-tp-input').value)
   const sl = parseFloat(document.getElementById('custom-sl-input').value)
   const hint = document.getElementById('tpsl-hint')
@@ -3560,23 +4334,12 @@ document.querySelector('.trust-dots[data-key="scalpThreshold"]')?.addEventListen
 })
 
 // Coin selector
-let selectedCoins = ['BTC', 'ETH', 'SOL', 'BNB']
-let customCoins = []
+// selectedCoins handled by coinState
+// customCoins handled by coinState
 
-function renderCustomCoins() {
-  const container = document.getElementById('custom-coin-buttons')
-  container.innerHTML = customCoins.map(coin => `
-    <button class="coin-btn ${selectedCoins.includes(coin) ? 'active' : ''}" data-coin="${coin}" data-custom="true">
-      ${coin} <span style="margin-left:4px;opacity:0.6;font-size:10px;" onclick="removeCustomCoin('${coin}');event.stopPropagation()">✕</span>
-    </button>
-  `).join('')
-  // Attach click handlers to new buttons
-  container.querySelectorAll('.leverage-btn').forEach(btn => {
-    btn.addEventListener('click', () => toggleCoin(btn.dataset.coin, btn))
-  })
-}
+// renderCustomCoins handled by coinState
 
-const FREE_COIN_LIMIT = 999 // Remove limit during development;
+// FREE_COIN_LIMIT defined above
 
 function showCoinLimitModal() {
   // Show upgrade prompt
@@ -3648,7 +4411,7 @@ document.querySelectorAll('.coin-btn[data-coin]').forEach(btn => {
   btn.addEventListener('click', () => toggleCoin(btn.dataset.coin, btn))
 })
 
-document.getElementById('add-custom-coin-btn').addEventListener('click', () => {
+document.getElementById('add-custom-coin-btn')?.addEventListener('click', () => {
   const input = document.getElementById('custom-coin-input')
   const coin = input.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
   if (!coin) return
@@ -3671,35 +4434,16 @@ document.getElementById('add-custom-coin-btn').addEventListener('click', () => {
   input.value = ''
 })
 
-document.getElementById('custom-coin-input').addEventListener('keydown', e => {
+document.getElementById('custom-coin-input')?.addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('add-custom-coin-btn').click()
 })
 
 // Restore coin selections
-async function restoreCoinSelections(settings) {
-  // Use saved coins or default to BTC/ETH/SOL/BNB
-  if (settings?.tradingCoins && settings.tradingCoins.length > 0) {
-    selectedCoins = settings.tradingCoins
-  } else {
-    selectedCoins = ['BTC', 'ETH', 'SOL']
-    ipcRenderer.send('set-setting', 'tradingCoins', selectedCoins)
-  }
-  
-  if (settings?.customCoins) {
-    customCoins = settings.customCoins
-    renderCustomCoins()
-  }
+// restoreCoinSelections handled above
 
-  updateCoinCounter()
-  
-  // Update all coin buttons
-  document.querySelectorAll('.leverage-btn[data-coin]:not([data-custom])').forEach(btn => {
-    btn.classList.toggle('active', selectedCoins.includes(btn.dataset.coin))
-  })
-}
 
 // Scalp toggle
-document.getElementById('scalp-toggle').addEventListener('click', function() {
+document.getElementById('scalp-toggle')?.addEventListener('click', function() {
   this.classList.toggle('on')
   const on = this.classList.contains('on')
   ipcRenderer.send('set-setting', 'scalpTrading', on)
@@ -3969,17 +4713,17 @@ setupDailyBtnGroup('.daily-psell-btn', 'dailyPowerSellRSI')
 setupDailyBtnGroup('.daily-lev-btn', 'dailyLeverage')
 setupDailyBtnGroup('.daily-max-btn', 'dailyMaxTrades')
 
-document.getElementById('daily-trade-toggle').addEventListener('click', function() {
+document.getElementById('daily-trade-toggle')?.addEventListener('click', function() {
   this.classList.toggle('on')
   ipcRenderer.send('set-daily-setting', 'dailyTradeEnabled', this.classList.contains('on'))
 })
 
-document.getElementById('daily-power-only-toggle').addEventListener('click', function() {
+document.getElementById('daily-power-only-toggle')?.addEventListener('click', function() {
   this.classList.toggle('on')
   ipcRenderer.send('set-daily-setting', 'dailyPowerOnly', this.classList.contains('on'))
 })
 
-document.getElementById('save-daily-size-btn').addEventListener('click', () => {
+document.getElementById('save-daily-size-btn')?.addEventListener('click', () => {
   const val = parseFloat(document.getElementById('daily-size-input').value)
   if (val > 0) {
     ipcRenderer.send('set-daily-setting', 'dailyTradeSize', val)
@@ -3988,7 +4732,7 @@ document.getElementById('save-daily-size-btn').addEventListener('click', () => {
   }
 })
 
-document.getElementById('refresh-daily-signals-btn').addEventListener('click', async () => {
+document.getElementById('refresh-daily-signals-btn')?.addEventListener('click', async () => {
   const btn = document.getElementById('refresh-daily-signals-btn')
   btn.textContent = 'Scanning...'
   btn.disabled = true
@@ -4060,6 +4804,140 @@ async function restoreDailySettings(settings) {
   await loadDailySignals()
 }
 
+
+// ── Trading Sub-tabs ──────────────────────────────────────────────────────
+document.querySelectorAll('.trade-tab').forEach(tab => {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.trade-tab').forEach(t => t.classList.remove('active'))
+    document.querySelectorAll('.trade-tab-content').forEach(c => c.classList.remove('active'))
+    this.classList.add('active')
+    const tabId = 'tab-' + this.dataset.tab
+    document.getElementById(tabId)?.classList.add('active')
+    // Load data for tab
+    if (this.dataset.tab === 'overview') loadOverviewTab()
+    if (this.dataset.tab === 'daytrade') loadDayTradeTab()
+    if (this.dataset.tab === 'maintrade') loadMainTradeTab()
+    if (this.dataset.tab === 'scalp') loadScalpTab()
+    if (this.dataset.tab === 'spot') { loadSpotBalances(); loadOpenLimitOrders(); loadDCAPlans(); loadAlerts() }
+  })
+})
+
+function loadOverviewTab() {
+  loadOpenPositions()
+  loadMarketRegime()
+  loadTradeAnalytics()
+  loadDailySignals()
+}
+
+function loadDayTradeTab() {
+  const pd = JSON.parse(localStorage.getItem('_pt_cache') || 'null')
+  if (!pd) { ipcRenderer.invoke('get-paper-stats').then(s => { if(s) renderDayTrades(s) }) }
+  else renderDayTrades(pd)
+}
+
+function loadMainTradeTab() {
+  ipcRenderer.invoke('get-paper-stats').then(s => { if(s) renderMainTrades(s) })
+  buildIndicatorSections(window._cachedSettings || {})
+}
+
+function loadScalpTab() {
+  ipcRenderer.invoke('get-paper-stats').then(s => { if(s) renderScalpTrades(s) })
+  buildIndicatorSections(window._cachedSettings || {})
+}
+
+function renderDayTrades(stats) {
+  const open = stats.trades.filter(t => t.status === 'open' && t.isDayTrade)
+  const closed = stats.trades.filter(t => t.status !== 'open' && t.isDayTrade)
+  const wins = closed.filter(t => t.pnl > 0)
+  const pnl = closed.reduce((s, t) => s + (t.pnl||0), 0)
+
+  const el = id => document.getElementById(id)
+  if(el('day-total')) el('day-total').textContent = closed.length
+  if(el('day-pnl')) { el('day-pnl').textContent = `${pnl>=0?'+':''}$${pnl.toFixed(0)}`; el('day-pnl').style.color = pnl>=0?'var(--green)':'var(--red)' }
+  if(el('day-wr')) el('day-wr').textContent = closed.length ? Math.round(wins.length/closed.length*100)+'%' : '0%'
+
+  const openList = el('day-open-list')
+  if(openList) openList.innerHTML = open.length ? renderTradeCards(open) : '<div style="color:var(--text2);text-align:center;padding:12px;font-size:12px;">No open day trades</div>'
+  const histList = el('day-history-list')
+  if(histList) histList.innerHTML = closed.length ? renderTradeCards(closed.slice(-10).reverse()) : '<div style="color:var(--text2);text-align:center;padding:12px;font-size:12px;">No history yet</div>'
+}
+
+function renderMainTrades(stats) {
+  const open = stats.trades.filter(t => t.status === 'open' && !t.isDayTrade && !t.isScalp)
+  const closed = stats.trades.filter(t => t.status !== 'open' && !t.isDayTrade && !t.isScalp)
+  const wins = closed.filter(t => t.pnl > 0)
+  const pnl = closed.reduce((s, t) => s + (t.pnl||0), 0)
+
+  const el = id => document.getElementById(id)
+  if(el('main-total')) el('main-total').textContent = closed.length
+  if(el('main-pnl')) { el('main-pnl').textContent = `${pnl>=0?'+':''}$${pnl.toFixed(0)}`; el('main-pnl').style.color = pnl>=0?'var(--green)':'var(--red)' }
+  if(el('main-wr')) el('main-wr').textContent = closed.length ? Math.round(wins.length/closed.length*100)+'%' : '0%'
+
+  const openList = el('main-open-list')
+  if(openList) openList.innerHTML = open.length ? renderTradeCards(open) : '<div style="color:var(--text2);text-align:center;padding:12px;font-size:12px;">No open positions</div>'
+  const histList = el('main-history-list')
+  if(histList) histList.innerHTML = closed.length ? renderTradeCards(closed.slice(-20).reverse()) : '<div style="color:var(--text2);text-align:center;padding:12px;font-size:12px;">No history yet</div>'
+
+  // Lessons
+  ipcRenderer.invoke('get-lessons').then(lessons => {
+    const list = el('pt-lessons-list')
+    if(!list) return
+    if(!lessons?.length) { list.innerHTML = '<div style="color:var(--text2);font-size:12px;text-align:center;padding:12px;">No lessons yet</div>'; return }
+    list.innerHTML = lessons.slice(-10).reverse().map(l => `
+      <div style="padding:8px 0;border-bottom:1px solid var(--border2);font-size:12px;">
+        <div style="color:var(--accent);margin-bottom:3px;">📋 ${l.rule||l.lesson||''}</div>
+        <div style="color:var(--text2);font-size:10px;">${new Date(l.timestamp||Date.now()).toLocaleDateString()}</div>
+      </div>`).join('')
+  }).catch(() => {})
+}
+
+function renderScalpTrades(stats) {
+  const open = stats.trades.filter(t => t.status === 'open' && t.isScalp)
+  const closed = stats.trades.filter(t => t.status !== 'open' && t.isScalp)
+  const wins = closed.filter(t => t.pnl > 0)
+  const pnl = closed.reduce((s, t) => s + (t.pnl||0), 0)
+
+  const el = id => document.getElementById(id)
+  if(el('scalp-total')) el('scalp-total').textContent = closed.length
+  if(el('scalp-pnl')) { el('scalp-pnl').textContent = `${pnl>=0?'+':''}$${pnl.toFixed(0)}`; el('scalp-pnl').style.color = pnl>=0?'var(--green)':'var(--red)' }
+  if(el('scalp-wr')) el('scalp-wr').textContent = closed.length ? Math.round(wins.length/closed.length*100)+'%' : '0%'
+
+  const openList = el('scalp-open-list')
+  if(openList) openList.innerHTML = open.length ? renderTradeCards(open) : '<div style="color:var(--text2);text-align:center;padding:12px;font-size:12px;">No open scalps</div>'
+  const histList = el('scalp-history-list')
+  if(histList) histList.innerHTML = closed.length ? renderTradeCards(closed.slice(-30).reverse()) : '<div style="color:var(--text2);text-align:center;padding:12px;font-size:12px;">No history yet</div>'
+}
+
+function renderTradeCards(trades) {
+  return trades.map(t => {
+    const pnl = t.pnl || 0
+    const pnlColor = pnl >= 0 ? 'var(--green)' : 'var(--red)'
+    const badge = t.isScalp ? '<span style="background:rgba(251,191,36,0.2);color:#fbbf24;border-radius:4px;font-size:10px;padding:1px 5px;">⚡SCALP</span>' :
+                  t.isDayTrade ? '<span style="background:rgba(99,102,241,0.2);color:#818cf8;border-radius:4px;font-size:10px;padding:1px 5px;">📅DAY</span>' : ''
+    const status = t.status === 'open' ? '<span style="color:#fbbf24;">● OPEN</span>' :
+                   t.status === 'win' ? '<span style="color:var(--green);">✅ WIN</span>' :
+                   '<span style="color:var(--red);">❌ LOSS</span>'
+    return `<div style="padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-weight:700;">${t.coin}</span>
+          <span style="font-size:11px;color:${t.direction==='long'?'var(--green)':'var(--red)'};">${t.direction?.toUpperCase()} ${t.leverage}x</span>
+          ${badge}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          ${status}
+          <span style="font-weight:700;color:${pnlColor};">${pnl>=0?'+':''}$${pnl.toFixed(2)}</span>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text2);">Entry: $${t.entry} | TP: $${t.target} | SL: $${t.stopLoss}</div>
+      <div style="font-size:10px;color:var(--text2);">${t.caller || ''} | ${new Date(t.openTime).toLocaleString()}</div>
+      ${t.status === 'open' ? `<button onclick="closeTrade(${t.id},${t.entry})" style="margin-top:4px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:var(--red);border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;">Close</button>` : ''}
+    </div>`
+  }).join('')
+}
+
+// Load overview by default when trading page opens
+
 // ── Main Leverage Buttons ─────────────────────────────────────────────────
 document.querySelectorAll('.lev-btn').forEach(btn => {
   btn.addEventListener('click', function() {
@@ -4091,7 +4969,7 @@ document.querySelectorAll('.scalp-dur-btn').forEach(btn => {
 })
 
 // Scalp size
-document.getElementById('save-scalp-btn').addEventListener('click', () => {
+document.getElementById('save-scalp-btn')?.addEventListener('click', () => {
   const size = parseFloat(document.getElementById('scalp-size-input').value)
   if (!size || size <= 0) return
   ipcRenderer.send('set-setting', 'scalpSize', size)
@@ -4103,7 +4981,7 @@ document.getElementById('save-scalp-btn').addEventListener('click', () => {
 try {
 
 // ── Rage Lock ────────────────────────────────────────────────────────────
-document.getElementById('rage-lock-toggle').addEventListener('click', function() {
+document.getElementById('rage-lock-toggle')?.addEventListener('click', function() {
   this.classList.toggle('on')
   const on = this.classList.contains('on')
   ipcRenderer.send('set-setting', 'rageLockEnabled', on)
@@ -4126,13 +5004,13 @@ document.querySelectorAll('.rage-dur-btn').forEach(btn => {
   })
 })
 
-document.getElementById('manual-lock-btn').addEventListener('click', () => {
+document.getElementById('manual-lock-btn')?.addEventListener('click', () => {
   ipcRenderer.send('manual-rage-lock', 30)
   document.getElementById('rage-lock-status').style.display = 'block'
   document.getElementById('rage-lock-reason').textContent = 'Manually locked — take a break!'
 })
 
-document.getElementById('manual-unlock-btn').addEventListener('click', () => {
+document.getElementById('manual-unlock-btn')?.addEventListener('click', () => {
   ipcRenderer.send('unlock-rage-lock')
   document.getElementById('rage-lock-status').style.display = 'none'
 })
@@ -4163,7 +5041,335 @@ async function loadPsychScore() {
   ].join('')
 }
 
-document.getElementById('refresh-psych-btn').addEventListener('click', loadPsychScore)
+document.getElementById('refresh-psych-btn')?.addEventListener('click', loadPsychScore)
+
+
+// Dev unlock in settings
+document.getElementById('dev-unlock-settings-btn')?.addEventListener('click', async () => {
+  const pwd = document.getElementById('dev-pwd-settings')?.value
+  const err = document.getElementById('dev-unlock-error')
+  try {
+    const res = await fetch('http://localhost:3001/auth', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({password:pwd})
+    })
+    const data = await res.json()
+    if (data.success) {
+      localStorage.setItem('dev_token', data.token)
+      document.getElementById('dev-lock-in-settings').style.display = 'none'
+      document.getElementById('dev-controls-in-settings').style.display = 'block'
+      if(err) err.textContent = ''
+    } else {
+      if(err) err.textContent = '❌ Wrong password'
+    }
+  } catch(e) {
+    if(err) err.textContent = '❌ Dev server not running'
+  }
+})
+
+document.getElementById('dev-change-pwd-settings')?.addEventListener('click', async () => {
+  const pwd = document.getElementById('dev-new-pwd-settings')?.value
+  if (!pwd || pwd.length < 8) return
+  await fetch('http://localhost:3001/api/control', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('dev_token')},
+    body:JSON.stringify({action:'changePassword',value:pwd})
+  }).catch(() => {})
+  localStorage.setItem('dev_token', pwd)
+  document.getElementById('dev-new-pwd-settings').value = ''
+})
+
+// ── Others Page Sub-tabs ─────────────────────────────────────────────────
+document.querySelectorAll('[data-others-tab]').forEach(tab => {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('[data-others-tab]').forEach(t => t.classList.remove('active'))
+    document.querySelectorAll('.others-tab-content').forEach(c => c.classList.remove('active'))
+    this.classList.add('active')
+    const tabEl = document.getElementById('others-' + this.dataset.othersTab)
+    if (tabEl) tabEl.classList.add('active')
+    // Load content for tab
+    if (this.dataset.othersTab === 'study') loadBooks()
+    if (this.dataset.othersTab === 'memory') loadMemories()
+  })
+})
+
+// add active class to others-tab-content
+document.querySelectorAll('.others-tab-content').forEach((el, i) => {
+  if (i > 0) el.classList.remove('active')
+})
+
+// ── Study Timer ──────────────────────────────────────────────────────────
+let timerInterval = null
+let timerSeconds = 25 * 60
+let timerRunning = false
+
+function formatTime(s) {
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+}
+
+function updateTimerDisplay() {
+  const el = document.getElementById('timer-display')
+  if (el) el.textContent = formatTime(timerSeconds)
+}
+
+document.querySelectorAll('.timer-preset-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.timer-preset-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    timerSeconds = parseInt(this.dataset.min) * 60
+    timerRunning = false
+    clearInterval(timerInterval)
+    updateTimerDisplay()
+    const startBtn = document.getElementById('timer-start-btn')
+    if (startBtn) startBtn.textContent = '▶ Start'
+  })
+})
+
+document.getElementById('timer-start-btn')?.addEventListener('click', function() {
+  if (timerRunning) {
+    timerRunning = false
+    clearInterval(timerInterval)
+    this.textContent = '▶ Start'
+  } else {
+    timerRunning = true
+    this.textContent = '⏸ Pause'
+    timerInterval = setInterval(() => {
+      if (timerSeconds <= 0) {
+        clearInterval(timerInterval)
+        timerRunning = false
+        document.getElementById('timer-start-btn').textContent = '▶ Start'
+        // Notify
+        ipcRenderer.invoke('get-voice', 'Time is up! Great work! Take a break.').then(audio => {
+          if (audio) playAudio(audio)
+        }).catch(() => {})
+        return
+      }
+      timerSeconds--
+      updateTimerDisplay()
+    }, 1000)
+  }
+})
+
+document.getElementById('timer-reset-btn')?.addEventListener('click', () => {
+  clearInterval(timerInterval)
+  timerRunning = false
+  const activeBtn = document.querySelector('.timer-preset-btn.active')
+  timerSeconds = parseInt(activeBtn?.dataset.min || 25) * 60
+  updateTimerDisplay()
+  const startBtn = document.getElementById('timer-start-btn')
+  if (startBtn) startBtn.textContent = '▶ Start'
+})
+
+// ── Calculator ────────────────────────────────────────────────────────────
+document.getElementById('calc-btn')?.addEventListener('click', async () => {
+  const q = document.getElementById('calc-input')?.value
+  if (!q) return
+  const result = document.getElementById('calc-result')
+  if (result) result.textContent = 'Calculating...'
+  try {
+    // Simple eval for basic math
+    const cleanQ = q.trim()
+    let answer = ''
+    if (/^[\d\s+\-*/.()%]+$/.test(cleanQ)) {
+      answer = eval(cleanQ.replace('%', '/100'))
+    } else {
+      // Ask Claude
+      const res = await ipcRenderer.invoke('process-voice-input-text', `Calculate: ${q}`, null)
+      answer = res?.reply || 'Could not calculate'
+    }
+    if (result) result.textContent = `= ${answer}`
+  } catch(e) {
+    if (result) result.textContent = 'Could not calculate'
+  }
+})
+
+document.getElementById('calc-input')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('calc-btn')?.click()
+})
+
+// ── Currency Converter ────────────────────────────────────────────────────
+document.getElementById('conv-btn')?.addEventListener('click', async () => {
+  const amount = parseFloat(document.getElementById('conv-amount')?.value)
+  const from = document.getElementById('conv-from')?.value
+  const to = document.getElementById('conv-to')?.value
+  const result = document.getElementById('conv-result')
+  if (!amount || !from || !to) return
+  if (result) result.textContent = 'Converting...'
+  try {
+    const res = await fetch(`https://api.exchangerate.host/convert?from=${from}&to=${to}&amount=${amount}`)
+    const data = await res.json()
+    if (data.result) {
+      if (result) result.textContent = `${amount} ${from} = ${data.result.toFixed(2)} ${to}`
+    } else {
+      // Ask Claude as fallback
+      const reply = await ipcRenderer.invoke('process-voice-input-text', `Convert ${amount} ${from} to ${to}`, null)
+      if (result) result.textContent = reply?.reply || 'Could not convert'
+    }
+  } catch(e) {
+    if (result) result.textContent = 'Could not connect to exchange rate API'
+  }
+})
+
+// ── Speed buttons ─────────────────────────────────────────────────────────
+document.querySelectorAll('.speed-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    ipcRenderer.send('set-setting', 'voiceSpeed', parseFloat(this.dataset.speed))
+  })
+})
+
+// ── Notes ─────────────────────────────────────────────────────────────────
+document.getElementById('save-note-btn')?.addEventListener('click', async () => {
+  const note = document.getElementById('quick-note')?.value?.trim()
+  if (!note) return
+  await ipcRenderer.invoke('save-memory', note).catch(() => {})
+  document.getElementById('quick-note').value = ''
+  loadMemories()
+})
+
+// Load others page when tab opens
+document.querySelectorAll('.page-tab').forEach(tab => {
+  if (tab.dataset.page === '5') {
+    tab.addEventListener('click', () => {
+      setTimeout(() => {
+        if(typeof loadBooks === 'function') loadBooks()
+        if(typeof loadMemories === 'function') loadMemories()
+        if(typeof loadUsageStats === 'function') loadUsageStats()
+      }, 200)
+    })
+  }
+})
+
+// ── Books & Study System ──────────────────────────────────────────────────
+
+let _activeBookId = null
+
+async function loadBooks() {
+  const data = await ipcRenderer.invoke('get-books').catch(() => ({ books: [] }))
+  const list = document.getElementById('books-list')
+  if (!list) return
+
+  if (!data.books?.length) {
+    list.innerHTML = '<div class="empty-state">No textbooks yet</div>'
+    return
+  }
+
+  list.innerHTML = data.books.map(b => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--bg3);border-radius:8px;margin-bottom:4px;">
+      <div style="cursor:pointer;" onclick="setActiveBook('${b.id}','${b.name}')">
+        <div style="font-size:12px;font-weight:600;">${b.name}</div>
+        <div style="font-size:10px;color:var(--text2);">${b.pageCount} pages • ${b.subject}</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        ${_activeBookId === b.id ? '<span style="font-size:10px;color:var(--accent);">Active</span>' : ''}
+        <button onclick="deleteBook('${b.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;">✕</button>
+      </div>
+    </div>`).join('')
+}
+
+function setActiveBook(id, name) {
+  _activeBookId = id
+  loadBooks()
+  showStatus(`📚 Active book: ${name}`)
+}
+
+async function deleteBook(id) {
+  await ipcRenderer.invoke('delete-book', id)
+  if (_activeBookId === id) _activeBookId = null
+  loadBooks()
+}
+
+async function handleBookFile(input) {
+  const file = input.files[0]
+  if (!file) return
+  await processBookUpload(file.path || file.name, file.name)
+}
+
+async function handleBookDrop(event) {
+  event.preventDefault()
+  document.getElementById('book-drop-zone').style.borderColor = 'var(--border)'
+  const file = event.dataTransfer.files[0]
+  if (!file || !file.name.endsWith('.pdf')) {
+    showStatus('Please drop a PDF file')
+    return
+  }
+  await processBookUpload(file.path || file.name, file.name)
+}
+
+async function processBookUpload(filePath, fileName) {
+  const status = document.getElementById('book-index-status')
+  const nameInput = document.getElementById('book-name-input')
+  const subject = document.getElementById('book-subject')?.value || 'general'
+  const bookName = nameInput?.value.trim() || fileName.replace('.pdf', '')
+
+  if (status) {
+    status.style.display = 'block'
+    status.style.color = 'var(--accent)'
+    status.textContent = `⏳ Indexing "${bookName}"... This may take a moment`
+  }
+
+  try {
+    const result = await ipcRenderer.invoke('index-book', {
+      pdfPath: filePath,
+      name: bookName,
+      subject
+    })
+
+    if (result.success) {
+      if (status) {
+        status.style.color = 'var(--green)'
+        status.textContent = `✅ Indexed! "${bookName}" — ${result.pageCount} pages ready`
+      }
+      _activeBookId = result.bookId
+      if (nameInput) nameInput.value = ''
+      loadBooks()
+    } else {
+      if (status) {
+        status.style.color = 'var(--red)'
+        status.textContent = `❌ Error: ${result.error}`
+      }
+    }
+  } catch(e) {
+    if (status) {
+      status.style.color = 'var(--red)'
+      status.textContent = `❌ Failed to index: ${e.message}`
+    }
+  }
+}
+
+// Page jump
+document.getElementById('page-jump-btn')?.addEventListener('click', async () => {
+  const pageNum = parseInt(document.getElementById('page-jump-input')?.value)
+  if (!pageNum || !_activeBookId) {
+    if (!_activeBookId) showStatus('Select a book first')
+    return
+  }
+  const page = await ipcRenderer.invoke('get-book-page', _activeBookId, pageNum)
+  const display = document.getElementById('page-content-display')
+  if (!display) return
+  if (page) {
+    display.style.display = 'block'
+    display.innerHTML = `<div style="font-size:10px;color:var(--accent);margin-bottom:6px;">Page ${pageNum}</div><div style="white-space:pre-wrap;">${page.text.slice(0, 2000)}</div>`
+  } else {
+    display.style.display = 'block'
+    display.textContent = `Page ${pageNum} not found`
+  }
+})
+
+// Listen for book indexed event from main
+ipcRenderer.on('book-indexed', (e, result) => {
+  if (result.success) {
+    _activeBookId = result.bookId
+    loadBooks()
+  }
+})
+
+// Load books on startup
+setTimeout(() => { if(typeof loadBooks === "function") loadBooks(); }, 1000)
 
 // ── Second Brain ─────────────────────────────────────────────────────────
 async function loadMemories() {
@@ -4189,7 +5395,7 @@ async function deleteMemory(id) {
   loadMemories()
 }
 
-document.getElementById('save-memory-btn').addEventListener('click', async () => {
+document.getElementById('save-memory-btn')?.addEventListener('click', async () => {
   const input = document.getElementById('memory-input')
   const text = input.value.trim()
   if (!text) return
@@ -4199,7 +5405,7 @@ document.getElementById('save-memory-btn').addEventListener('click', async () =>
 })
 
 // ── Morning Briefing ─────────────────────────────────────────────────────
-document.getElementById('morning-briefing-toggle').addEventListener('click', function() {
+document.getElementById('morning-briefing-toggle')?.addEventListener('click', function() {
   this.classList.toggle('on')
   ipcRenderer.send('set-setting', 'morningBriefing', this.classList.contains('on'))
 })
@@ -4267,10 +5473,10 @@ document.querySelectorAll('.spot-sell-pct-btn').forEach(btn => {
 })
 
 // Refresh balances
-document.getElementById('refresh-spot-btn').addEventListener('click', loadSpotBalances)
+document.getElementById('refresh-spot-btn')?.addEventListener('click', loadSpotBalances)
 
 // Market Buy
-document.getElementById('spot-buy-btn').addEventListener('click', async () => {
+document.getElementById('spot-buy-btn')?.addEventListener('click', async () => {
   const coin = document.getElementById('spot-buy-coin').value
   const amount = parseFloat(document.getElementById('spot-buy-amount').value)
   const status = document.getElementById('spot-status')
@@ -4295,7 +5501,7 @@ document.getElementById('spot-buy-btn').addEventListener('click', async () => {
 })
 
 // Market Sell
-document.getElementById('spot-sell-btn').addEventListener('click', async () => {
+document.getElementById('spot-sell-btn')?.addEventListener('click', async () => {
   const coin = document.getElementById('spot-sell-coin').value
   const status = document.getElementById('spot-status')
   status.textContent = `Selling ${spotSellPct}% of ${coin}...`
@@ -4317,7 +5523,7 @@ document.getElementById('spot-sell-btn').addEventListener('click', async () => {
 })
 
 // Limit Buy
-document.getElementById('spot-limit-buy-btn').addEventListener('click', async () => {
+document.getElementById('spot-limit-buy-btn')?.addEventListener('click', async () => {
   const coin = document.getElementById('spot-limit-coin').value
   const price = parseFloat(document.getElementById('spot-limit-price').value)
   const amount = parseFloat(document.getElementById('spot-limit-amount').value)
@@ -4369,14 +5575,14 @@ ipcRenderer.on('page-changed', (e, page) => {
 })
 
 // Max drawdown protection
-document.getElementById('save-drawdown-btn').addEventListener('click', () => {
+document.getElementById('save-drawdown-btn')?.addEventListener('click', () => {
   const val = parseFloat(document.getElementById('max-drawdown-input').value)
   if (!val || val <= 0) return
   ipcRenderer.send('set-setting', 'maxDrawdown', val)
   document.getElementById('drawdown-hint').textContent = `Auto-close if trade loses more than ${val}%`
   document.getElementById('drawdown-hint').style.color = 'var(--red)'
 })
-document.getElementById('disable-drawdown-btn').addEventListener('click', () => {
+document.getElementById('disable-drawdown-btn')?.addEventListener('click', () => {
   document.getElementById('max-drawdown-input').value = ''
   ipcRenderer.send('set-setting', 'maxDrawdown', null)
   document.getElementById('drawdown-hint').textContent = 'Disabled — trades close only at SL or target'
@@ -4388,7 +5594,7 @@ function loadSettings() {
   return window._cachedSettings || {}
 }
 
-document.getElementById('save-size-btn').addEventListener('click', () => {
+document.getElementById('save-size-btn')?.addEventListener('click', () => {
   const size = parseFloat(document.getElementById('trade-size-input').value)
   if (!size || size <= 0) return
   
@@ -4431,7 +5637,7 @@ setInterval(() => {
 // removed bad global leverage-btn handler
 
 // Toggles
-document.getElementById('auto-trade-toggle').addEventListener('click', function() {
+document.getElementById('auto-trade-toggle')?.addEventListener('click', function() {
   this.classList.toggle('on')
   ipcRenderer.send('set-setting', 'autoPaperTrade', this.classList.contains('on'))
 })
@@ -4454,7 +5660,7 @@ document.querySelectorAll('.interval-btn').forEach(btn => {
   })
 })
 
-document.getElementById('independent-scanner-toggle').addEventListener('click', function() {
+document.getElementById('independent-scanner-toggle')?.addEventListener('click', function() {
   this.classList.toggle('on')
   ipcRenderer.send('set-setting', 'independentScanner', this.classList.contains('on'))
   const on = this.classList.contains('on')
@@ -4585,11 +5791,16 @@ async function loadTradingUI() {
   window._cachedSettings = settings
 
   // Restore UI from settings right away (no waiting for trades)
-  applySettingsToUI(settings)
+  try { applySettingsToUI(settings) } catch(e) { console.error('applySettingsToUI error:', e.message) }
 
   // Load trades separately in background
   loadOpenPositions()
   loadTradeHistory()
+
+  // Load regime and analytics in background
+  setTimeout(loadMarketRegime, 800)
+  setTimeout(loadTradeAnalytics, 1200)
+  setTimeout(loadUsageStats, 500)
 
   // Load TG stats
   let tgStats = { stats: {} }
@@ -4734,6 +5945,19 @@ function applySettingsToUI(settings) {
 
     // Advanced trading settings
     restoreAdvancedSettings(settings)
+
+    // Daily loss limit restore
+    if (settings?.dailyLossLimit) {
+      const matchBtn = [...document.querySelectorAll('.daily-loss-btn')].find(b => parseFloat(b.dataset.val) === settings.dailyLossLimit)
+      if (matchBtn) { document.querySelectorAll('.daily-loss-btn').forEach(b => b.classList.remove('active')); matchBtn.classList.add('active') }
+      else { const el = document.getElementById('custom-loss-limit'); if(el) el.value = settings.dailyLossLimit }
+    }
+    if (settings?.maxOpenPositions !== undefined) {
+      document.querySelectorAll('.max-pos-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.val) === settings.maxOpenPositions))
+    }
+
+    // Load DCA and alerts
+    setTimeout(() => { loadDCAPlans(); loadAlerts(); }, 200)
 
     // Daily trade bot settings
     restoreDailySettings(settings)
@@ -4969,7 +6193,7 @@ async function _old_stats_block() {
   try { restoreNewSettings() } catch(e) { console.error('restoreNewSettings:', e) }
 }
 
-document.getElementById('chart-analysis-toggle').addEventListener('click', function() {
+document.getElementById('chart-analysis-toggle')?.addEventListener('click', function() {
   this.classList.toggle('on')
   ipcRenderer.send('set-setting', 'chartAnalysis', this.classList.contains('on'))
 })
@@ -5066,12 +6290,12 @@ function renderIntelFeed() {
 }
 
 // Notification toggles
-document.getElementById('trade-notify-toggle').addEventListener('click', function() {
+document.getElementById('trade-notify-toggle')?.addEventListener('click', function() {
   this.classList.toggle('on')
   ipcRenderer.send('set-setting', 'tradeNotifications', this.classList.contains('on'))
 })
 
-document.getElementById('intel-notify-toggle').addEventListener('click', function() {
+document.getElementById('intel-notify-toggle')?.addEventListener('click', function() {
   this.classList.toggle('on')
   ipcRenderer.send('set-setting', 'intelNotifications', this.classList.contains('on'))
 })
@@ -5202,11 +6426,11 @@ const chars=[
   {name:'Kira',emoji:'🌺',free:false},  {name:'Zero',emoji:'🤖',free:false},
   {name:'Echo',emoji:'🌊',free:false},
 ]
-document.getElementById('edit-btn').addEventListener('click',()=>{
+document.getElementById('edit-btn')?.addEventListener('click',()=>{
   document.getElementById('edit-page').classList.add('open')
   buildCharRow(); initEditWaifu()
 })
-document.getElementById('back-from-edit').addEventListener('click',()=>document.getElementById('edit-page').classList.remove('open'))
+document.getElementById('back-from-edit')?.addEventListener('click',()=>document.getElementById('edit-page').classList.remove('open'))
 function buildCharRow() {
   const row=document.getElementById('char-row')
   row.innerHTML=chars.map((c,i)=>`<div class="char-card ${!c.free?'locked':''} ${i===0?'active':''}" data-idx="${i}">
@@ -5233,12 +6457,12 @@ async function initEditWaifu() {
 }
 
 // ── Customize ──
-document.getElementById('customize-btn').addEventListener('click',()=>{
+document.getElementById('customize-btn')?.addEventListener('click',()=>{
   document.getElementById('edit-page').classList.remove('open')
   document.getElementById('customize-page').classList.add('open')
   initCustWaifu(); loadCustSettings()
 })
-document.getElementById('back-from-customize').addEventListener('click',()=>document.getElementById('customize-page').classList.remove('open'))
+document.getElementById('back-from-customize')?.addEventListener('click',()=>document.getElementById('customize-page').classList.remove('open'))
 
 async function initCustWaifu() {
   if (custApp) return
@@ -5267,10 +6491,10 @@ document.querySelectorAll('.swatch').forEach(s=>s.addEventListener('click',()=>{
 document.querySelectorAll('.item-card:not(.locked)').forEach(s=>s.addEventListener('click',()=>{
   const grp=s.closest('.item-wrap'); grp.querySelectorAll('.item-card').forEach(x=>x.classList.remove('active')); s.classList.add('active')
 }))
-document.getElementById('c-speed').addEventListener('input',updateSpeedVal)
+document.getElementById('c-speed')?.addEventListener('input',updateSpeedVal)
 function updateSpeedVal() { document.getElementById('c-speed-val').textContent=(document.getElementById('c-speed').value/100).toFixed(1)+'×' }
 
-document.getElementById('cust-save').addEventListener('click',async()=>{
+document.getElementById('cust-save')?.addEventListener('click',async()=>{
   const name=document.getElementById('c-name').value||'Asuka'
   const wake=document.getElementById('c-wake').value||'asuka'
   const speed=parseInt(document.getElementById('c-speed').value)/100
@@ -5291,18 +6515,33 @@ document.getElementById('cust-save').addEventListener('click',async()=>{
 })
 
 // ── Settings ──
-document.getElementById('settings-open-btn').addEventListener('click',()=>{
+document.getElementById('settings-open-btn')?.addEventListener('click',()=>{
   document.getElementById('settings-page').classList.add('open')
-  if (settings.coingeckoKey) document.getElementById('s-coingecko').value=settings.coingeckoKey
-  if (settings.moralisKey)   document.getElementById('s-moralis').value=settings.moralisKey
-  if (settings.youtubeKey)   document.getElementById('s-youtube').value=settings.youtubeKey
-  if (settings.etherscanKey) document.getElementById('s-etherscan').value=settings.etherscanKey
-  if (memory.alarmTime)      document.getElementById('s-alarm').value=memory.alarmTime
-  if (memory.sleepHour)      document.getElementById('s-sleep').value=memory.sleepHour
-  if (memory.waterReminderMinutes) document.getElementById('s-water').value=memory.waterReminderMinutes
+  // Restore settings values
+  const s = window._cachedSettings || {}
+  const mem = window._cachedMemory || {}
+  if (s.coingeckoKey) document.getElementById('s-coingecko').value=s.coingeckoKey
+  if (s.moralisKey)   document.getElementById('s-moralis').value=s.moralisKey
+  if (s.youtubeKey)   document.getElementById('s-youtube').value=s.youtubeKey
+  if (s.etherscanKey) document.getElementById('s-etherscan').value=s.etherscanKey
+  if (mem.alarmTime)  document.getElementById('s-alarm').value=mem.alarmTime
+  if (mem.sleepHour)  document.getElementById('s-sleep').value=mem.sleepHour
+  if (mem.waterReminderMinutes) document.getElementById('s-water').value=mem.waterReminderMinutes
 })
-document.getElementById('back-from-settings').addEventListener('click',()=>document.getElementById('settings-page').classList.remove('open'))
-document.getElementById('settings-save-btn').addEventListener('click',async()=>{
+
+document.getElementById('back-from-settings')?.addEventListener('click',()=>{
+  document.getElementById('settings-page').classList.remove('open')
+  // Restore the active page properly
+  const activeTab = document.querySelector('.page-tab.active')
+  const pageNum = activeTab ? parseInt(activeTab.dataset.page) : 1
+  const pageId = PAGE_IDS?.[pageNum] || ('page-' + pageNum)
+  const pageEl = document.getElementById(pageId)
+  if (pageEl) {
+    document.querySelectorAll('.page').forEach(p => p.style.display = 'none')
+    pageEl.style.display = 'flex'
+  }
+})
+document.getElementById('settings-save-btn')?.addEventListener('click',async()=>{
   settings.coingeckoKey=document.getElementById('s-coingecko').value
   settings.moralisKey=document.getElementById('s-moralis').value
   settings.youtubeKey=document.getElementById('s-youtube').value
@@ -5320,8 +6559,109 @@ document.getElementById('settings-save-btn').addEventListener('click',async()=>{
   await playAudio(await ipcRenderer.invoke('get-voice',msg))
   document.getElementById('waifu-speech').textContent=''
 })
-document.getElementById('export-btn').addEventListener('click',()=>ipcRenderer.invoke('export-data'))
-document.getElementById('import-btn').addEventListener('click',()=>{
+document.getElementById('export-btn')?.addEventListener('click',()=>ipcRenderer.invoke('export-data'))
+
+// ── Dev Controls in Settings ──────────────────────────────────────────────
+let _devToken = localStorage.getItem('dev_token') || ''
+
+function devApiCall(action, extra = {}) {
+  return fetch('http://localhost:3001/api/control', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _devToken },
+    body: JSON.stringify({ action, ...extra })
+  }).catch(() => null)
+}
+
+document.getElementById('dev-unlock-btn')?.addEventListener('click', async () => {
+  const pwd = document.getElementById('dev-pwd-input')?.value?.trim()
+  const err = document.getElementById('dev-unlock-err')
+  if (!pwd) return
+
+  // Verify via IPC (works even without dev server running)
+  try {
+    const ok = await ipcRenderer.invoke('dev-verify-password', pwd).catch(() => null)
+    if (ok === true) {
+      _devToken = pwd
+      localStorage.setItem('dev_token', pwd)
+      document.getElementById('dev-lock-state').style.display = 'none'
+      document.getElementById('dev-unlocked-state').style.display = 'block'
+      if (err) err.textContent = ''
+    } else {
+      if (err) err.textContent = '❌ Wrong password — default is Asuka2026!'
+    }
+  } catch(e) {
+    // Fallback: try dev server
+    try {
+      const res = await fetch('http://localhost:3001/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pwd })
+      })
+      const data = await res.json()
+      if (data.success) {
+        _devToken = pwd
+        localStorage.setItem('dev_token', pwd)
+        document.getElementById('dev-lock-state').style.display = 'none'
+        document.getElementById('dev-unlocked-state').style.display = 'block'
+        if (err) err.textContent = ''
+      } else {
+        if (err) err.textContent = '❌ Wrong password'
+      }
+    } catch(e2) {
+      if (err) err.textContent = '❌ Could not verify password'
+    }
+  }
+})
+
+document.getElementById('dev-lock-again-btn')?.addEventListener('click', () => {
+  localStorage.removeItem('dev_token')
+  _devToken = ''
+  document.getElementById('dev-lock-state').style.display = 'block'
+  document.getElementById('dev-unlocked-state').style.display = 'none'
+  document.getElementById('dev-pwd-input').value = ''
+})
+
+document.getElementById('dev-pause-all-btn')?.addEventListener('click', () => devApiCall('pauseAll'))
+document.getElementById('dev-resume-all-btn')?.addEventListener('click', () => devApiCall('resumeAll'))
+
+document.querySelectorAll('.dev-coin-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.dev-coin-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    devApiCall('setCoinOverride', { value: this.dataset.val })
+  })
+})
+
+document.querySelectorAll('.dev-interval-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.dev-interval-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    devApiCall('setInterval', { value: parseInt(this.dataset.val) || null })
+  })
+})
+
+document.getElementById('dev-save-pwd-btn')?.addEventListener('click', async () => {
+  const pwd = document.getElementById('dev-new-pwd')?.value
+  if (!pwd || pwd.length < 8) return
+  await devApiCall('changePassword', { value: pwd })
+  _devToken = pwd
+  localStorage.setItem('dev_token', pwd)
+  document.getElementById('dev-new-pwd').value = ''
+  document.getElementById('dev-unlock-err').textContent = ''
+  alert('Password changed!')
+})
+
+// Auto-unlock if token saved
+if (_devToken) {
+  fetch('http://localhost:3001/api/stats', { headers: { Authorization: 'Bearer ' + _devToken } })
+    .then(r => {
+      if (r.ok) {
+        document.getElementById('dev-lock-state').style.display = 'none'
+        document.getElementById('dev-unlocked-state').style.display = 'block'
+      }
+    }).catch(() => {})
+}
+document.getElementById('import-btn')?.addEventListener('click',()=>{
   const inp=document.createElement('input'); inp.type='file'; inp.accept='.json'
   inp.onchange=async e=>{
     const txt=await e.target.files[0].text()
@@ -5333,7 +6673,7 @@ document.getElementById('import-btn').addEventListener('click',()=>{
 })
 
 // ── Close ──
-document.getElementById('close-btn').addEventListener('click',()=>{ ipcRenderer.send('dashboard-closed'); window.close() })
+document.getElementById('close-btn')?.addEventListener('click',()=>{ ipcRenderer.send('dashboard-closed'); window.close() })
 
 // ── Auto refresh ──
 setInterval(loadPrices, 30000)
@@ -5355,7 +6695,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (pageNum === 2) setTimeout(() => { try { loadTelegramUI() } catch(e) { console.error(e) } }, 300)
       if (pageNum === 3) {
         setTimeout(() => { try { loadTradingUI() } catch(e) { console.error(e) } }, 300)
-        setTimeout(() => { try { loadSpotBalances(); loadOpenLimitOrders() } catch(e) {} }, 500)
+        setTimeout(() => { try { loadOverviewTab() } catch(e) {} }, 500)
 
       }
     }
