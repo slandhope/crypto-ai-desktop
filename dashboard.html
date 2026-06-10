@@ -396,6 +396,64 @@
   }
   .trading-stat-label { font-size: 11px; color: var(--text2); margin-top: 2px; }
 
+
+  /* ══ GLOBAL LUXURY GLASS THEME ══════════════════════════════════════ */
+  body::before {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% -10%, rgba(0,212,255,0.06), transparent),
+      radial-gradient(ellipse 60% 40% at 90% 110%, rgba(124,58,237,0.07), transparent);
+  }
+  .tg-section {
+    background: rgba(15,23,42,0.55) !important;
+    border: 1px solid rgba(148,163,184,0.09);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.03);
+    transition: border-color .25s ease, box-shadow .25s ease;
+  }
+  .tg-section:hover {
+    border-color: rgba(0,212,255,0.22);
+    box-shadow: 0 6px 28px rgba(0,212,255,0.05), inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+  .page-tab {
+    border-radius: 10px;
+    transition: all .22s ease;
+  }
+  .page-tab:hover { background: rgba(0,212,255,0.07); }
+  .page-tab.active {
+    background: linear-gradient(135deg, rgba(0,212,255,0.16), rgba(124,58,237,0.16));
+    border: 1px solid rgba(0,212,255,0.3);
+    box-shadow: 0 0 16px rgba(0,212,255,0.12), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  input[type="text"], input[type="number"], input[type="password"], select, textarea {
+    transition: border-color .2s ease, box-shadow .2s ease;
+  }
+  input[type="text"]:focus, input[type="number"]:focus, input[type="password"]:focus, select:focus, textarea:focus {
+    border-color: rgba(0,212,255,0.45) !important;
+    box-shadow: 0 0 0 3px rgba(0,212,255,0.08), 0 0 14px rgba(0,212,255,0.1);
+    outline: none;
+  }
+  .tg-add-btn {
+    transition: all .18s ease;
+  }
+  .tg-add-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0,212,255,0.18);
+  }
+  .overlay-topbar {
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    background: rgba(2,6,23,0.7) !important;
+  }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(0,212,255,0.25), rgba(124,58,237,0.25));
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(0,212,255,0.4); }
+  ::-webkit-scrollbar-track { background: transparent; }
+
   /* ══ LUXURY TRADING UI ══════════════════════════════════════════════ */
   #trading-page .trading-hero {
     background: linear-gradient(135deg, rgba(0,212,255,0.08), rgba(124,58,237,0.08));
@@ -1675,6 +1733,41 @@
         <div class="ov-chip-label">Engine</div>
         <div class="ov-chip-val" id="ov-engine" style="font-size:11px;"><span class="scan-pulse"></span>Live</div>
       </div>
+    </div>
+
+    <!-- Risk Protections -->
+    <div class="tg-section" style="margin-bottom:10px;padding:12px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🛡️ Risk Protections</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.25);border-radius:8px;padding:8px;">
+          <input type="checkbox" id="rp-autopilot" style="accent-color:#7c3aed;"> 🤖 Auto Pilot (all on)
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(15,23,42,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;">
+          <input type="checkbox" id="rp-profitlock" style="accent-color:#34d399;"> 🔒 Profit Lock (+5% day)
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(15,23,42,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;">
+          <input type="checkbox" id="rp-antitilt" style="accent-color:#00d4ff;"> 🧊 Anti-Tilt (½ size)
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(15,23,42,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;">
+          <input type="checkbox" id="rp-volsizing" style="accent-color:#fbbf24;"> 🌪️ Volatility Sizing
+        </label>
+      </div>
+      <div style="font-size:10px;color:var(--text2);margin:8px 0 6px;font-weight:600;">TRADE GUARDS (on by default — your call)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(15,23,42,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;">
+          <input type="checkbox" id="rp-bench" checked style="accent-color:#f97316;"> 🪑 Coin Bench (4 losses)
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(15,23,42,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;">
+          <input type="checkbox" id="rp-cooldown" checked style="accent-color:#38bdf8;"> ⏰ Loss Cooldown
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(15,23,42,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;">
+          <input type="checkbox" id="rp-ragelock" checked style="accent-color:#ef4444;"> 🔒 Rage Lock
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(15,23,42,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;">
+          <input type="checkbox" id="rp-maxpos" checked style="accent-color:#a78bfa;"> 📊 Max Positions
+        </label>
+      </div>
+      <div style="font-size:10px;color:var(--text2);margin-top:6px;">Auto Pilot = Asuka manages the top protections herself</div>
     </div>
 
     <!-- Panic close-all -->
@@ -5415,6 +5508,49 @@ async function updateOverviewStrip() {
 }
 setInterval(updateOverviewStrip, 15000)
 setTimeout(updateOverviewStrip, 1500)
+
+// ── Risk Protection toggles ───────────────────────────────────────────────
+const RP_KEYS = { 'rp-autopilot':'riskAutoPilot', 'rp-profitlock':'profitLockEnabled', 'rp-antitilt':'antiTiltEnabled', 'rp-volsizing':'volSizingEnabled' }
+Object.entries(RP_KEYS).forEach(([elId, key]) => {
+  document.getElementById(elId)?.addEventListener('change', function() {
+    ipcRenderer.send('set-setting', key, this.checked)
+    if (elId === 'rp-autopilot' && this.checked) {
+      // Visual: autopilot covers everything
+      ;['rp-profitlock','rp-antitilt','rp-volsizing'].forEach(id => {
+        const el = document.getElementById(id)
+        if (el) el.parentElement.style.opacity = '0.5'
+      })
+    } else if (elId === 'rp-autopilot') {
+      ;['rp-profitlock','rp-antitilt','rp-volsizing'].forEach(id => {
+        const el = document.getElementById(id)
+        if (el) el.parentElement.style.opacity = '1'
+      })
+    }
+  })
+})
+// Trade guards — default ON, unchecking disables
+const RP_GUARDS = { 'rp-bench':'benchEnabled', 'rp-cooldown':'cooldownEnabled', 'rp-ragelock':'rageLockEnabled', 'rp-maxpos':'maxPositionsEnabled' }
+Object.entries(RP_GUARDS).forEach(([elId, key]) => {
+  document.getElementById(elId)?.addEventListener('change', function() {
+    ipcRenderer.send('set-setting', key, this.checked)
+  })
+})
+// Restore saved states
+ipcRenderer.invoke('get-settings').then(s => {
+  if (!s) return
+  Object.entries(RP_KEYS).forEach(([elId, key]) => {
+    const el = document.getElementById(elId)
+    if (el && s[key]) el.checked = true
+  })
+  Object.entries(RP_GUARDS).forEach(([elId, key]) => {
+    const el = document.getElementById(elId)
+    if (el) el.checked = s[key] !== false
+  })
+  if (s.riskAutoPilot) ['rp-profitlock','rp-antitilt','rp-volsizing'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.parentElement.style.opacity = '0.5'
+  })
+}).catch(() => {})
+
 
 // ── Equity Curve Sparkline ────────────────────────────────────────────────
 async function drawEquitySpark() {

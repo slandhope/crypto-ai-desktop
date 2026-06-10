@@ -4062,7 +4062,7 @@ const newsCtx = newsSentiment ? `News Sentiment: ${newsSentiment.label} (${newsS
 const whaleCtx = whaleSignal || '';
 const divergenceCtx = divergence?.signal || '';
 const tgSentimentCtx = tgSentiment?.signal || '';
-const [coinPrice, funding, fearGreed, dominance, news, openInterest, lsRatio, liquidations, volume, technicalAnalysis, orderBook, correlation, timeSignal] = await Promise.all([
+const [coinPrice, funding, fearGreed, dominance, news, openInterest, lsRatio, liquidations, volume, technicalAnalysis, orderBook, correlation, timeSignal, advancedFlow, btcLead] = await Promise.all([
       getCryptoPrice(scanCoin.toLowerCase()).catch(() => null),
       getFundingRate(scanCoin).catch(() => null),
       Promise.resolve(fgRaw),
@@ -4075,8 +4075,16 @@ const [coinPrice, funding, fearGreed, dominance, news, openInterest, lsRatio, li
       getTechnicalAnalysis(scanCoin).catch(() => null),
       getOrderBook(scanCoin).catch(() => null),
       getCorrelation(scanCoin).catch(() => null),
-      Promise.resolve(getTimeSignal())
+      Promise.resolve(getTimeSignal()),
+      getAdvancedFlow(scanCoin).catch(() => null),
+      scanCoin !== 'BTC' ? getBTCLeadSignal().catch(() => null) : Promise.resolve(null)
     ]);
+
+    // ₿ BTC LEAD HARD GATE — don't fight the king (alts only)
+    if (btcLead?.block) {
+      console.log(btcLead.summary);
+      // Note: we don't know direction yet — store for post-analysis gate
+    }
 
     const pd = loadPaperTrades();
     const recentTrades = pd.trades.filter(t => t.coin === scanCoin).slice(-5);
@@ -4099,6 +4107,8 @@ ${lsRatio ? `- Long/Short Ratio: ${lsRatio}` : ''}
 ${liquidations ? `- Liquidation Zones: ${liquidations}` : ''}
 ${volume ? `- Volume: ${volume}` : ''}
 ${technicalAnalysis ? `\nTECHNICAL ANALYSIS:\n${technicalAnalysis}` : ''}
+${advancedFlow ? `\nADVANCED FLOW (order flow, structure, sweeps, traps, patterns — weigh these heavily, they show what's happening NOW):\n${advancedFlow}` : ''}
+${btcLead?.summary ? `\n${btcLead.summary}` : ''}
 ${orderBook ? `- Order Book: ${orderBook}` : ''}
 ${correlation ? `- Correlation: ${correlation}` : ''}
 - Time: ${timeSignal}
@@ -4242,8 +4252,10 @@ Only trade when there is a CLEAR edge — don't force trades.`;
         for (let i = 0; i < groupRoles.length; i++) {
           if (i > 0) await delay(500);
           const role = groupRoles[i];
+          const track = getAgentAccuracy(role);
+          const trackLine = track ? ` Your track record: ${track.accuracy}% accurate over ${track.votes} trades${track.accuracy < 45 ? ' — you have been wrong often, be extra careful' : track.accuracy > 65 ? ' — you have been sharp, trust your read' : ''}.` : '';
           const result = await callMiroAgent(role,
-            `You are a crypto ${role}. Market: ${marketSummary}. Should we ${analysis.direction?.toUpperCase()} ${scanCoin} right now? JSON: {"agree":true/false,"confidence":0-100,"argument":"specific reason in 10 words"}`
+            `You are a crypto ${role}.${trackLine} Market: ${marketSummary}. Should we ${analysis.direction?.toUpperCase()} ${scanCoin} right now? JSON: {"agree":true/false,"confidence":0-100,"argument":"specific reason in 10 words"}`
           );
           round1Results.push(result ? { ...result, role } : { agree: false, confidence: 50, argument: 'unclear', role });
         }
@@ -4281,7 +4293,8 @@ JSON: {"agree":true/false,"confidence":0-100,"changed":true/false}`
           changed: groupChanged, confidence: groupConf,
           topBullArg: round1Results.filter(r => r.agree)[0]?.argument || '',
           topBearArg: round1Results.filter(r => !r.agree)[0]?.argument || '',
-          pct: Math.round(groupAgree / groupRoles.length * 100)
+          pct: Math.round(groupAgree / groupRoles.length * 100),
+          roleVotes: round2Results.map((v, i) => ({ role: groupRoles[i], agree: !!v.agree }))
         };
       }
 
@@ -4303,7 +4316,19 @@ JSON: {"agree":true/false,"confidence":0-100,"changed":true/false}`
       // Compile group results
       const totalAgree = groupResults.reduce((s, g) => s + g.agree, 0);
       const totalChanged = groupResults.reduce((s, g) => s + g.changed, 0);
-      const swarmAgreePct = Math.round(totalAgree / TOTAL_AGENTS * 100);
+      const rawSwarmPct = Math.round(totalAgree / TOTAL_AGENTS * 100);
+      // Experience-weighted vote: veteran agents (5+ trades) count by accuracy
+      const allVotes = groupResults.flatMap(g => g.roleVotes || []);
+      let wSum = 0, wAgree = 0;
+      for (const v of allVotes) {
+        const track = getAgentAccuracy(v.role);
+        const weight = track ? Math.max(0.25, track.accuracy / 100) : 0.5; // rookies = 0.5
+        wSum += weight;
+        if (v.agree) wAgree += weight;
+      }
+      const swarmAgreePct = wSum > 0 ? Math.round(wAgree / wSum * 100) : rawSwarmPct;
+      if (swarmAgreePct !== rawSwarmPct) console.log(`🎓 Experience-weighted vote: ${rawSwarmPct}% raw → ${swarmAgreePct}% weighted (veterans count more)`);
+      const _swarmVotesForRecord = allVotes;
       const swarmConfidence = Math.round(groupResults.reduce((s, g) => s + g.confidence, 0) / groupResults.length);
       // combinedConfidence calculated below
       const agreeCount = totalAgree;
@@ -4410,6 +4435,13 @@ JSON only:
       finalDecision.stopLoss = smartParams.stopLoss;
       // ─────────────────────────────────────────────────────────────────
 
+      // ── BTC Lead Gate — alts can't fight BTC's direction ──────────────
+      if (btcLead?.block && scanCoin !== 'BTC' && finalDecision.direction === btcLead.block) {
+        console.log(`₿ BTC LEAD GATE: blocking ${finalDecision.direction} ${scanCoin} — ${btcLead.summary}`);
+        logShadowTrade(scanCoin, finalDecision.direction, finalDecision.entry || analysis.entry, finalDecision.target, finalDecision.stopLoss, 'BTC lead gate', finalDecision.confidence);
+        return;
+      }
+
       // ── MTF Confirmation Gate (Off/Soft/Hard) ─────────────────────────
       const mtfMode = (settings.mtfMode || 'soft').toLowerCase();
       if (mtfMode !== 'off') {
@@ -4485,7 +4517,8 @@ JSON only:
         trailingLevels: smartParams.trailingLevels,
         partialTp: smartParams.partialTp,
         qualityGrade,
-        sizeMultiplier
+        sizeMultiplier,
+        swarmVotes: _swarmVotesForRecord
       };
 
       openPaperTrade(signal);
@@ -5007,6 +5040,10 @@ async function runIndependentScalpScan() {
       ]);
       
       // Additional scalp signals
+      const [scalpCVD, scalpBtcLead] = await Promise.all([
+        getCVD(coin).catch(() => null),
+        coin !== 'BTC' ? getBTCLeadSignal().catch(() => null) : Promise.resolve(null)
+      ]);
       const [scalpFunding, scalpPivot] = await Promise.all([
         scalpIndicators.fundingExtreme !== false ? getFundingRateExtreme(coin).catch(() => null) : null,
         scalpIndicators.pivots !== false ? getPivotPoints(coin).catch(() => null) : null
@@ -5026,7 +5063,9 @@ async function runIndependentScalpScan() {
         lsRatio, liq, vol, scalpRsi, scalpBb, scalpSr, scalpOb, scalpIchi,
         scalpATRInfo,
         scalpFunding?.extreme ? scalpFunding.summary : null,
-        scalpPivot ? `Pivots: PP=$${scalpPivot.PP} | ${scalpPivot.abovePivot ? 'Above PP bullish' : 'Below PP bearish'}` : null
+        scalpPivot ? `Pivots: PP=$${scalpPivot.PP} | ${scalpPivot.abovePivot ? 'Above PP bullish' : 'Below PP bearish'}` : null,
+        scalpCVD?.summary || null,
+        scalpBtcLead?.summary || null
       ].filter(Boolean).join('\n');
       const vwapSignal = extraSignals;
 
@@ -5144,6 +5183,7 @@ JSON: {"agree":true/false,"confidence":0-100,"argument":"specific reason 8 words
 
       if (agreeCount < 2) {
         console.log(`⚡ Agents rejected: only ${agreeCount}/5 agree — skipping ${coin}`);
+        logShadowTrade(coin, scoutResult?.direction, scoutResult?.entry, scoutResult?.target, scoutResult?.stopLoss, `scalp agents ${agreeCount}/5`, scoutResult?.confidence);
         continue;
       }
       // Need at least 2/5 agents to agree
@@ -5204,6 +5244,7 @@ JSON only:
 
       if (!finalDecision?.execute) {
         console.log(`⚡ Sonnet rejected ${coin}: ${finalDecision?.reason}`);
+        logShadowTrade(coin, scoutResult?.direction, scoutResult?.entry, scoutResult?.target, scoutResult?.stopLoss, 'scalp Sonnet reject', scoutResult?.confidence);
         continue;
       }
 
@@ -5364,6 +5405,14 @@ JSON only:
     const longVotes = scalpSuggestions.filter(a => a.direction === 'long').length;
     const shortVotes = scalpSuggestions.filter(a => a.direction === 'short').length;
     const scalpDirection = longVotes >= shortVotes ? 'long' : 'short';
+
+    // ₿ BTC Lead Gate — scalps follow BTC hardest on short timeframes
+    const btcLeadScalp = coin !== 'BTC' ? await getBTCLeadSignal().catch(() => null) : null;
+    if (btcLeadScalp?.block && btcLeadScalp.block === scalpDirection) {
+      console.log(`₿ SCALP BTC GATE: blocking ${scalpDirection} ${coin} — ${btcLeadScalp.summary}`);
+      logShadowTrade(coin, scalpDirection, null, null, null, 'scalp BTC lead gate', avgConf);
+      return;
+    }
 
     // Claude final scalp decision
     const finalRes = await anthropic.messages.create({
@@ -5741,6 +5790,7 @@ let rageLockTimer = null;
 let consecutiveLosses = 0;
 
 function checkRageLock() {
+  if (loadSettings().rageLockEnabled === false) return false; // user disabled
   const settings = loadSettings();
   if (!settings.rageLockEnabled) return false;
   if (rageLockActive) return true;
@@ -6097,6 +6147,192 @@ async function getCoinPrice(coin) {
   } catch(e) { return null; }
 }
 
+
+// ─── ADVANCED FLOW ANALYSIS — CVD, stop-hunts, structure, traps, patterns ──
+
+// 1. CVD / Order Flow — real buying vs selling pressure RIGHT NOW
+async function getCVD(coin) {
+  try {
+    const res = await fetchT(`https://fapi.binance.com/fapi/v1/aggTrades?symbol=${coin}USDT&limit=1000`);
+    const trades = await res.json();
+    if (!Array.isArray(trades)) return null;
+    let buyVol = 0, sellVol = 0;
+    for (const t of trades) {
+      const v = parseFloat(t.q) * parseFloat(t.p);
+      if (t.m) sellVol += v; else buyVol += v; // m=true → buyer is maker → SELL pressure
+    }
+    const total = buyVol + sellVol;
+    if (!total) return null;
+    const buyPct = Math.round(buyVol / total * 100);
+    const delta = buyVol - sellVol;
+    const label = buyPct >= 62 ? '🟢 STRONG BUYING' : buyPct >= 55 ? '🟢 buyers in control'
+      : buyPct <= 38 ? '🔴 STRONG SELLING' : buyPct <= 45 ? '🔴 sellers in control' : '⚪ balanced';
+    return { buyPct, delta, summary: `Order Flow (CVD): ${label} — ${buyPct}% buy volume, delta ${delta >= 0 ? '+' : ''}$${(delta/1000).toFixed(0)}K (last 1000 trades)` };
+  } catch(e) { return null; }
+}
+
+// 2. Stop-Hunt / Liquidity Sweep — whales grabbing liquidity before the move
+function detectStopHunt(candles, sr) {
+  try {
+    if (!candles || candles.length < 6 || !sr) return null;
+    const recent = candles.slice(-5);
+    const support = sr.nearestSupport, resistance = sr.nearestResistance;
+    for (const c of recent) {
+      if (support && c.low < support * 0.997 && c.close > support) {
+        return { type: 'bullish_sweep', summary: `🎣 STOP HUNT: price swept below support $${support} then reclaimed — institutional long entry pattern` };
+      }
+      if (resistance && c.high > resistance * 1.003 && c.close < resistance) {
+        return { type: 'bearish_sweep', summary: `🎣 STOP HUNT: price swept above resistance $${resistance} then rejected — institutional short entry pattern` };
+      }
+    }
+    return null;
+  } catch(e) { return null; }
+}
+
+// 3. Market Structure — HH/HL vs LH/LL trend skeleton
+function getMarketStructure(candles) {
+  try {
+    if (!candles || candles.length < 30) return null;
+    const c = candles.slice(-60);
+    const swings = { highs: [], lows: [] };
+    for (let i = 2; i < c.length - 2; i++) {
+      if (c[i].high > c[i-1].high && c[i].high > c[i-2].high && c[i].high > c[i+1].high && c[i].high > c[i+2].high) swings.highs.push(c[i].high);
+      if (c[i].low < c[i-1].low && c[i].low < c[i-2].low && c[i].low < c[i+1].low && c[i].low < c[i+2].low) swings.lows.push(c[i].low);
+    }
+    if (swings.highs.length < 2 || swings.lows.length < 2) return null;
+    const [h1, h2] = swings.highs.slice(-2);
+    const [l1, l2] = swings.lows.slice(-2);
+    const hh = h2 > h1, hl = l2 > l1, lh = h2 < h1, ll = l2 < l1;
+    let structure, bias;
+    if (hh && hl) { structure = 'HH+HL UPTREND'; bias = 'long'; }
+    else if (lh && ll) { structure = 'LH+LL DOWNTREND'; bias = 'short'; }
+    else { structure = 'MIXED/RANGE'; bias = 'neutral'; }
+    return { structure, bias, summary: `Market Structure: ${structure} — structure favors ${bias.toUpperCase()}` };
+  } catch(e) { return null; }
+}
+
+// 4. BTC Lead Signal — alts follow BTC; don't fight the king
+let _btcLeadCache = { data: null, ts: 0 };
+async function getBTCLeadSignal() {
+  try {
+    if (Date.now() - _btcLeadCache.ts < 5 * 60 * 1000) return _btcLeadCache.data;
+    const candles = await getCandles('BTC', '15m', 3);
+    if (!candles || candles.length < 3) return null;
+    const changePct = (candles[2].close - candles[0].open) / candles[0].open * 100;
+    let signal = null;
+    if (changePct <= -1.5) signal = { block: 'long', changePct, summary: `₿ BTC LEAD: BTC dumped ${changePct.toFixed(1)}% in 30min — alt longs BLOCKED (alts follow down)` };
+    else if (changePct >= 1.5) signal = { block: 'short', changePct, summary: `₿ BTC LEAD: BTC pumped +${changePct.toFixed(1)}% in 30min — alt shorts BLOCKED (alts follow up)` };
+    else signal = { block: null, changePct, summary: `BTC stable (${changePct >= 0 ? '+' : ''}${changePct.toFixed(1)}% /30min)` };
+    _btcLeadCache = { data: signal, ts: Date.now() };
+    return signal;
+  } catch(e) { return null; }
+}
+
+// 5. OI Trap Detection — open interest building while price flat = trap forming
+async function detectOITrap(coin) {
+  try {
+    const res = await fetchT(`https://fapi.binance.com/futures/data/openInterestHist?symbol=${coin}USDT&period=5m&limit=12`);
+    const hist = await res.json();
+    if (!Array.isArray(hist) || hist.length < 12) return null;
+    const oiStart = parseFloat(hist[0].sumOpenInterestValue);
+    const oiEnd = parseFloat(hist[11].sumOpenInterestValue);
+    const oiChange = (oiEnd - oiStart) / oiStart * 100;
+    const candles = await getCandles(coin, '5m', 12);
+    if (!candles) return null;
+    const priceChange = (candles[candles.length-1].close - candles[0].open) / candles[0].open * 100;
+    if (oiChange > 3 && Math.abs(priceChange) < 0.3) {
+      return { summary: `⚠️ OI TRAP RISK: Open Interest +${oiChange.toFixed(1)}% in 1h while price flat (${priceChange.toFixed(2)}%) — positions building, violent move incoming, direction unclear` };
+    }
+    return null;
+  } catch(e) { return null; }
+}
+
+// 6. Candle Patterns AT key levels — context-aware, not noise
+function detectCandlePattern(candles, sr) {
+  try {
+    if (!candles || candles.length < 3 || !sr) return null;
+    const c1 = candles[candles.length - 2], c2 = candles[candles.length - 1];
+    const nearSupport = sr.nearestSupport && Math.abs(c2.close - sr.nearestSupport) / sr.nearestSupport < 0.01;
+    const nearResistance = sr.nearestResistance && Math.abs(c2.close - sr.nearestResistance) / sr.nearestResistance < 0.01;
+    const body = cc => Math.abs(cc.close - cc.open);
+    // Bullish engulfing at support
+    if (nearSupport && c1.close < c1.open && c2.close > c2.open && c2.close > c1.open && c2.open < c1.close) {
+      return { summary: `🕯️ BULLISH ENGULFING at support $${sr.nearestSupport} — strong long signal` };
+    }
+    // Bearish engulfing at resistance
+    if (nearResistance && c1.close > c1.open && c2.close < c2.open && c2.open > c1.close && c2.close < c1.open) {
+      return { summary: `🕯️ BEARISH ENGULFING at resistance $${sr.nearestResistance} — strong short signal` };
+    }
+    // Pin bar (hammer) at support
+    const lowerWick = Math.min(c2.open, c2.close) - c2.low;
+    if (nearSupport && lowerWick > body(c2) * 2 && c2.close > c2.open) {
+      return { summary: `🕯️ HAMMER/PIN BAR at support $${sr.nearestSupport} — rejection of lows, bullish` };
+    }
+    // Shooting star at resistance
+    const upperWick = c2.high - Math.max(c2.open, c2.close);
+    if (nearResistance && upperWick > body(c2) * 2 && c2.close < c2.open) {
+      return { summary: `🕯️ SHOOTING STAR at resistance $${sr.nearestResistance} — rejection of highs, bearish` };
+    }
+    return null;
+  } catch(e) { return null; }
+}
+
+// Bundle all advanced flow into one context block for the scan prompt
+async function getAdvancedFlow(coin) {
+  try {
+    const candles = await getCandles(coin, '1h', 60);
+    const sr = candles ? calcSupportResistance(candles) : null;
+    const [cvd, oiTrap] = await Promise.all([
+      getCVD(coin).catch(() => null),
+      detectOITrap(coin).catch(() => null)
+    ]);
+    const parts = [];
+    if (cvd) parts.push(cvd.summary);
+    const structure = getMarketStructure(candles);
+    if (structure) parts.push(structure.summary);
+    const hunt = detectStopHunt(candles, sr);
+    if (hunt) parts.push(hunt.summary);
+    if (oiTrap) parts.push(oiTrap.summary);
+    const pattern = detectCandlePattern(candles, sr);
+    if (pattern) parts.push(pattern.summary);
+    return parts.length ? parts.join('\n') : null;
+  } catch(e) { return null; }
+}
+
+// ─── MIROFISH EXPERIENCE — per-agent track records ─────────────────────────
+const AGENT_STATS_FILE = path.join(DATA_DIR, 'agent-stats.json');
+
+function getAgentStats() { return loadJSON(AGENT_STATS_FILE, {}); }
+
+function getAgentAccuracy(role) {
+  const stats = getAgentStats();
+  const s = stats[role];
+  if (!s || s.votes < 5) return null; // need 5+ votes for a track record
+  return { accuracy: Math.round(s.correct / s.votes * 100), votes: s.votes };
+}
+
+function updateAgentStats(swarmVotes, won) {
+  try {
+    if (!swarmVotes?.length) return;
+    const stats = getAgentStats();
+    for (const v of swarmVotes) {
+      if (!stats[v.role]) stats[v.role] = { votes: 0, correct: 0 };
+      stats[v.role].votes++;
+      // Agent was right if: agreed and trade won, OR disagreed and trade lost
+      if ((v.agree && won) || (!v.agree && !won)) stats[v.role].correct++;
+    }
+    saveJSON(AGENT_STATS_FILE, stats);
+  } catch(e) {}
+}
+
+ipcMain.handle('get-agent-stats', () => {
+  const stats = getAgentStats();
+  return Object.entries(stats)
+    .filter(([_, s]) => s.votes >= 3)
+    .map(([role, s]) => ({ role, votes: s.votes, accuracy: Math.round(s.correct / s.votes * 100) }))
+    .sort((a, b) => b.accuracy - a.accuracy);
+});
+
 // ─── SHADOW TRADES — track rejected signals to tune the brain ──────────────
 const SHADOW_FILE = path.join(DATA_DIR, 'shadow-trades.json');
 
@@ -6162,6 +6398,7 @@ const BENCH_FILE = path.join(DATA_DIR, 'coin-bench.json');
 
 function getCoinBench(coin) {
   try {
+    if (loadSettings().benchEnabled === false) return null; // user disabled
     const data = loadJSON(BENCH_FILE, {});
     const b = data[coin];
     if (b?.benchedUntil && Date.now() < b.benchedUntil) {
@@ -6262,6 +6499,10 @@ async function openPaperTrade(signal) {
     size = size * signal.sizeMultiplier;
     console.log(`💎 Conviction sizing: grade ${signal.qualityGrade || '?'} → $${size.toFixed(0)} position`);
   }
+  // Anti-tilt (3 losses in a row → half size until a win)
+  size = size * getAntiTiltMultiplier();
+  // Volatility-adaptive sizing (high ATR coin → smaller position)
+  size = size * (await getVolatilityMultiplier(signal.coin));
   const positionSize = size * leverage;
   const liquidationPct = 1 / leverage * 0.8;
   const liquidationPrice = signal.direction === 'long'
@@ -6288,6 +6529,7 @@ async function openPaperTrade(signal) {
     useBinance: false,
     tradeMode: signal.tradeMode || 'normal',
     qualityGrade: signal.qualityGrade || null,
+    swarmVotes: signal.swarmVotes || null,
     trailingLevels: signal.trailingLevels || [],
     partialTp: signal.partialTp || 1.0,
     partialTpDone: false
@@ -6358,6 +6600,7 @@ async function closePaperTrade(tradeId, closePrice, reason) {
 
   if (trade.caller) updateCallerStats(trade.caller, actualPnl > 0);
   updateCoinBench(trade.coin, actualPnl > 0); // 4 consecutive losses → 7-day bench
+  if (trade.swarmVotes) updateAgentStats(trade.swarmVotes, actualPnl > 0); // agents learn from outcomes
 
   // Close on Binance testnet if linked
   if (trade.useBinance && trade.binanceSymbol) {
@@ -7346,6 +7589,7 @@ function setCoinCooldown(coin, minutes = 30) {
 }
 
 function isCoinOnCooldown(coin) {
+  if (loadSettings().cooldownEnabled === false) return null; // user disabled
   const cooldownUntil = COIN_COOLDOWNS[coin];
   if (!cooldownUntil) return false;
   if (Date.now() > cooldownUntil) {
@@ -7523,8 +7767,64 @@ All trading paused until midnight UTC`);
   return false;
 }
 
+
+// ─── RISK PROTECTIONS (user-toggleable, Auto Pilot enables all) ────────────
+function riskFeatureOn(settings, key) {
+  return !!settings.riskAutoPilot || !!settings[key];
+}
+
+// Daily PROFIT lock — protect a winning day
+function checkDailyProfitLock() {
+  const settings = loadSettings();
+  if (!riskFeatureOn(settings, 'profitLockEnabled')) return false;
+  const lockPct = settings.profitLockPct || 5; // % of balance
+  const pd = loadPaperTrades();
+  const today = new Date().toDateString();
+  const todayPnl = pd.trades
+    .filter(t => t.closeTime && new Date(t.closeTime).toDateString() === today)
+    .reduce((s, t) => s + (t.pnl || 0), 0);
+  const lockAmount = pd.balance * (lockPct / 100);
+  if (todayPnl >= lockAmount) {
+    console.log(`🔒 PROFIT LOCK: +$${todayPnl.toFixed(0)} today (≥${lockPct}% of balance) — keeping the win, no new trades until tomorrow`);
+    return true;
+  }
+  return false;
+}
+
+// Anti-tilt — 3 losses in a row anywhere → half size until a win
+function getAntiTiltMultiplier() {
+  const settings = loadSettings();
+  if (!riskFeatureOn(settings, 'antiTiltEnabled')) return 1;
+  const pd = loadPaperTrades();
+  const recent = pd.trades.filter(t => t.status !== 'open' && t.closeTime)
+    .sort((a, b) => b.closeTime - a.closeTime).slice(0, 3);
+  if (recent.length === 3 && recent.every(t => (t.pnl || 0) < 0)) {
+    console.log('🧊 Anti-tilt: 3 consecutive losses — half size until next win');
+    return 0.5;
+  }
+  return 1;
+}
+
+// Volatility-adaptive sizing — same risk per trade regardless of coin
+async function getVolatilityMultiplier(coin) {
+  const settings = loadSettings();
+  if (!riskFeatureOn(settings, 'volSizingEnabled')) return 1;
+  try {
+    const candles = await getCandles(coin, '1h', 30);
+    if (!candles) return 1;
+    const atr = calcATR(candles, 14);
+    const price = candles[candles.length - 1].close;
+    if (!atr || !price) return 1;
+    const atrPct = (atr / price) * 100;
+    if (atrPct > 5) { console.log(`🌪️ ${coin} very volatile (ATR ${atrPct.toFixed(1)}%) — size ×0.6`); return 0.6; }
+    if (atrPct > 3) { console.log(`💨 ${coin} volatile (ATR ${atrPct.toFixed(1)}%) — size ×0.8`); return 0.8; }
+    return 1;
+  } catch(e) { return 1; }
+}
+
 function isTradingPaused() {
   if (checkDailyPnlLimit()) return true;
+  if (checkDailyProfitLock()) return true;
   if (_tradingPausedUntil > Date.now()) return true;
   return false;
 }
@@ -7532,6 +7832,7 @@ function isTradingPaused() {
 // ─── MAX CONCURRENT POSITIONS ─────────────────────────────────────────────
 function checkMaxPositions() {
   const settings = loadSettings();
+  if (settings.maxPositionsEnabled === false) return false; // user disabled
   const maxPositions = settings.maxOpenPositions;
   if (!maxPositions || maxPositions <= 0) return false;
 
