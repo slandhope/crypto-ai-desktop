@@ -396,6 +396,94 @@
   }
   .trading-stat-label { font-size: 11px; color: var(--text2); margin-top: 2px; }
 
+  /* ══ LUXURY TRADING UI ══════════════════════════════════════════════ */
+  #trading-page .trading-hero {
+    background: linear-gradient(135deg, rgba(0,212,255,0.08), rgba(124,58,237,0.08));
+    border: 1px solid rgba(0,212,255,0.15);
+    border-radius: 16px;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
+    padding: 16px 12px;
+    position: relative;
+    overflow: hidden;
+  }
+  #trading-page .trading-hero::before {
+    content: ''; position: absolute; top: 0; left: -100%;
+    width: 60%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,212,255,0.6), transparent);
+    animation: heroShine 4s ease-in-out infinite;
+  }
+  @keyframes heroShine { 50% { left: 140%; } 100% { left: 140%; } }
+  #trading-page .trading-stat-val {
+    background: linear-gradient(135deg, #fff, #94a3b8);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    font-weight: 800; letter-spacing: -0.5px;
+  }
+  #trading-page .trading-stat-val.profit {
+    background: linear-gradient(135deg, #34d399, #10b981);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 12px rgba(52,211,153,0.4));
+  }
+  #trading-page .trading-stat-val.loss {
+    background: linear-gradient(135deg, #f87171, #ef4444);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 12px rgba(239,68,68,0.4));
+  }
+  #trading-page .tg-section {
+    background: rgba(15,23,42,0.6);
+    border: 1px solid rgba(148,163,184,0.08);
+    border-radius: 14px;
+    backdrop-filter: blur(12px);
+    transition: border-color .25s ease, transform .25s ease, box-shadow .25s ease;
+  }
+  #trading-page .tg-section:hover {
+    border-color: rgba(0,212,255,0.25);
+    box-shadow: 0 4px 24px rgba(0,212,255,0.06);
+  }
+  #trading-page .trade-tab {
+    position: relative; transition: all .2s ease;
+  }
+  #trading-page .trade-tab.active::after {
+    content: ''; position: absolute; bottom: -1px; left: 15%; right: 15%;
+    height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, #00d4ff, #7c3aed);
+    box-shadow: 0 0 12px rgba(0,212,255,0.5);
+  }
+  #trading-page .leverage-btn, #trading-page .tg-add-btn {
+    transition: all .18s ease;
+  }
+  #trading-page .leverage-btn:hover, #trading-page .tg-add-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0,212,255,0.15);
+  }
+  #trading-page .leverage-btn.active {
+    background: linear-gradient(135deg, rgba(0,212,255,0.25), rgba(124,58,237,0.25));
+    border-color: rgba(0,212,255,0.5);
+    box-shadow: 0 0 16px rgba(0,212,255,0.2), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+  /* Quick-glance strip */
+  .ov-strip {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 10px;
+  }
+  .ov-chip {
+    background: rgba(15,23,42,0.7); border: 1px solid rgba(148,163,184,0.1);
+    border-radius: 12px; padding: 10px 8px; text-align: center;
+    backdrop-filter: blur(10px); transition: all .2s ease;
+  }
+  .ov-chip:hover { border-color: rgba(0,212,255,0.3); transform: translateY(-1px); }
+  .ov-chip-label { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 3px; }
+  .ov-chip-val { font-size: 14px; font-weight: 800; }
+  .regime-bull { color: #34d399; text-shadow: 0 0 12px rgba(52,211,153,0.5); }
+  .regime-bear { color: #ef4444; text-shadow: 0 0 12px rgba(239,68,68,0.5); }
+  .regime-side { color: #fbbf24; text-shadow: 0 0 12px rgba(251,191,36,0.5); }
+  .scan-pulse {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: #34d399; margin-right: 5px;
+    animation: scanPulse 2s ease-in-out infinite;
+  }
+  @keyframes scanPulse { 50% { opacity: .3; box-shadow: 0 0 8px #34d399; } }
+
+
   .trade-item {
     padding: 12px;
     background: var(--bg2);
@@ -1569,8 +1657,33 @@
   <!-- ══════ OVERVIEW TAB ══════ -->
   <div class="trade-tab-content active" id="tab-overview">
 
+    <!-- Quick-glance strip -->
+    <div class="ov-strip" style="margin-top:12px;">
+      <div class="ov-chip">
+        <div class="ov-chip-label">Regime</div>
+        <div class="ov-chip-val regime-side" id="ov-regime">—</div>
+      </div>
+      <div class="ov-chip">
+        <div class="ov-chip-label">Today P&L</div>
+        <div class="ov-chip-val" id="ov-today-pnl">$0</div>
+      </div>
+      <div class="ov-chip">
+        <div class="ov-chip-label">Open</div>
+        <div class="ov-chip-val" id="ov-open" style="color:#fbbf24;">0</div>
+      </div>
+      <div class="ov-chip">
+        <div class="ov-chip-label">Engine</div>
+        <div class="ov-chip-val" id="ov-engine" style="font-size:11px;"><span class="scan-pulse"></span>Live</div>
+      </div>
+    </div>
+
+    <!-- Panic close-all -->
+    <button id="ov-close-all-btn" style="width:100%;margin-bottom:10px;padding:9px;border-radius:12px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:#ef4444;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;display:none;">
+      🛑 Close ALL Open Positions
+    </button>
+
     <!-- Stats hero -->
-    <div class="trading-hero" style="margin:12px 0 8px;">
+    <div class="trading-hero" style="margin:4px 0 8px;">
       <div class="trading-stat">
         <div class="trading-stat-label">Win Rate</div>
         <div class="trading-stat-val" id="pt-winrate">0%</div>
@@ -1584,9 +1697,10 @@
         <div class="trading-stat-val" id="pt-total">0</div>
       </div>
     </div>
-    <div style="text-align:center;font-size:12px;color:var(--text2);margin-bottom:12px;">
+    <div style="text-align:center;font-size:12px;color:var(--text2);margin-bottom:6px;">
       Balance: <span id="pt-balance" style="color:var(--accent);font-weight:600;">$100,000</span>
     </div>
+    <canvas id="equity-spark" width="600" height="56" style="width:100%;height:56px;margin-bottom:10px;border-radius:10px;background:rgba(15,23,42,0.5);border:1px solid rgba(148,163,184,0.07);"></canvas>
 
     <!-- Usage Stats -->
     <div class="tg-section" style="margin-bottom:8px;">
@@ -2223,8 +2337,8 @@
           <button class="leverage-btn alert-dir-btn active" data-val="above">Above</button>
           <button class="leverage-btn alert-dir-btn" data-val="below">Below</button>
         </div>
-        <button class="tg-add-btn" id="add-alert-btn" style="width:100%;margin-bottom:6px;">Set Alert</button>
-        <div id="alerts-list" style="font-size:12px;"></div>
+        <button class="tg-add-btn" id="trade-add-alert-btn" style="width:100%;margin-bottom:6px;">Set Alert</button>
+        <div id="trade-alerts-list" style="font-size:12px;"></div>
       </div>
     </div>
   </div>
@@ -2262,16 +2376,12 @@
       <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Upload textbooks — Asuka reads any page on command</div>
 
       <!-- Drop zone -->
-      <div id="book-drop-zone" style="border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;cursor:pointer;margin-bottom:10px;transition:.2s;"
-        onclick="document.getElementById('book-file-input').click()"
-        ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
-        ondragleave="this.style.borderColor='var(--border)'"
-        ondrop="handleBookDrop(event)">
+      <div id="book-drop-zone" style="border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;cursor:pointer;margin-bottom:10px;transition:.2s;">
         <div style="font-size:32px;margin-bottom:6px;">📄</div>
         <div style="font-size:12px;font-weight:600;">Drop PDF here or tap to upload</div>
         <div style="font-size:10px;color:var(--text2);margin-top:4px;">Japanese textbook, manga, study guides...</div>
       </div>
-      <input type="file" id="book-file-input" accept=".pdf" style="display:none;" onchange="handleBookFile(this)">
+      <input type="file" id="book-file-input" accept=".pdf" style="display:none;">
 
       <div style="display:flex;gap:6px;margin-bottom:8px;">
         <input class="tg-input" id="book-name-input" placeholder="Book name e.g. Genki 1" style="margin:0;flex:1;">
@@ -2406,7 +2516,7 @@
     <!-- Journal -->
     <div class="tg-section">
       <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📔 Trading Journal</div>
-      <div id="pt-lessons-list" style="font-size:11px;"></div>
+      <div id="memory-lessons-list" style="font-size:11px;"></div>
     </div>
   </div>
 
@@ -2490,204 +2600,6 @@
 </div>
 </div><!-- end others page -->
 
-<!-- PAGE 4 — DEV DASHBOARD -->
-<div class="page" id="page-4">
-
-  <!-- Dev Lock Screen -->
-  <div id="dev-lock-screen" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:30px;">
-    <div style="font-size:40px;margin-bottom:12px;">🔒</div>
-    <div style="font-size:16px;font-weight:700;margin-bottom:6px;">Dev Access Required</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:20px;text-align:center;">Enter your developer password to access controls</div>
-    <input type="password" id="dev-password-input" placeholder="Enter dev password"
-      style="width:100%;max-width:260px;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px;text-align:center;margin-bottom:10px;">
-    <button id="dev-unlock-btn" class="tg-add-btn" style="width:100%;max-width:260px;padding:12px;font-size:14px;">Unlock</button>
-    <div id="dev-lock-error" style="color:var(--red);font-size:12px;margin-top:8px;"></div>
-    <div style="font-size:10px;color:var(--text2);margin-top:16px;text-align:center;">Triple-tap the Dev tab to show password hint</div>
-  </div>
-
-  <!-- Dev Dashboard (hidden until unlocked) -->
-  <div id="dev-dashboard" style="display:none;overflow-y:auto;height:100%;padding:12px;">
-
-    <!-- Header -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <div>
-        <div style="font-size:14px;font-weight:800;color:var(--accent);">⚙️ Dev Control Center</div>
-        <div style="font-size:10px;color:var(--text2);" id="dev-last-refresh">Loading...</div>
-      </div>
-      <div style="display:flex;gap:6px;">
-        <button class="tg-add-btn" id="dev-refresh-btn" style="padding:4px 10px;font-size:11px;">🔄 Refresh</button>
-        <button class="tg-add-btn" id="dev-lock-btn" style="padding:4px 10px;font-size:11px;background:rgba(239,68,68,0.2);color:var(--red);">🔒 Lock</button>
-      </div>
-    </div>
-
-    <!-- Cost Monitor -->
-    <div class="tg-section" style="margin-bottom:8px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:10px;">💰 API Cost Monitor</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
-        <div style="padding:10px;background:var(--bg3);border-radius:8px;text-align:center;">
-          <div style="font-size:10px;color:var(--text2);">Today</div>
-          <div style="font-size:20px;font-weight:800;color:var(--accent);" id="dev-cost-today">$0.00</div>
-        </div>
-        <div style="padding:10px;background:var(--bg3);border-radius:8px;text-align:center;">
-          <div style="font-size:10px;color:var(--text2);">This Month</div>
-          <div style="font-size:20px;font-weight:800;" id="dev-cost-month">$0.00</div>
-        </div>
-        <div style="padding:10px;background:var(--bg3);border-radius:8px;text-align:center;">
-          <div style="font-size:10px;color:var(--text2);">Per Day Avg</div>
-          <div style="font-size:16px;font-weight:700;" id="dev-cost-avg">$0.00</div>
-        </div>
-        <div style="padding:10px;background:var(--bg3);border-radius:8px;text-align:center;">
-          <div style="font-size:10px;color:var(--text2);">Projected/Month</div>
-          <div style="font-size:16px;font-weight:700;color:var(--red);" id="dev-cost-projected">$0.00</div>
-        </div>
-      </div>
-
-      <!-- Rate Limits -->
-      <div style="font-size:11px;font-weight:600;margin-bottom:6px;">Rate Limits</div>
-      <div style="margin-bottom:4px;">
-        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">
-          <span>Haiku Requests/min</span>
-          <span id="dev-haiku-pct" style="color:var(--red);">--</span>
-        </div>
-        <div style="background:var(--bg3);border-radius:4px;height:6px;">
-          <div id="dev-haiku-bar" style="background:var(--red);height:6px;border-radius:4px;width:0%;transition:width 0.3s;"></div>
-        </div>
-      </div>
-      <div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">
-          <span>Sonnet Requests/min</span>
-          <span id="dev-sonnet-pct" style="color:var(--accent);">--</span>
-        </div>
-        <div style="background:var(--bg3);border-radius:4px;height:6px;">
-          <div id="dev-sonnet-bar" style="background:var(--accent);height:6px;border-radius:4px;width:0%;transition:width 0.3s;"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- System Status -->
-    <div class="tg-section" style="margin-bottom:8px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:10px;">🔧 System Status</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;" id="dev-system-status">
-        <div style="padding:8px;background:var(--bg3);border-radius:6px;">
-          <div style="font-size:10px;color:var(--text2);">Main Scanner</div>
-          <div style="font-size:12px;font-weight:700;" id="dev-scanner-status">--</div>
-        </div>
-        <div style="padding:8px;background:var(--bg3);border-radius:6px;">
-          <div style="font-size:10px;color:var(--text2);">Scalp Scanner</div>
-          <div style="font-size:12px;font-weight:700;" id="dev-scalp-status">--</div>
-        </div>
-        <div style="padding:8px;background:var(--bg3);border-radius:6px;">
-          <div style="font-size:10px;color:var(--text2);">Daily Bot</div>
-          <div style="font-size:12px;font-weight:700;" id="dev-daily-status">--</div>
-        </div>
-        <div style="padding:8px;background:var(--bg3);border-radius:6px;">
-          <div style="font-size:10px;color:var(--text2);">Telegram Bot</div>
-          <div style="font-size:12px;font-weight:700;" id="dev-tg-status">--</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Global Coin Override -->
-    <div class="tg-section" style="margin-bottom:8px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:6px;">🪙 Global Coin Override</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Force all users to scan fewer coins (cost control)</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
-        <button class="leverage-btn dev-coin-override-btn active" data-coins="all">All User Coins</button>
-        <button class="leverage-btn dev-coin-override-btn" data-coins="5">Max 5</button>
-        <button class="leverage-btn dev-coin-override-btn" data-coins="3">Max 3</button>
-        <button class="leverage-btn dev-coin-override-btn" data-coins="2">BTC+ETH only</button>
-        <button class="leverage-btn dev-coin-override-btn" data-coins="1">BTC only</button>
-      </div>
-      <div style="font-size:10px;color:var(--text2);" id="dev-coin-cost-hint">Current: scanning all user coins</div>
-    </div>
-
-    <!-- Scan Interval Override -->
-    <div class="tg-section" style="margin-bottom:8px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:6px;">⏱️ Scan Interval Override</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Force slower scanning to reduce costs</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <button class="leverage-btn dev-interval-btn active" data-min="0">User Setting</button>
-        <button class="leverage-btn dev-interval-btn" data-min="30">30 min</button>
-        <button class="leverage-btn dev-interval-btn" data-min="60">1 hr</button>
-        <button class="leverage-btn dev-interval-btn" data-min="120">2 hr</button>
-        <button class="leverage-btn dev-interval-btn" data-min="240">4 hr</button>
-      </div>
-    </div>
-
-    <!-- Emergency Controls -->
-    <div class="tg-section" style="margin-bottom:8px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:10px;">🚨 Emergency Controls</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <button class="tg-add-btn" id="dev-pause-all-btn"
-          style="background:rgba(239,68,68,0.2);color:var(--red);padding:12px;font-size:12px;">
-          ⏸️ Pause ALL Trading
-        </button>
-        <button class="tg-add-btn" id="dev-resume-all-btn"
-          style="background:rgba(52,211,153,0.2);color:var(--green);padding:12px;font-size:12px;">
-          ▶️ Resume ALL Trading
-        </button>
-        <button class="tg-add-btn" id="dev-pause-scalp-btn"
-          style="background:rgba(251,191,36,0.2);color:#fbbf24;padding:10px;font-size:11px;">
-          ⚡ Pause Scalp Only
-        </button>
-        <button class="tg-add-btn" id="dev-pause-main-btn"
-          style="background:rgba(251,191,36,0.2);color:#fbbf24;padding:10px;font-size:11px;">
-          📈 Pause Main Only
-        </button>
-      </div>
-      <div id="dev-emergency-status" style="font-size:11px;color:var(--green);text-align:center;margin-top:8px;">✅ All systems running</div>
-    </div>
-
-    <!-- Trade Stats -->
-    <div class="tg-section" style="margin-bottom:8px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:10px;">📊 Live Trade Stats</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
-        <div style="padding:8px;background:var(--bg3);border-radius:6px;text-align:center;">
-          <div style="font-size:10px;color:var(--text2);">Open Trades</div>
-          <div style="font-size:18px;font-weight:800;color:#fbbf24;" id="dev-open-trades">0</div>
-        </div>
-        <div style="padding:8px;background:var(--bg3);border-radius:6px;text-align:center;">
-          <div style="font-size:10px;color:var(--text2);">Today P&L</div>
-          <div style="font-size:18px;font-weight:800;" id="dev-today-pnl">$0</div>
-        </div>
-        <div style="padding:8px;background:var(--bg3);border-radius:6px;text-align:center;">
-          <div style="font-size:10px;color:var(--text2);">Win Rate</div>
-          <div style="font-size:18px;font-weight:800;color:var(--green);" id="dev-win-rate">0%</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Dev Settings -->
-    <div class="tg-section" style="margin-bottom:8px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:10px;">🔑 Dev Settings</div>
-
-      <div style="margin-bottom:10px;">
-        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Change Dev Password</div>
-        <div style="display:flex;gap:6px;">
-          <input type="password" id="dev-new-password" placeholder="New password (min 8 chars)"
-            class="tg-input" style="margin:0;flex:1;">
-          <button class="tg-add-btn" id="dev-change-pwd-btn">Save</button>
-        </div>
-        <div id="dev-pwd-msg" style="font-size:10px;margin-top:4px;"></div>
-      </div>
-
-      <div class="auto-trade-toggle">
-        <div><div style="font-size:11px;font-weight:600;">Dev Mode Logs</div><div style="font-size:10px;color:var(--text2);">Extra console output</div></div>
-        <div class="toggle-switch on" id="dev-logs-toggle"></div>
-      </div>
-    </div>
-
-    <!-- Error Log -->
-    <div class="tg-section">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <div style="font-size:12px;font-weight:700;">📋 Recent Errors</div>
-        <button class="tg-add-btn" id="dev-clear-errors-btn" style="font-size:10px;padding:3px 8px;">Clear</button>
-      </div>
-      <div id="dev-error-log" style="font-size:11px;color:var(--text2);max-height:150px;overflow-y:auto;">No errors</div>
-    </div>
-
-  </div>
-</div><!-- end dev page -->
 
 </div><!-- end pages-wrapper -->
 
@@ -2854,7 +2766,7 @@
       <div id="dev-lock-state">
         <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Password protected — default: <span style="color:var(--accent);font-family:monospace;">Asuka2026!</span></div>
         <div style="display:flex;gap:6px;">
-          <input type="password" id="dev-pwd-input" placeholder="Dev password" class="s-input" style="flex:1;">
+          <input type="password" id="settings-dev-pwd-input" placeholder="Dev password — default: Asuka2026!" class="s-input" style="flex:1;">
           <button class="s-btn s-btn-primary" id="dev-unlock-btn" style="padding:8px 14px;white-space:nowrap;">Unlock</button>
         </div>
         <div id="dev-unlock-err" style="font-size:11px;color:#ef4444;margin-top:4px;"></div>
@@ -3271,7 +3183,7 @@ document.getElementById('wallet-add-confirm')?.addEventListener('click',async()=
 const pagesWrapper = document.getElementById('pages-wrapper')
 
 // Map page numbers to element IDs
-const PAGE_IDS = { 1: 'page-1', 2: 'page-2', 3: 'trading-page', 4: 'page-4', 5: 'page-5' }
+const PAGE_IDS = { 1: 'page-1', 2: 'page-2', 3: 'trading-page', 5: 'page-5' }
 
 function navigateToPage(pageNum) {
   // Always close ALL overlays first
@@ -3827,25 +3739,7 @@ function setupCoinSelector(prefix, settingKey) {
   renderCustom()
 }
 
-function removeCustomCoin(prefix, coin) {
-  coinState[prefix].custom = coinState[prefix].custom.filter(c => c !== coin)
-  coinState[prefix].selected = coinState[prefix].selected.filter(c => c !== coin)
-  const settingKey = prefix === 'main' ? 'tradingCoins' : prefix === 'day' ? 'dayTradeCoins' : 'scalpCoins'
-  ipcRenderer.send('set-setting', settingKey, coinState[prefix].selected)
-  ipcRenderer.send('set-setting', `${settingKey}Custom`, coinState[prefix].custom)
-  // Re-render
-  const list = document.getElementById(`${prefix}-custom-coins-list`)
-  if (list) {
-    list.innerHTML = coinState[prefix].custom.map(c => `
-      <div style="display:flex;align-items:center;gap:3px;background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.3);border-radius:6px;padding:3px 8px;">
-        <span style="font-size:11px;font-weight:600;">${c}</span>
-        <button onclick="removeCustomCoin('${prefix}','${c}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0 0 0 4px;">✕</button>
-      </div>`).join('')
-  }
-  // Update counter
-  const counter = document.getElementById(`${prefix}-coin-counter`)
-  if (counter) counter.textContent = `${coinState[prefix].selected.length}/999 coins`
-}
+
 
 // Initialize all 3 selectors
 setupCoinSelector('main', 'tradingCoins')
@@ -3886,10 +3780,7 @@ async function restoreCoinSelections(settings) {
 }
 
 // Legacy compat
-function updateCoinCounter() {
-  const counter = document.getElementById('main-coin-counter')
-  if (counter) counter.textContent = `${coinState.main.selected.length} selected`
-}
+
 let selectedCoins = coinState.main.selected
 let customCoins = coinState.main.custom
 
@@ -4399,12 +4290,23 @@ function updateCoinCounter() {
   }
 }
 
-function removeCustomCoin(coin) {
-  customCoins = customCoins.filter(c => c !== coin)
-  selectedCoins = selectedCoins.filter(c => c !== coin)
-  ipcRenderer.send('set-setting', 'tradingCoins', selectedCoins)
-  ipcRenderer.send('set-setting', 'customCoins', customCoins)
-  renderCustomCoins()
+function removeCustomCoin(prefix, coin) {
+  // Legacy single-arg support: removeCustomCoin('PEPE') → main list
+  if (coin === undefined) { coin = prefix; prefix = 'main' }
+  if (!coinState[prefix]) return
+  coinState[prefix].custom = coinState[prefix].custom.filter(c => c !== coin)
+  coinState[prefix].selected = coinState[prefix].selected.filter(c => c !== coin)
+  const keyMap = { main: 'tradingCoins', day: 'dayTradeCoins', scalp: 'scalpCoins' }
+  ipcRenderer.send('set-setting', keyMap[prefix] || 'tradingCoins', coinState[prefix].selected)
+  // Re-render chips + counter
+  const list = document.getElementById(`${prefix}-custom-coins-list`)
+  if (list) list.innerHTML = coinState[prefix].custom.map(c => `
+      <div style="display:flex;align-items:center;gap:3px;background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.3);border-radius:6px;padding:3px 8px;">
+        <span style="font-size:11px;font-weight:600;">${c}</span>
+        <button onclick="removeCustomCoin('${prefix}','${c}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0 0 0 4px;">✕</button>
+      </div>`).join('')
+  const counter = document.getElementById(`${prefix}-coin-counter`)
+  if (counter) counter.textContent = `${coinState[prefix].selected.length}/999 coins`
 }
 
 document.querySelectorAll('.coin-btn[data-coin]').forEach(btn => {
@@ -5260,15 +5162,23 @@ async function loadBooks() {
 
   list.innerHTML = data.books.map(b => `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--bg3);border-radius:8px;margin-bottom:4px;">
-      <div style="cursor:pointer;" onclick="setActiveBook('${b.id}','${b.name}')">
+      <div style="cursor:pointer;flex:1;" data-book-id="${b.id}" data-book-name="${b.name}" class="book-select-btn">
         <div style="font-size:12px;font-weight:600;">${b.name}</div>
         <div style="font-size:10px;color:var(--text2);">${b.pageCount} pages • ${b.subject}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center;">
         ${_activeBookId === b.id ? '<span style="font-size:10px;color:var(--accent);">Active</span>' : ''}
-        <button onclick="deleteBook('${b.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;">✕</button>
+        <button data-delete-book="${b.id}" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:4px;">✕</button>
       </div>
     </div>`).join('')
+
+  // Wire up book buttons after rendering
+  list.querySelectorAll('.book-select-btn').forEach(btn => {
+    btn.addEventListener('click', () => setActiveBook(btn.dataset.bookId, btn.dataset.bookName))
+  })
+  list.querySelectorAll('[data-delete-book]').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); deleteBook(btn.dataset.deleteBook) })
+  })
 }
 
 function setActiveBook(id, name) {
@@ -5286,58 +5196,80 @@ async function deleteBook(id) {
 async function handleBookFile(input) {
   const file = input.files[0]
   if (!file) return
-  await processBookUpload(file.path || file.name, file.name)
+  await processBookUploadFile(file)
 }
 
 async function handleBookDrop(event) {
   event.preventDefault()
-  document.getElementById('book-drop-zone').style.borderColor = 'var(--border)'
+  const zone = document.getElementById('book-drop-zone')
+  if (zone) zone.style.borderColor = 'var(--border)'
   const file = event.dataTransfer.files[0]
-  if (!file || !file.name.endsWith('.pdf')) {
+  if (!file) { showStatus('No file detected'); return }
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
     showStatus('Please drop a PDF file')
     return
   }
-  await processBookUpload(file.path || file.name, file.name)
+  await processBookUploadFile(file)
 }
 
-async function processBookUpload(filePath, fileName) {
+async function processBookUploadFile(file) {
   const status = document.getElementById('book-index-status')
   const nameInput = document.getElementById('book-name-input')
   const subject = document.getElementById('book-subject')?.value || 'general'
-  const bookName = nameInput?.value.trim() || fileName.replace('.pdf', '')
+  const bookName = nameInput?.value.trim() || file.name.replace(/\.pdf$/i, '')
+  const sizeMB = file.size / (1024 * 1024)
 
   if (status) {
     status.style.display = 'block'
     status.style.color = 'var(--accent)'
-    status.textContent = `⏳ Indexing "${bookName}"... This may take a moment`
+    status.textContent = `⏳ Reading "${bookName}" (${sizeMB.toFixed(1)}MB)...`
   }
 
   try {
-    const result = await ipcRenderer.invoke('index-book', {
-      pdfPath: filePath,
-      name: bookName,
-      subject
-    })
+    let result
 
-    if (result.success) {
+    if (sizeMB > 8) {
+      // Large PDF — use native file dialog (bypasses IPC size limit)
+      if (status) status.textContent = `⏳ Large PDF detected — opening file browser...`
+      result = await ipcRenderer.invoke('open-book-dialog', { name: bookName, subject })
+    } else {
+      // Small PDF — send bytes through IPC
+      const arrayBuffer = await file.arrayBuffer()
+      const uint8Array = new Uint8Array(arrayBuffer)
+      const fileData = Array.from(uint8Array)
+
+      if (status) status.textContent = `⏳ Indexing "${bookName}"...`
+
+      result = await ipcRenderer.invoke('index-book-data', { fileData, name: bookName, subject })
+
+      // If too large, fall back to dialog
+      if (result?.error === 'FILE_TOO_LARGE') {
+        if (status) status.textContent = `⏳ File too large — opening file browser...`
+        result = await ipcRenderer.invoke('open-book-dialog', { name: bookName, subject })
+      }
+    }
+
+    if (result?.success) {
       if (status) {
         status.style.color = 'var(--green)'
-        status.textContent = `✅ Indexed! "${bookName}" — ${result.pageCount} pages ready`
+        status.textContent = `✅ "${bookName}" indexed — ${result.pageCount} pages ready! Say "Page 1" to start.`
       }
       _activeBookId = result.bookId
       if (nameInput) nameInput.value = ''
-      loadBooks()
+      await loadBooks()
+      document.getElementById('books-list')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     } else {
       if (status) {
         status.style.color = 'var(--red)'
-        status.textContent = `❌ Error: ${result.error}`
+        status.textContent = `❌ Error: ${result?.error || 'Could not parse PDF'}`
       }
     }
   } catch(e) {
     if (status) {
       status.style.color = 'var(--red)'
-      status.textContent = `❌ Failed to index: ${e.message}`
+      status.textContent = `❌ Failed: ${e.message}`
     }
+    console.error('Book upload error:', e)
   }
 }
 
@@ -5370,6 +5302,229 @@ ipcRenderer.on('book-indexed', (e, result) => {
 
 // Load books on startup
 setTimeout(() => { if(typeof loadBooks === "function") loadBooks(); }, 1000)
+
+// Wire up book drop zone properly (no inline handlers)
+function initBookDropZone() {
+  const zone = document.getElementById('book-drop-zone')
+  const fileInput = document.getElementById('book-file-input')
+  if (!zone || !fileInput) return
+
+  // Click to browse — use native dialog directly (no size limits)
+  zone.addEventListener('click', () => {
+    const nameInput = document.getElementById('book-name-input')
+    const subject = document.getElementById('book-subject')?.value || 'general'
+    const bookName = nameInput?.value.trim() || ''
+    const status = document.getElementById('book-index-status')
+    if (status) { status.style.display = 'block'; status.style.color = 'var(--accent)'; status.textContent = '⏳ Opening file browser...' }
+    ipcRenderer.invoke('open-book-dialog', { name: bookName, subject }).then(async result => {
+      if (result?.success) {
+        if (status) { status.style.color = 'var(--green)'; status.textContent = `✅ "${result.name}" indexed — ${result.pageCount} pages ready!` }
+        _activeBookId = result.bookId
+        if (nameInput) nameInput.value = ''
+        await loadBooks()
+      } else if (result?.error && result.error !== 'No file selected') {
+        if (status) { status.style.color = 'var(--red)'; status.textContent = `❌ ${result.error}` }
+      } else {
+        if (status) { status.style.display = 'none' }
+      }
+    }).catch(e => { if (status) { status.style.color = 'var(--red)'; status.textContent = `❌ ${e.message}` } })
+  })
+
+  // Drag over
+  zone.addEventListener('dragover', (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    zone.style.borderColor = 'var(--accent)'
+    zone.style.background = 'rgba(0,212,255,0.05)'
+  })
+
+  // Drag leave
+  zone.addEventListener('dragleave', (e) => {
+    e.preventDefault()
+    zone.style.borderColor = 'var(--border)'
+    zone.style.background = ''
+  })
+
+  // Drop
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    zone.style.borderColor = 'var(--border)'
+    zone.style.background = ''
+    const file = e.dataTransfer.files[0]
+    if (!file) { showStatus('No file detected'); return }
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      showStatus('⚠️ Please drop a PDF file')
+      return
+    }
+    processBookUploadFile(file)
+  })
+
+  // File input change
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0]
+    if (file) processBookUploadFile(file)
+    // Reset so same file can be selected again
+    fileInput.value = ''
+  })
+}
+
+// Init after DOM ready
+setTimeout(initBookDropZone, 800)
+
+// ── Overview Quick-Glance Strip ───────────────────────────────────────────
+async function updateOverviewStrip() {
+  try {
+    // Regime
+    const regime = await ipcRenderer.invoke('get-market-regime').catch(() => null)
+    const regimeEl = document.getElementById('ov-regime')
+    if (regimeEl && regime?.regime) {
+      const r = regime.regime.toLowerCase()
+      regimeEl.textContent = r === 'bull' ? '🐂 Bull' : r === 'bear' ? '🐻 Bear' : '〰️ Side'
+      regimeEl.className = 'ov-chip-val ' + (r === 'bull' ? 'regime-bull' : r === 'bear' ? 'regime-bear' : 'regime-side')
+    }
+
+    // Trades data
+    const trades = await ipcRenderer.invoke('get-paper-trades').catch(() => null)
+    if (trades?.trades) {
+      const open = trades.trades.filter(t => t.status === 'open')
+      const today = new Date().toDateString()
+      const todayClosed = trades.trades.filter(t => t.closeTime && new Date(t.closeTime).toDateString() === today)
+      const todayPnl = todayClosed.reduce((s, t) => s + (t.pnl || 0), 0)
+
+      const openEl = document.getElementById('ov-open')
+      if (openEl) openEl.textContent = open.length
+
+      const pnlEl = document.getElementById('ov-today-pnl')
+      if (pnlEl) {
+        pnlEl.textContent = (todayPnl >= 0 ? '+' : '') + '$' + todayPnl.toFixed(2)
+        pnlEl.style.color = todayPnl > 0 ? '#34d399' : todayPnl < 0 ? '#ef4444' : 'var(--text)'
+        pnlEl.style.textShadow = todayPnl > 0 ? '0 0 12px rgba(52,211,153,0.4)' : todayPnl < 0 ? '0 0 12px rgba(239,68,68,0.4)' : 'none'
+      }
+
+      // Glow on hero P&L too
+      const heroPnl = document.getElementById('pt-pnl')
+      if (heroPnl) {
+        const total = trades.trades.filter(t => t.status !== 'open').reduce((s,t) => s + (t.pnl||0), 0)
+        heroPnl.classList.remove('profit', 'loss')
+        if (total > 0) heroPnl.classList.add('profit')
+        else if (total < 0) heroPnl.classList.add('loss')
+      }
+    }
+  } catch(e) {}
+}
+setInterval(updateOverviewStrip, 15000)
+setTimeout(updateOverviewStrip, 1500)
+
+// ── Equity Curve Sparkline ────────────────────────────────────────────────
+async function drawEquitySpark() {
+  try {
+    const canvas = document.getElementById('equity-spark')
+    if (!canvas) return
+    const data = await ipcRenderer.invoke('get-paper-trades').catch(() => null)
+    if (!data?.trades) return
+    const closed = data.trades.filter(t => t.status !== 'open' && t.closeTime)
+      .sort((a,b) => new Date(a.closeTime) - new Date(b.closeTime))
+    if (closed.length < 2) { canvas.style.display = 'none'; return }
+    canvas.style.display = 'block'
+
+    // Build equity curve from starting balance
+    const start = 100000
+    let bal = start
+    const pts = [bal]
+    closed.forEach(t => { bal += (t.pnl || 0); pts.push(bal) })
+
+    const ctx = canvas.getContext('2d')
+    const W = canvas.width, H = canvas.height
+    ctx.clearRect(0, 0, W, H)
+    const min = Math.min(...pts), max = Math.max(...pts)
+    const range = (max - min) || 1
+    const stepX = W / (pts.length - 1)
+    const y = v => H - 8 - ((v - min) / range) * (H - 16)
+
+    const up = pts[pts.length-1] >= start
+    // Gradient fill
+    const grad = ctx.createLinearGradient(0, 0, 0, H)
+    grad.addColorStop(0, up ? 'rgba(52,211,153,0.25)' : 'rgba(239,68,68,0.25)')
+    grad.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.beginPath()
+    ctx.moveTo(0, y(pts[0]))
+    pts.forEach((p, i) => ctx.lineTo(i * stepX, y(p)))
+    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath()
+    ctx.fillStyle = grad; ctx.fill()
+    // Line
+    ctx.beginPath()
+    ctx.moveTo(0, y(pts[0]))
+    pts.forEach((p, i) => ctx.lineTo(i * stepX, y(p)))
+    ctx.strokeStyle = up ? '#34d399' : '#ef4444'
+    ctx.lineWidth = 2
+    ctx.shadowColor = up ? 'rgba(52,211,153,0.6)' : 'rgba(239,68,68,0.6)'
+    ctx.shadowBlur = 6
+    ctx.stroke()
+    ctx.shadowBlur = 0
+  } catch(e) {}
+}
+setInterval(drawEquitySpark, 30000)
+setTimeout(drawEquitySpark, 2000)
+
+// ── Engine chip — live scanner status + interval ──────────────────────────
+async function updateEngineChip() {
+  try {
+    const s = await ipcRenderer.invoke('get-scanner-status').catch(() => null)
+    const el = document.getElementById('ov-engine')
+    if (!el || !s) return
+    if (s.paused) {
+      el.innerHTML = '<span style="color:#ef4444;">⏸ Paused</span>'
+    } else if (s.running) {
+      el.innerHTML = `<span class="scan-pulse"></span>${s.intervalMin}min`
+      el.title = `Scanning every ${s.intervalMin} min` + (s.scalpEnabled ? ' + scalp' : '')
+    } else {
+      el.innerHTML = '<span style="color:#fbbf24;">○ Off</span>'
+    }
+  } catch(e) {}
+}
+setInterval(updateEngineChip, 20000)
+setTimeout(updateEngineChip, 2000)
+
+
+// ── Close All (panic button) — only visible when positions open ──────────
+document.getElementById('ov-close-all-btn')?.addEventListener('click', async function() {
+  if (!confirm('Close ALL open positions at market price?')) return
+  this.textContent = '⏳ Closing...'
+  const r = await ipcRenderer.invoke('close-all-trades').catch(() => null)
+  this.textContent = r?.success ? `✅ Closed ${r.closed} positions` : '❌ Failed'
+  setTimeout(() => { this.textContent = '🛑 Close ALL Open Positions'; updateOverviewStrip() }, 2500)
+})
+
+// Show/hide panic button based on open count
+const _ovOpenObserver = setInterval(() => {
+  const open = parseInt(document.getElementById('ov-open')?.textContent || '0')
+  const btn = document.getElementById('ov-close-all-btn')
+  if (btn) btn.style.display = open > 0 ? 'block' : 'none'
+}, 5000)
+
+
+
+// ── Renamed duplicate-ID elements wiring ─────────────────────────────────
+document.getElementById('trade-add-alert-btn')?.addEventListener('click', () => {
+  // Reuse the same alert-add path as page 1 widget
+  document.getElementById('add-alert-btn')?.click()
+  setTimeout(() => {
+    const src = document.getElementById('alerts-list')
+    const dst = document.getElementById('trade-alerts-list')
+    if (src && dst) dst.innerHTML = src.innerHTML
+  }, 400)
+})
+
+// Mirror lessons into Others → Memory journal when populated
+const _origLessonsObserver = new MutationObserver(() => {
+  const src = document.getElementById('pt-lessons-list')
+  const dst = document.getElementById('memory-lessons-list')
+  if (src && dst) dst.innerHTML = src.innerHTML
+})
+const _ptl = document.getElementById('pt-lessons-list')
+if (_ptl) _origLessonsObserver.observe(_ptl, { childList: true, subtree: true })
+
 
 // ── Second Brain ─────────────────────────────────────────────────────────
 async function loadMemories() {
@@ -6573,7 +6728,7 @@ function devApiCall(action, extra = {}) {
 }
 
 document.getElementById('dev-unlock-btn')?.addEventListener('click', async () => {
-  const pwd = document.getElementById('dev-pwd-input')?.value?.trim()
+  const pwd = document.getElementById('settings-dev-pwd-input')?.value?.trim()
   const err = document.getElementById('dev-unlock-err')
   if (!pwd) return
 
@@ -6618,7 +6773,7 @@ document.getElementById('dev-lock-again-btn')?.addEventListener('click', () => {
   _devToken = ''
   document.getElementById('dev-lock-state').style.display = 'block'
   document.getElementById('dev-unlocked-state').style.display = 'none'
-  document.getElementById('dev-pwd-input').value = ''
+  const devPwdEl = document.getElementById('settings-dev-pwd-input'); if(devPwdEl) devPwdEl.value = ''
 })
 
 document.getElementById('dev-pause-all-btn')?.addEventListener('click', () => devApiCall('pauseAll'))

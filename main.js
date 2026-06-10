@@ -3966,8 +3966,52 @@ async function applyTrailingStop(trade, currentPrice) {
 }
 
 // ─── INDEPENDENT MARKET SCANNER ───────────────────────────────────────────
+
+// ─── DEV STATE READER — makes web dev panel (localhost:3001) actually work ──
+const DEV_STATE_FILE_MAIN = path.join(DATA_DIR, 'dev-state.json');
+
+function getDevOverrides() {
+  try {
+    const s = loadJSON(DEV_STATE_FILE_MAIN, {});
+    return {
+      pauseAll: !!s.pauseAll,
+      pauseMain: !!(s.pauseAll || s.pauseMain),
+      pauseScalp: !!(s.pauseAll || s.pauseScalp),
+      intervalOverride: s.intervalOverride || null,
+      coinOverride: s.coinOverride || null,
+    };
+  } catch(e) {
+    return { pauseAll: false, pauseMain: false, pauseScalp: false, intervalOverride: null, coinOverride: null };
+  }
+}
+
+// Effective scan interval = dev override > max(user setting, tier minimum)
+function getEffectiveScanInterval() {
+  const dev = getDevOverrides();
+  if (dev.intervalOverride) return dev.intervalOverride;
+  const settings = loadSettings();
+  const userInterval = settings.scanIntervalMinutes || 30;
+  const tier = getUserTier();
+  const tierMin = tier.scan_interval || 30; // tier defines FASTEST allowed
+  return Math.max(userInterval, tierMin);
+}
+
+// Watch dev-state.json — restart scanner if interval changed via web panel
+let _lastEffectiveInterval = null;
+setInterval(() => {
+  try {
+    const eff = getEffectiveScanInterval();
+    if (_lastEffectiveInterval !== null && eff !== _lastEffectiveInterval) {
+      console.log(`🔧 Dev: scan interval changed ${_lastEffectiveInterval} → ${eff} min — restarting scanner`);
+      startIndependentScanner();
+    }
+    _lastEffectiveInterval = eff;
+  } catch(e) {}
+}, 60 * 1000);
+
 async function runIndependentScan() {
-  if (_globalPauseMain) { console.log('⏸️ Main scanner paused by dev'); return; }
+  const devOv = getDevOverrides();
+  if (_globalPauseMain || devOv.pauseMain) { console.log('⏸️ Main scanner paused by dev'); return; }
   const settings = loadSettings();
   if (!settings.independentScanner) return;
   if (!settings.autoPaperTrade) return;
@@ -4148,10 +4192,11 @@ Only trade when there is a CLEAR edge — don't force trades.`;
         threshold = 50;
       }
 
-      // ── MiroFish Group Chat 2-Round Debate (Groq + Cerebras) ────────────
-      const TOTAL_AGENTS = 20;
-      const NUM_GROUPS = 2;  // 2 groups of 10 agents — within rate limit
+      // ── MiroFish Group Chat 2-Round Debate (Claude Haiku agents) ────────
+      const _tierForAgents = getUserTier();
+      const TOTAL_AGENTS = _tierForAgents.mirofish_agents || 20; // Tier: 10/20/30
       const AGENTS_PER_GROUP = 10;
+      const NUM_GROUPS = Math.max(1, Math.round(TOTAL_AGENTS / AGENTS_PER_GROUP));
       const marketSummary = `${scanCoin} at ${coinPrice}, Funding: ${funding}, FG: ${fearGreed}. Claude suggests: ${analysis.direction?.toUpperCase()} with ${analysis.confidence}% confidence. Reason: ${analysis.reason}`;
 
       const allRoles = [
@@ -4284,6 +4329,7 @@ JSON: {"agree":true/false,"confidence":0-100,"changed":true/false}`
       // Skip if swarm disagrees
       if (swarmAgreePct < 50) {
         console.log(`❌ MiroFish disagrees (${swarmAgreePct}%) — skipping ${analysis.direction} ${scanCoin}`);
+        logShadowTrade(scanCoin, analysis.direction, analysis.entry, analysis.target, analysis.stopLoss, `MiroFish disagree ${swarmAgreePct}%`, analysis.confidence);
         return;
       }
 
@@ -4341,11 +4387,13 @@ JSON only:
 
       if (!finalDecision.shouldTrade) {
         console.log(`❌ Claude final rejected the trade`);
+        logShadowTrade(scanCoin, analysis.direction, analysis.entry, analysis.target, analysis.stopLoss, 'Sonnet final reject', analysis.confidence);
         return;
       }
 
       if (finalDecision.confidence < threshold) {
         console.log(`⏭️ Final confidence ${finalDecision.confidence}% below threshold ${threshold}% — skipping`);
+        logShadowTrade(scanCoin, finalDecision.direction, finalDecision.entry || analysis.entry, finalDecision.target, finalDecision.stopLoss, `below threshold ${threshold}%`, finalDecision.confidence);
         return;
       }
       // ────────────────────────────────────────────────────────────────────
@@ -4361,6 +4409,54 @@ JSON only:
       finalDecision.target = smartParams.target;
       finalDecision.stopLoss = smartParams.stopLoss;
       // ─────────────────────────────────────────────────────────────────
+
+      // ── MTF Confirmation Gate (Off/Soft/Hard) ─────────────────────────
+      const mtfMode = (settings.mtfMode || 'soft').toLowerCase();
+      if (mtfMode !== 'off') {
+        const mtf = await getMultiTimeframeSignal(scanCoin, finalDecision.direction).catch(() => null);
+        if (mtf) {
+          console.log(`🔬 ${mtf.summary}`);
+          if (!mtf.isAligned) {
+            if (mtfMode === 'hard') {
+              console.log(`❌ MTF HARD mode: timeframes mixed — skipping ${finalDecision.direction} ${scanCoin}`);
+              logShadowTrade(scanCoin, finalDecision.direction, finalDecision.entry || analysis.entry, finalDecision.target, finalDecision.stopLoss, 'MTF hard reject', finalDecision.confidence);
+              return;
+            }
+            finalDecision.confidence = Math.max(0, finalDecision.confidence - 10);
+            console.log(`🔬 MTF soft penalty: confidence → ${finalDecision.confidence}%`);
+          }
+        }
+      }
+
+      // ── Regime Mechanical Rules — regime changes BEHAVIOR not just context ──
+      const regimeName = (regime?.regime || '').toLowerCase();
+      if (regimeName === 'bear' && finalDecision.direction === 'long') {
+        finalDecision.confidence = Math.max(0, finalDecision.confidence - 10);
+        console.log(`🐻 Counter-regime long in bear market: confidence → ${finalDecision.confidence}%`);
+      } else if (regimeName === 'bull' && finalDecision.direction === 'short') {
+        finalDecision.confidence = Math.max(0, finalDecision.confidence - 10);
+        console.log(`🐂 Counter-regime short in bull market: confidence → ${finalDecision.confidence}%`);
+      } else if ((regimeName === 'bull' && finalDecision.direction === 'long') || (regimeName === 'bear' && finalDecision.direction === 'short')) {
+        finalDecision.confidence = Math.min(95, finalDecision.confidence + 5);
+      }
+
+      // Re-check threshold after adjustments
+      if (finalDecision.confidence < threshold) {
+        console.log(`⏭️ Confidence ${finalDecision.confidence}% below threshold after MTF/regime adjustments — skipping`);
+        logShadowTrade(scanCoin, finalDecision.direction, finalDecision.entry || analysis.entry, finalDecision.target, finalDecision.stopLoss, 'below threshold after adjustments', finalDecision.confidence);
+        return;
+      }
+
+      // ── Conviction Sizing — quality grade gates size ──────────────────
+      const qScore = Math.round(finalDecision.confidence * 0.6 + swarmAgreePct * 0.4);
+      const qualityGrade = qScore >= 80 ? 'A' : qScore >= 65 ? 'B' : qScore >= 50 ? 'C' : 'D';
+      const sizeMultiplier = qualityGrade === 'A' ? 1.0 : qualityGrade === 'B' ? 0.75 : qualityGrade === 'C' ? 0.5 : 0;
+      if (sizeMultiplier === 0) {
+        console.log(`❌ Quality grade D (score ${qScore}) — not worth the risk, skipping`);
+        logShadowTrade(scanCoin, finalDecision.direction, finalDecision.entry || analysis.entry, finalDecision.target, finalDecision.stopLoss, 'quality grade D', finalDecision.confidence);
+        return;
+      }
+      console.log(`💎 Signal quality: ${qualityGrade} (${qScore}) — sizing at ${sizeMultiplier * 100}%`);
 
       // Check not already in this coin
       const existingTrade = pd.trades.find(t => t.status === 'open' && t.coin === analysis.coin);
@@ -4387,7 +4483,9 @@ JSON only:
         timestamp: Date.now(),
         tradeMode: smartParams.mode,
         trailingLevels: smartParams.trailingLevels,
-        partialTp: smartParams.partialTp
+        partialTp: smartParams.partialTp,
+        qualityGrade,
+        sizeMultiplier
       };
 
       openPaperTrade(signal);
@@ -4422,9 +4520,10 @@ let independentScanInterval = null;
 function startIndependentScanner() {
   if (independentScanInterval) clearInterval(independentScanInterval);
   const settings = loadSettings();
-  const intervalMinutes = settings.scanIntervalMinutes || 30;
+  const intervalMinutes = getEffectiveScanInterval();
+  _lastEffectiveInterval = intervalMinutes;
   independentScanInterval = setInterval(runIndependentScan, intervalMinutes * 60 * 1000);
-  console.log(`🔍 Independent market scanner started (every ${intervalMinutes} min)`);
+  console.log(`🔍 Independent market scanner started (every ${intervalMinutes} min — tier+dev enforced)`);
   if (settings.independentScanner) {
     setTimeout(runIndependentScan, 5000);
   }
@@ -4799,6 +4898,10 @@ function isSupportedOnTestnet(coin) {
 
 // ─── INDEPENDENT SCALP SCANNER ────────────────────────────────────────────
 async function runIndependentScalpScan() {
+  const devOv = getDevOverrides();
+  if (_globalPauseScalp || devOv.pauseScalp) { return; }
+  const tier = getUserTier();
+  if (!tier.scalp_enabled) { return; } // Tier enforcement: Starter has no scalp
   const settings = loadSettings();
   if (!settings.scalpTrading) return;
   if (!settings.autoPaperTrade) return;
@@ -5982,6 +6085,117 @@ function loadPaperTrades() {
 function savePaperTrades(d) { saveJSON(PAPER_TRADES_FILE, d); }
 
 // Open a new paper trade
+
+// Numeric price helper — wraps getCryptoPrice string output
+async function getCoinPrice(coin) {
+  try {
+    const priceStr = await getCryptoPrice(String(coin).toLowerCase());
+    const m = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
+    if (!m) return null;
+    const p = parseFloat(m[1].replace(/,/g, ''));
+    return isNaN(p) ? null : p;
+  } catch(e) { return null; }
+}
+
+// ─── SHADOW TRADES — track rejected signals to tune the brain ──────────────
+const SHADOW_FILE = path.join(DATA_DIR, 'shadow-trades.json');
+
+function logShadowTrade(coin, direction, entry, target, stopLoss, reason, confidence) {
+  try {
+    if (!entry) return;
+    const data = loadJSON(SHADOW_FILE, { shadows: [], stats: { wouldWin: 0, wouldLose: 0, neutral: 0 } });
+    data.shadows.push({
+      id: Date.now() + Math.random(),
+      coin, direction, entry,
+      target: target || (direction === 'long' ? entry * 1.03 : entry * 0.97),
+      stopLoss: stopLoss || (direction === 'long' ? entry * 0.985 : entry * 1.015),
+      reason, confidence: confidence || 0,
+      timestamp: Date.now(), resolved: false, outcome: null
+    });
+    // Keep last 300
+    if (data.shadows.length > 300) data.shadows = data.shadows.slice(-300);
+    saveJSON(SHADOW_FILE, data);
+    console.log(`👻 Shadow trade logged: ${direction} ${coin} (rejected: ${reason})`);
+  } catch(e) {}
+}
+
+let _lastShadowResolve = 0;
+async function resolveShadowTrades() {
+  try {
+    if (Date.now() - _lastShadowResolve < 10 * 60 * 1000) return; // every 10 min max
+    _lastShadowResolve = Date.now();
+    const data = loadJSON(SHADOW_FILE, { shadows: [], stats: { wouldWin: 0, wouldLose: 0, neutral: 0 } });
+    const pending = data.shadows.filter(s => !s.resolved);
+    if (!pending.length) return;
+
+    const coins = [...new Set(pending.map(s => s.coin))];
+    const prices = {};
+    for (const c of coins) {
+      try { prices[c] = await getCoinPrice(c); } catch(e) {}
+    }
+
+    let changed = false;
+    for (const s of pending) {
+      const price = prices[s.coin];
+      if (!price) continue;
+      const hitTarget = s.direction === 'long' ? price >= s.target : price <= s.target;
+      const hitStop = s.direction === 'long' ? price <= s.stopLoss : price >= s.stopLoss;
+      const expired = Date.now() - s.timestamp > 48 * 60 * 60 * 1000;
+
+      if (hitTarget) { s.resolved = true; s.outcome = 'would_win'; data.stats.wouldWin++; changed = true; }
+      else if (hitStop) { s.resolved = true; s.outcome = 'would_lose'; data.stats.wouldLose++; changed = true; }
+      else if (expired) { s.resolved = true; s.outcome = 'neutral'; data.stats.neutral++; changed = true; }
+    }
+    if (changed) {
+      saveJSON(SHADOW_FILE, data);
+      const total = data.stats.wouldWin + data.stats.wouldLose;
+      if (total > 0 && total % 25 === 0) {
+        const rejAccuracy = Math.round(data.stats.wouldLose / total * 100);
+        console.log(`👻 Shadow stats: rejections were RIGHT ${rejAccuracy}% of the time (${data.stats.wouldLose} avoided losses, ${data.stats.wouldWin} missed wins)`);
+      }
+    }
+  } catch(e) {}
+}
+
+// ─── PER-COIN AUTO-BENCH — stop bleeding on cursed coins ───────────────────
+const BENCH_FILE = path.join(DATA_DIR, 'coin-bench.json');
+
+function getCoinBench(coin) {
+  try {
+    const data = loadJSON(BENCH_FILE, {});
+    const b = data[coin];
+    if (b?.benchedUntil && Date.now() < b.benchedUntil) {
+      return Math.ceil((b.benchedUntil - Date.now()) / (24*60*60*1000)); // days left
+    }
+    return null;
+  } catch(e) { return null; }
+}
+
+function updateCoinBench(coin, won) {
+  try {
+    const data = loadJSON(BENCH_FILE, {});
+    if (!data[coin]) data[coin] = { consecutiveLosses: 0, benchedUntil: 0 };
+    if (won) {
+      data[coin].consecutiveLosses = 0;
+    } else {
+      data[coin].consecutiveLosses++;
+      if (data[coin].consecutiveLosses >= 4) {
+        data[coin].benchedUntil = Date.now() + 7 * 24 * 60 * 60 * 1000;
+        data[coin].consecutiveLosses = 0;
+        console.log(`🪑 ${coin} BENCHED for 7 days — 4 consecutive losses`);
+        sendTelegramNotification(`🪑 ${coin} benched for 7 days\n4 consecutive losses — auto-protecting capital`).catch(() => {});
+      }
+    }
+    saveJSON(BENCH_FILE, data);
+  } catch(e) {}
+}
+
+ipcMain.handle('get-shadow-stats', () => {
+  const d = loadJSON(SHADOW_FILE, { shadows: [], stats: { wouldWin: 0, wouldLose: 0, neutral: 0 } });
+  return { stats: d.stats, recent: d.shadows.slice(-20) };
+});
+ipcMain.handle('get-coin-bench', () => loadJSON(BENCH_FILE, {}));
+
 async function openPaperTrade(signal) {
   // Check rage lock
   if (checkRageLock()) {
@@ -6027,11 +6241,27 @@ async function openPaperTrade(signal) {
     console.log(`🚫 Hard block: ${signal.coin} long below 70% in Extreme Fear (FG=${lastFG}) — lesson learned`);
     return null;
   }
+  // Per-coin bench — coin on losing streak is blocked
+  const benchDays = getCoinBench(signal.coin);
+  if (benchDays) {
+    console.log(`🪑 ${signal.coin} is benched (${benchDays}d left after losing streak) — trade blocked`);
+    return null;
+  }
+
   const pd = loadPaperTrades();
   // settings already declared
   // Use signal leverage if provided (scalp trades), otherwise use settings
   const leverage = signal.leverage || settings.paperLeverage || 1;
-  const size = signal.size || settings.paperTradeSize || (pd.balance * 0.05);
+  let size = signal.size || settings.paperTradeSize || (pd.balance * 0.05);
+  // Kelly Criterion sizing (now works for leverage trades, not just spot)
+  if (settings.useKellyCriterion) {
+    try { size = calcKellySize(signal.coin, size); } catch(e) {}
+  }
+  // Conviction sizing — quality grade scales position (A=100% B=75% C=50%)
+  if (signal.sizeMultiplier && signal.sizeMultiplier > 0 && signal.sizeMultiplier < 1) {
+    size = size * signal.sizeMultiplier;
+    console.log(`💎 Conviction sizing: grade ${signal.qualityGrade || '?'} → $${size.toFixed(0)} position`);
+  }
   const positionSize = size * leverage;
   const liquidationPct = 1 / leverage * 0.8;
   const liquidationPrice = signal.direction === 'long'
@@ -6057,6 +6287,7 @@ async function openPaperTrade(signal) {
     pnl: 0,
     useBinance: false,
     tradeMode: signal.tradeMode || 'normal',
+    qualityGrade: signal.qualityGrade || null,
     trailingLevels: signal.trailingLevels || [],
     partialTp: signal.partialTp || 1.0,
     partialTpDone: false
@@ -6126,6 +6357,7 @@ async function closePaperTrade(tradeId, closePrice, reason) {
   savePaperTrades(pd);
 
   if (trade.caller) updateCallerStats(trade.caller, actualPnl > 0);
+  updateCoinBench(trade.coin, actualPnl > 0); // 4 consecutive losses → 7-day bench
 
   // Close on Binance testnet if linked
   if (trade.useBinance && trade.binanceSymbol) {
@@ -6284,6 +6516,17 @@ async function checkPaperTrades() {
         else if (currentPrice >= trade.stopLoss) closePaperTrade(trade.id, currentPrice, 'stop loss hit');
       }
 
+      // Stagnant exit — main trades going nowhere lock capital
+      if (trade.tradeMode !== 'scalp') {
+        const stagnantHours = 18;
+        const ageMs = Date.now() - trade.openTime;
+        if (ageMs > stagnantHours * 60 * 60 * 1000 && Math.abs(pnlPct) < 1) {
+          console.log(`💤 ${trade.coin} stagnant ${stagnantHours}h+ (${pnlPct.toFixed(2)}%) — freeing capital`);
+          closePaperTrade(trade.id, currentPrice, `stagnant ${stagnantHours}h — freeing capital`);
+          continue;
+        }
+      }
+
       // Auto close after 7 days
       const sevenDays = 7 * 24 * 60 * 60 * 1000;
       if (Date.now() - trade.openTime > sevenDays) {
@@ -6291,6 +6534,9 @@ async function checkPaperTrades() {
       }
     } catch(e) { console.error('Paper trade check error:', e.message); }
   }
+
+  // Resolve shadow trades (throttled to every 10 min internally)
+  resolveShadowTrades().catch(() => {});
 }
 
 // Run market scan for new signals
@@ -6625,56 +6871,6 @@ async function checkSmartProfitAlerts() {
 // ─── TELEGRAM BOT ──────────────────────────────────────────────────────────
 let tgBot = null;
 
-async function startTelegramBot() {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  if (!botToken) {
-    console.log('ℹ️ No TELEGRAM_BOT_TOKEN — bot disabled. Add to .env to enable.');
-    return;
-  }
-
-  const { Api } = require('telegram');
-  let lastUpdateId = 0;
-
-  async function pollBot() {
-    try {
-      const res = await fetchT(
-        `https://api.telegram.org/bot${botToken}/getUpdates?offset=${lastUpdateId + 1}&timeout=10`,
-        {}, 15000
-      );
-      const data = await res.json();
-      
-      if (!data.ok || !data.result?.length) return;
-
-      for (const update of data.result) {
-        lastUpdateId = update.update_id;
-        const msg = update.message;
-        if (!msg?.text) continue;
-
-        const chatId = msg.chat.id;
-        const text = msg.text;
-        console.log(`🤖 Bot message from ${chatId}: ${text}`);
-
-        // Process through routeCommand
-        try {
-          const reply = await routeCommand(text);
-          await fetchT(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chatId, text: reply || "I'm here! 💙" })
-          }, 8000);
-        } catch(e) {
-          console.error('Bot reply error:', e.message);
-        }
-      }
-    } catch(e) {}
-    
-    // Poll every 2 seconds
-    setTimeout(pollBot, 2000);
-  }
-
-  console.log('🤖 Telegram bot started — send messages to your bot!');
-  pollBot();
-}
 
 // ─── CHAT PATTERN LEARNING ────────────────────────────────────────────────
 async function learnFromChatPattern(trade, pnl) {
@@ -7831,10 +8027,10 @@ function getActiveBook() {
   return index.books[index.books.length - 1];
 }
 
-// Ask Asuka about book content
+// Ask Asuka about book content — uses Haiku (cheaper, fast enough for explanations)
 async function askAboutBook(pageText, question, bookName, pageNum) {
   const res = await anthropic.messages.create({
-    model: CLAUDE_MODEL,
+    model: 'claude-haiku-4-5-20251001', // Haiku — 4x cheaper than Sonnet, plenty smart for tutoring
     max_tokens: 500,
     system: buildSystemPrompt(),
     messages: [{
@@ -7858,6 +8054,58 @@ Keep response natural and conversational, like a tutor.`
 }
 
 // IPC handlers
+
+// IPC handler — opens native file dialog to pick PDF (avoids IPC size limits)
+ipcMain.handle('open-book-dialog', async (e, { name, subject }) => {
+  try {
+    const { dialog } = require('electron');
+    const result = await dialog.showOpenDialog({
+      title: 'Select PDF Textbook',
+      filters: [{ name: 'PDF Files', extensions: ['pdf'] }],
+      properties: ['openFile']
+    });
+    if (result.canceled || !result.filePaths.length) {
+      return { success: false, error: 'No file selected' };
+    }
+    const filePath = result.filePaths[0];
+    const fileName = path.basename(filePath, '.pdf');
+    console.log(`📚 Indexing via dialog: "${name || fileName}"`);
+    return await indexBook(filePath, name || fileName, subject || 'general');
+  } catch(e) {
+    console.error('open-book-dialog error:', e.message);
+    return { success: false, error: e.message };
+  }
+});
+
+// IPC handler that accepts raw file bytes — for small PDFs only
+ipcMain.handle('index-book-data', async (e, { fileData, name, subject }) => {
+  try {
+    if (!fileData || !fileData.length) return { success: false, error: 'No file data received' };
+    
+    const sizeMB = fileData.length / (1024 * 1024);
+    console.log(`📚 Indexing book: "${name}" (${sizeMB.toFixed(1)}MB)`);
+    
+    if (sizeMB > 10) {
+      return { success: false, error: 'FILE_TOO_LARGE', message: 'PDF too large for direct upload. Use file browser instead.' };
+    }
+    
+    const buffer = Buffer.from(fileData);
+    const tempPath = path.join(DATA_DIR, `_temp_upload_${Date.now()}.pdf`);
+    fs.writeFileSync(tempPath, buffer);
+    
+    try {
+      const result = await indexBook(tempPath, name || 'Textbook', subject || 'general');
+      console.log(`📚 Index result:`, result.success ? `✅ ${result.pageCount} pages` : `❌ ${result.error}`);
+      return result;
+    } finally {
+      try { fs.unlinkSync(tempPath); } catch(e) {}
+    }
+  } catch(e) {
+    console.error('index-book-data error:', e.message);
+    return { success: false, error: e.message };
+  }
+});
+
 ipcMain.handle('index-book', async (e, { pdfPath, name, subject }) => {
   return indexBook(pdfPath, name, subject);
 });
@@ -8298,10 +8546,15 @@ function startDevServer() {
     return;
   }
   const { spawn } = require('child_process');
-  const devProc = spawn('node', [devServerPath], { detached: false, stdio: 'pipe' });
-  devProc.stdout?.on('data', d => console.log('[DEV]', d.toString().trim()));
-  devProc.stderr?.on('data', d => console.error('[DEV ERR]', d.toString().trim()));
-  console.log('⚙️ Dev panel: http://localhost:3001');
+  const devProc = spawn(process.execPath, [devServerPath], {
+    detached: false,
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  devProc.stdout?.on('data', d => process.stdout.write('[DEV] ' + d));
+  devProc.stderr?.on('data', d => process.stderr.write('[DEV ERR] ' + d));
+  devProc.on('error', e => console.error('Dev server failed to start:', e.message));
+  devProc.on('exit', code => console.log('[DEV] server exited:', code));
+  console.log('⚙️ Dev panel starting → http://localhost:3001');
 }
 
 // ─── USER TIER & LIMITS SYSTEM ────────────────────────────────────────────
@@ -8415,6 +8668,38 @@ anthropic.messages.create = async function(params) {
 };
 
 // ─── IPC HANDLERS FOR LIMITS & TIER ───────────────────────────────────────
+ipcMain.handle('get-scanner-status', () => {
+  try {
+    const devOv = getDevOverrides();
+    const settings = loadSettings();
+    return {
+      running: !!settings.independentScanner && !devOv.pauseMain && !_globalPauseMain,
+      intervalMin: getEffectiveScanInterval(),
+      scalpEnabled: getUserTier().scalp_enabled && !!settings.scalpTrading && !devOv.pauseScalp,
+      paused: devOv.pauseAll || _globalPauseMain,
+    };
+  } catch(e) { return { running: false, intervalMin: 30, scalpEnabled: false, paused: false }; }
+});
+
+ipcMain.handle('close-all-trades', async () => {
+  try {
+    const pd = loadPaperTrades();
+    const open = pd.trades.filter(t => t.status === 'open');
+    let closed = 0;
+    for (const trade of open) {
+      try {
+        const price = await getCoinPrice(trade.coin);
+        if (price) { await closePaperTrade(trade.id, price, 'manual close-all by user'); closed++; }
+      } catch(e) {}
+    }
+    console.log(`🛑 Close All: ${closed}/${open.length} trades closed`);
+    sendTelegramNotification(`🛑 Close All executed — ${closed} positions closed`).catch(() => {});
+    return { success: true, closed, total: open.length };
+  } catch(e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('get-paper-trades-v2', () => loadPaperTrades());
+
 ipcMain.handle('get-usage-stats', () => {
   const usage = loadUsage();
   const config = loadUserConfig();
@@ -8738,16 +9023,50 @@ ipcMain.handle('get-paper-stats', async () => {
   };
 });
 
-// Extract trading signal from image using Claude Vision
+// Image analysis daily cap tracking
+let _imageDailyCount = 0;
+let _imageDailyDate = new Date().toDateString();
+
+function checkImageCap() {
+  const today = new Date().toDateString();
+  if (_imageDailyDate !== today) {
+    _imageDailyCount = 0;
+    _imageDailyDate = today;
+  }
+  const settings = loadSettings();
+  const cap = settings.imageDailyCap || 30; // default 30 images/day
+  if (_imageDailyCount >= cap) {
+    console.log(`🖼️ Image cap reached (${_imageDailyCount}/${cap}) — skipping`);
+    return false;
+  }
+  _imageDailyCount++;
+  return true;
+}
+
+// Extract trading signal from image using Claude Haiku Vision (cheaper)
 async function extractSignalFromImage(imageBuffer, sender, groupName) {
   try {
     const settings = loadSettings();
     if (!settings.chartAnalysis) return null;
 
+    // Size filter — skip tiny images (memes/stickers) and huge ones (photos)
+    const sizeKB = imageBuffer.length / 1024;
+    if (sizeKB < 15) {
+      console.log(`🖼️ Skipping tiny image (${sizeKB.toFixed(0)}KB) from @${sender}`);
+      return null;
+    }
+    if (sizeKB > 600) {
+      console.log(`🖼️ Skipping huge image (${sizeKB.toFixed(0)}KB) from @${sender}`);
+      return null;
+    }
+
+    // Daily cap check
+    if (!checkImageCap()) return null;
+
     const base64Image = imageBuffer.toString('base64');
     const res = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 300,
+      model: 'claude-haiku-4-5-20251001', // Use Haiku — 4x cheaper for image analysis
+      max_tokens: 200,
       messages: [{
         role: 'user',
         content: [
@@ -8757,11 +9076,10 @@ async function extractSignalFromImage(imageBuffer, sender, groupName) {
           },
           {
             type: 'text',
-            text: `Analyze this crypto chart image shared by @${sender} in ${groupName}. Is this a trading signal or chart analysis? 
-If yes, extract: coin, direction (long/short), key price levels.
-Respond ONLY with JSON:
-{"isSignal":true,"coin":"BTC","direction":"long","entry":104000,"target":108000,"stopLoss":102000,"confidence":65,"chartNote":"brief description"}
-If not a trading chart: {"isSignal":false}`
+            text: `Is this a crypto trading chart with a signal? Extract if yes.
+JSON only:
+{"isSignal":true,"coin":"BTC","direction":"long","entry":104000,"target":108000,"stopLoss":102000,"confidence":65,"chartNote":"brief"}
+If not a chart: {"isSignal":false}`
           }
         ]
       }]
