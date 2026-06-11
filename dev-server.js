@@ -223,6 +223,30 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    if (pathname === '/api/publish-config' && req.method === 'POST') {
+      res.setHeader('Content-Type', 'application/json');
+      (async () => {
+        try {
+          const { config } = JSON.parse(body);
+          const ghToken = process.env.GITHUB_TOKEN;
+          const repo = process.env.GITHUB_CONFIG_REPO || 'slandhop/crypto-ai-config';
+          if (!ghToken) { res.writeHead(200); res.end(JSON.stringify({ success: false, error: 'NO_TOKEN' })); return; }
+          const apiUrl = `https://api.github.com/repos/${repo}/contents/sponsored.json`;
+          const headers = { 'Authorization': `Bearer ${ghToken}`, 'User-Agent': 'crypto-ai-dev', 'Accept': 'application/vnd.github+json' };
+          let sha = null;
+          try { const cur = await fetch(apiUrl, { headers }); if (cur.ok) sha = (await cur.json()).sha; } catch(e) {}
+          const put = await fetch(apiUrl, { method: 'PUT', headers, body: JSON.stringify({
+            message: 'Broadcast update from dev panel',
+            content: Buffer.from(JSON.stringify(config, null, 2)).toString('base64'),
+            ...(sha ? { sha } : {}) }) });
+          const ok = put.ok;
+          console.log(ok ? '📡 Config published to GitHub' : '❌ Publish failed');
+          res.writeHead(200); res.end(JSON.stringify({ success: ok, error: ok ? null : (await put.text()).slice(0,150) }));
+        } catch(e) { res.writeHead(200); res.end(JSON.stringify({ success: false, error: e.message })); }
+      })();
+      return;
+    }
+
     if (pathname === '/api/control' && req.method === 'POST') {
       try {
         const cmd = JSON.parse(body);
@@ -397,15 +421,16 @@ input:focus{border-color:#00d4ff}
   <nav>
     <div class="nav-title">⚙️ CRYPTO.AI Dev</div>
     <div class="nav-tabs">
-      <button class="nav-tab active" onclick="showTab('overview')">Overview</button>
-      <button class="nav-tab" onclick="showTab('coins')">Coin Control</button>
-      <button class="nav-tab" onclick="showTab('trades')">Trades</button>
-      <button class="nav-tab" onclick="showTab('settings')">Settings</button>
+      <button class="nav-tab active" data-tab="overview">Overview</button>
+      <button class="nav-tab" data-tab="coins">Coin Control</button>
+      <button class="nav-tab" data-tab="trades">Trades</button>
+      <button class="nav-tab" data-tab="broadcast">📡 Broadcast</button>
+        <button class="nav-tab" data-tab="settings">Settings</button>
     </div>
     <div class="nav-right">
       <span id="refresh-time"></span>
-      <button class="btn-ghost btn-sm" onclick="refresh()">🔄</button>
-      <button class="btn-danger btn-sm" onclick="lock()">🔒 Lock</button>
+      <button class="btn-ghost btn-sm" id="refresh-btn">🔄</button>
+      <button class="btn-danger btn-sm" id="lock-btn">🔒 Lock</button>
     </div>
   </nav>
 
@@ -414,7 +439,7 @@ input:focus{border-color:#00d4ff}
     <!-- Emergency Banner -->
     <div class="emergency-banner" id="emergency-banner">
       ⏸️ TRADING PAUSED BY DEV — Click Resume to restore
-      <button class="btn-success btn-sm" style="margin-left:10px" onclick="ctrl('resumeAll')">▶️ Resume All</button>
+      <button class="btn-success btn-sm" style="margin-left:10px" id="resume-all-btn">▶️ Resume All</button>
     </div>
 
     <!-- ══ OVERVIEW TAB ══ -->
@@ -501,23 +526,37 @@ input:focus{border-color:#00d4ff}
       <div class="card" style="margin-bottom:12px;border-color:rgba(239,68,68,.3);">
         <div class="card-title">🚨 Emergency Controls</div>
         <div class="grid g4" style="margin-bottom:10px;">
-          <button class="btn-danger" onclick="ctrl('pauseAll')" style="padding:14px;">⏸️ Pause ALL</button>
-          <button class="btn-success" onclick="ctrl('resumeAll')" style="padding:14px;">▶️ Resume ALL</button>
-          <button class="btn-warning" onclick="ctrl('toggleScalp')">⚡ Toggle Scalp</button>
-          <button class="btn-warning" onclick="ctrl('toggleMain')">📈 Toggle Main</button>
+          <button class="btn-danger" id="pause-all-btn" style="padding:14px;">⏸️ Pause ALL</button>
+          <button class="btn-success" id="resume-all-btn" style="padding:14px;">▶️ Resume ALL</button>
+          <button class="btn-warning" id="toggle-scalp-btn">⚡ Toggle Scalp</button>
+          <button class="btn-warning" id="toggle-main-btn">📈 Toggle Main</button>
         </div>
         <div id="emergency-status" style="font-size:12px;text-align:center;padding:8px;background:#0f172a;border-radius:8px;color:#34d399;">✅ All systems running normally</div>
+      </div>
+
+      <!-- Coin Override -->
+      <div class="card" style="margin-bottom:12px;">
+        <div class="card-title">🪙 Global Coin Override</div>
+        <p style="font-size:12px;color:#64748b;margin-bottom:10px;">Limit coins scanned — instant cost reduction</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn-ghost btn-sm active-btn" data-coins="all">All Coins</button>
+          <button class="btn-ghost btn-sm" data-coins="5">Max 5</button>
+          <button class="btn-ghost btn-sm" data-coins="3">BTC/ETH/SOL</button>
+          <button class="btn-ghost btn-sm" data-coins="2">BTC/ETH</button>
+          <button class="btn-ghost btn-sm" data-coins="1">BTC Only</button>
+        </div>
+        <div id="coin-override-hint" style="font-size:11px;color:#64748b;margin-top:6px;"></div>
       </div>
 
       <!-- Scan Interval Override -->
       <div class="card" style="margin-bottom:12px;">
         <div class="card-title">⏱️ Scan Interval Override</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;" id="interval-btns">
-          <button class="btn-ghost btn-sm active-btn" onclick="setInterval_(0)">User Setting</button>
-          <button class="btn-ghost btn-sm" onclick="setInterval_(30)">30 min</button>
-          <button class="btn-ghost btn-sm" onclick="setInterval_(60)">1 hour</button>
-          <button class="btn-ghost btn-sm" onclick="setInterval_(120)">2 hours</button>
-          <button class="btn-ghost btn-sm" onclick="setInterval_(240)">4 hours</button>
+          <button class="btn-ghost btn-sm active-btn" data-interval="0">User Setting</button>
+          <button class="btn-ghost btn-sm" data-interval="30">30 min</button>
+          <button class="btn-ghost btn-sm" data-interval="60">1 hour</button>
+          <button class="btn-ghost btn-sm" data-interval="120">2 hours</button>
+          <button class="btn-ghost btn-sm" data-interval="240">4 hours</button>
         </div>
       </div>
 
@@ -555,9 +594,9 @@ input:focus{border-color:#00d4ff}
 
       <!-- Coin Type Selector -->
       <div class="type-tabs">
-        <button class="type-tab active" onclick="showCoinType('main')">📈 Main Trade</button>
-        <button class="type-tab" onclick="showCoinType('scalp')">⚡ Scalp</button>
-        <button class="type-tab" onclick="showCoinType('day')">📅 Day Trade</button>
+        <button class="type-tab active" data-cointype="main">📈 Main Trade</button>
+        <button class="type-tab" data-cointype="scalp">⚡ Scalp</button>
+        <button class="type-tab" data-cointype="day">📅 Day Trade</button>
       </div>
 
       <!-- Auto Optimize -->
@@ -572,8 +611,8 @@ input:focus{border-color:#00d4ff}
             <option value="50">50%</option>
           </select>
           <span style="font-size:12px;color:#475569;">of users</span>
-          <button class="btn-primary btn-sm" onclick="autoOptimize()">🤖 Auto Optimize</button>
-          <button class="btn-ghost btn-sm" onclick="resetAll()">Reset All ON</button>
+          <button class="btn-primary btn-sm" id="auto-optimize-btn">🤖 Auto Optimize</button>
+          <button class="btn-ghost btn-sm" id="reset-all-btn">Reset All ON</button>
         </div>
         <div id="optimize-result" style="font-size:11px;color:#475569;margin-top:8px;"></div>
       </div>
@@ -601,12 +640,52 @@ input:focus{border-color:#00d4ff}
     </div>
 
     <!-- ══ SETTINGS TAB ══ -->
+    <div class="tab-content" id="tab-broadcast">
+      <div class="card" style="margin-bottom:12px;">
+        <div class="card-title">📢 Sponsored Campaign</div>
+        <input id="bc-name" placeholder="Campaign name" class="bc-in">
+        <input id="bc-banner" placeholder="Banner text users see" class="bc-in">
+        <input id="bc-url" placeholder="Link URL" class="bc-in">
+        <textarea id="bc-context" placeholder="What Asuka knows (she discloses it's sponsored)" class="bc-in" style="height:50px;resize:vertical;"></textarea>
+        <div style="display:flex;gap:6px;">
+          <input id="bc-start" type="date" class="bc-in" style="flex:1;margin:0;">
+          <input id="bc-end" type="date" class="bc-in" style="flex:1;margin:0;">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="checkbox" id="bc-active" checked> Active</label>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:12px;">
+        <div class="card-title">🧠 Intelligence Push → ALL users</div>
+        <input id="bc-lesson-coin" placeholder="Coin (or GLOBAL)" class="bc-in">
+        <textarea id="bc-lesson-text" placeholder="Lesson: 'Avoid alt longs during FOMC week'" class="bc-in" style="height:44px;resize:vertical;"></textarea>
+        <button class="btn-ghost btn-sm" id="bc-add-lesson">+ Add Lesson</button>
+        <div id="bc-lessons-list" style="font-size:11px;color:#94a3b8;margin-top:6px;"></div>
+      </div>
+      <div class="card" style="margin-bottom:12px;">
+        <div class="card-title">💬 Suggested Questions</div>
+        <div style="display:flex;gap:6px;">
+          <input id="bc-prompt" placeholder="'Ask me about today's regime'" class="bc-in" style="flex:1;margin:0;">
+          <button class="btn-ghost btn-sm" id="bc-add-prompt">+ Add</button>
+        </div>
+        <div id="bc-prompts-list" style="font-size:11px;color:#94a3b8;margin-top:6px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🚀 Publish</div>
+        <pre id="bc-preview" style="font-size:10px;background:#020617;border:1px solid #1e293b;border-radius:8px;padding:8px;max-height:160px;overflow:auto;color:#94a3b8;">{}</pre>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button class="btn-ghost btn-sm" id="bc-copy" style="flex:1;">📋 Copy JSON</button>
+          <button class="btn-ghost btn-sm" id="bc-publish" style="flex:1;">📡 Publish to GitHub</button>
+        </div>
+        <div id="bc-status" style="font-size:11px;margin-top:6px;color:#94a3b8;"></div>
+        <div style="font-size:10px;color:#64748b;margin-top:4px;">Users refresh within 6h. One-click needs GITHUB_TOKEN in .env — else Copy JSON → paste to github.com/slandhop/crypto-ai-config</div>
+      </div>
+      <style>.bc-in{width:100%;margin:0 0 6px;padding:8px;border-radius:8px;border:1px solid #1e293b;background:#0f172a;color:#e2e8f0;box-sizing:border-box;}</style>
+    </div>
     <div class="tab-content" id="tab-settings">
       <div class="card">
         <div class="card-title">🔑 Change Dev Password</div>
         <div style="display:flex;gap:8px;">
           <input type="password" id="new-pwd" placeholder="New password (min 8 chars)" style="flex:1;">
-          <button class="btn-primary" onclick="changePwd()">Save</button>
+          <button class="btn-primary" id="change-pwd-btn">Save</button>
         </div>
         <div id="pwd-msg" style="font-size:12px;margin-top:8px;"></div>
       </div>
@@ -622,6 +701,28 @@ let currentCoinType = 'main';
 let refreshTimer = null;
 
 // ── Auth ──
+
+let bcLessons = [], bcPrompts = [];
+function bcBuild() {
+  const cfg = { updated: new Date().toISOString(), campaigns: [], globalLessons: bcLessons, suggestedPrompts: bcPrompts };
+  const name = document.getElementById('bc-name')?.value.trim();
+  if (name) cfg.campaigns.push({
+    name, active: document.getElementById('bc-active').checked,
+    banner: document.getElementById('bc-banner').value.trim(),
+    url: document.getElementById('bc-url').value.trim(),
+    asukaContext: document.getElementById('bc-context').value.trim(),
+    start: document.getElementById('bc-start').value || undefined,
+    end: document.getElementById('bc-end').value || undefined });
+  const pv = document.getElementById('bc-preview');
+  if (pv) pv.textContent = JSON.stringify(cfg, null, 2);
+  return cfg;
+}
+function bcRenderLists() {
+  const ll = document.getElementById('bc-lessons-list'), pl = document.getElementById('bc-prompts-list');
+  if (ll) ll.innerHTML = bcLessons.map(function(l,i){ return (i+1) + '. [' + l.coin + '] ' + l.lesson.slice(0,70); }).join('<br>') || 'No lessons queued';
+  if (pl) pl.innerHTML = bcPrompts.map(function(p,i){ return (i+1) + '. ' + p; }).join('<br>') || 'No prompts queued';
+  bcBuild();
+}
 async function unlock() {
   const pwdEl = document.getElementById('pwd');
   const err = document.getElementById('lock-err');
@@ -802,7 +903,7 @@ function renderCoinGrid() {
     const isDisabled = disabled.includes(coin);
     const data = coinStats[coin]||{count:0,pct:0};
     const barColor = data.pct>=50?'#34d399':data.pct>=20?'#fbbf24':'#ef4444';
-    return '<div class="coin-card'+(isDisabled?' disabled':'')+'" onclick="toggleCoin(\''+coin+'\')" title="Click to '+(isDisabled?'enable':'disable')+'">'
+    return '<div class="coin-card'+(isDisabled?' disabled':'')+'" data-toggle-coin="'+coin+'" title="Click to '+(isDisabled?'enable':'disable')+'">'
       +'<div class="coin-toggle">'+(isDisabled?'✕':'✓')+'</div>'
       +'<div class="coin-name">'+coin+'</div>'
       +'<div class="coin-bar"><div class="coin-bar-fill" style="width:'+data.pct+'%;background:'+barColor+'"></div></div>'
@@ -840,7 +941,23 @@ async function toggleCoin(coin) {
   refresh();
 }
 
-async function setInterval_(min) {
+async function setCoinOverride(val) {
+  document.querySelectorAll('[data-coins]').forEach(b => b.classList.remove('active-btn'));
+  const btn = document.querySelector('[data-coins="'+val+'"]');
+  if (btn) btn.classList.add('active-btn');
+  const hints = {
+    'all':'Scanning all coins',
+    '5':'Max 5 coins → saves ~$60/mo',
+    '3':'BTC/ETH/SOL → saves ~$100/mo',
+    '2':'BTC/ETH only → saves ~$135/mo',
+    '1':'BTC only → saves ~$155/mo'
+  };
+  const hint = document.getElementById('coin-override-hint');
+  if (hint) hint.textContent = hints[val] || '';
+  api('/api/control','POST',{action:'setCoinOverride',value:val}).then(() => refresh());
+}
+
+function setInterval_(min) {
   document.querySelectorAll('#interval-btns button').forEach(b=>b.classList.remove('active-btn'));
   event.target.classList.add('active-btn');
   await api('/api/control','POST',{action:'setInterval',value:min||null});
@@ -884,14 +1001,87 @@ function el(id) { return document.getElementById(id); }
 
 // Auto-login if token saved
 window.onload = () => {
-  // Wire up buttons properly (avoid inline onclick issues)
+  // Wire unlock
   document.getElementById('unlock-btn').addEventListener('click', unlock);
   document.getElementById('pwd').addEventListener('keydown', e => {
     if (e.key === 'Enter') unlock();
   });
 
+  // Wire nav tabs
+  document.querySelectorAll('.nav-tab[data-tab]').forEach(btn => {
+    btn.addEventListener('click', () => showTab(btn.dataset.tab));
+  });
+
+  // Wire action buttons
+  document.getElementById('refresh-btn')?.addEventListener('click', refresh);
+  document.getElementById('lock-btn')?.addEventListener('click', lock);
+  document.getElementById('pause-all-btn')?.addEventListener('click', () => ctrl('pauseAll'));
+  document.getElementById('resume-all-btn')?.addEventListener('click', () => ctrl('resumeAll'));
+  document.getElementById('toggle-scalp-btn')?.addEventListener('click', () => ctrl('toggleScalp'));
+  document.getElementById('toggle-main-btn')?.addEventListener('click', () => ctrl('toggleMain'));
+  document.getElementById('auto-optimize-btn')?.addEventListener('click', autoOptimize);
+  document.getElementById('reset-all-btn')?.addEventListener('click', resetAll);
+  document.getElementById('change-pwd-btn')?.addEventListener('click', changePwd);
+
+  // Wire coin override buttons
+  document.querySelectorAll('[data-coins]').forEach(btn => {
+    btn.addEventListener('click', () => setCoinOverride(btn.dataset.coins));
+  });
+
+  // Wire interval buttons
+  document.querySelectorAll('[data-interval]').forEach(btn => {
+    btn.addEventListener('click', () => setInterval_(parseInt(btn.dataset.interval)));
+  });
+
+  // Wire coin type tabs
+  document.querySelectorAll('[data-cointype]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-cointype]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      showCoinType(btn.dataset.cointype);
+    });
+  });
+
+  // Wire coin grid toggle (delegated - since grid is dynamic)
+  document.addEventListener('click', e => {
+    const card = e.target.closest('[data-toggle-coin]');
+    if (card) toggleCoin(card.dataset.toggleCoin);
+  });
+
+
+  ;['bc-name','bc-banner','bc-url','bc-context','bc-start','bc-end','bc-active'].forEach(id => {
+    const el = document.getElementById(id);
+    el?.addEventListener('input', bcBuild); el?.addEventListener('change', bcBuild);
+  });
+  document.getElementById('bc-add-lesson')?.addEventListener('click', () => {
+    const text = document.getElementById('bc-lesson-text').value.trim();
+    if (!text) return;
+    bcLessons.push({ id: 'bc-' + Date.now(), coin: (document.getElementById('bc-lesson-coin').value.trim().toUpperCase() || 'GLOBAL'), lesson: text, source: 'remote', timestamp: Date.now() });
+    document.getElementById('bc-lesson-text').value = '';
+    bcRenderLists();
+  });
+  document.getElementById('bc-add-prompt')?.addEventListener('click', () => {
+    const p = document.getElementById('bc-prompt').value.trim();
+    if (!p) return;
+    bcPrompts.push(p); document.getElementById('bc-prompt').value = '';
+    bcRenderLists();
+  });
+  document.getElementById('bc-copy')?.addEventListener('click', () => {
+    navigator.clipboard.writeText(JSON.stringify(bcBuild(), null, 2));
+    document.getElementById('bc-status').textContent = '📋 Copied — paste into GitHub sponsored.json';
+  });
+  document.getElementById('bc-publish')?.addEventListener('click', async () => {
+    const st = document.getElementById('bc-status');
+    st.textContent = '⏳ Publishing...';
+    const r = await api('/api/publish-config', 'POST', { config: bcBuild() }).catch(() => null);
+    st.textContent = r?.success ? '✅ Live — all users update within 6h'
+      : r?.error === 'NO_TOKEN' ? '⚠️ No GITHUB_TOKEN in .env — use Copy JSON'
+      : '❌ ' + (r?.error || 'Failed');
+  });
+  bcRenderLists();
+
   // Auto-login if valid token saved
-  const saved = localStorage.getItem('dev_token');
+  const saved = localStorage.getItem('dev_token') || window._token;
   if (saved) {
     token = saved;
     fetch('/api/stats', { headers: { Authorization: 'Bearer ' + token } })

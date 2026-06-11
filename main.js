@@ -289,7 +289,7 @@ CRYPTO RULES:
 - Price predictions: give honest take + "do your own research"
 - Scams: be blunt and direct
 - Trading questions: answer directly, no lectures
-- If they break their own rules: call it out`;
+- If they break their own rules: call it out${getSponsoredContext()}`;
 }
 
 // ─── CONVERSATION HISTORY ──────────────────────────────────────────────────
@@ -2095,10 +2095,36 @@ async function routeCommand(userText) {
     if (!page) {
       return `I couldn't find page ${pageNum} in ${activeBook.name}. The book has ${activeBook.pageCount} pages.`;
     }
+    saveStudyProgress(activeBook.id, pageNum);
+    global._lastBookPage = pageNum;
     const explanation = await askAboutBook(page.text, `Please read and explain page ${pageNum}`, activeBook.name, pageNum);
     return explanation;
   }
 
+
+  // "continue studying" / "japanese practice" / "let's study" — resume where we left off
+  if (/(continue|resume).{0,12}(study|practice|lesson|japanese|book)|japanese practice|let'?s study|study time/.test(lower)) {
+    const activeBook = getActiveBook();
+    if (!activeBook) return "No textbook loaded yet! Drop a PDF in Others → Study and we can start.";
+    const prog = getStudyProgress(activeBook.id);
+    if (prog?.lastPage) {
+      const nextPage = Math.min(prog.lastPage + 1, activeBook.pageCount);
+      const page = getBookPage(activeBook.id, nextPage);
+      if (page) {
+        saveStudyProgress(activeBook.id, nextPage);
+        global._lastBookPage = nextPage;
+        const explanation = await askAboutBook(page.text, `We are resuming a study session. Last time we covered page ${prog.lastPage}. Briefly welcome the student back (one sentence), then teach this page.`, activeBook.name, nextPage);
+        return explanation;
+      }
+    }
+    const page1 = getBookPage(activeBook.id, 1);
+    if (page1) {
+      saveStudyProgress(activeBook.id, 1);
+      global._lastBookPage = 1;
+      return await askAboutBook(page1.text, 'This is our first study session with this book. Welcome the student warmly (one sentence) and start teaching page 1.', activeBook.name, 1);
+    }
+    return `${activeBook.name} is loaded — say "Page 1" and we'll begin!`;
+  }
   // "explain lesson 2" or "lesson 2 section 1"
   const lessonMatch = lower.match(/lesson\s*(\d+)(?:[\s-]*(?:section|part|exercise)?\s*(\d+))?/);
   if (lessonMatch) {
@@ -4010,6 +4036,7 @@ setInterval(() => {
 }, 60 * 1000);
 
 async function runIndependentScan() {
+  _lastScanHeartbeat = Date.now();
   const devOv = getDevOverrides();
   if (_globalPauseMain || devOv.pauseMain) { console.log('⏸️ Main scanner paused by dev'); return; }
   const settings = loadSettings();
@@ -6432,6 +6459,457 @@ ipcMain.handle('get-shadow-stats', () => {
   return { stats: d.stats, recent: d.shadows.slice(-20) };
 });
 ipcMain.handle('get-coin-bench', () => loadJSON(BENCH_FILE, {}));
+
+
+// ─── INTELLIGENCE LAB: feed trades, backtest training, brain export ────────
+
+// Manual trade feed — you or users teach Asuka specific trades
+ipcMain.handle('feed-trade-lesson', (e, { coin, direction, won, note }) => {
+  try {
+    const lessons = loadTradingLessons();
+    lessons.lessons.push({
+      lesson: note || `${direction} ${coin} ${won ? 'worked' : 'failed'}`,
+      pattern: `manual feed: ${coin} ${direction}`,
+      coin: (coin || '').toUpperCase(), direction, won: !!won,
+      pnl: won ? '1' : '-1', source: 'manual', timestamp: Date.now()
+    });
+    if (lessons.lessons.length > 200) lessons.lessons = lessons.lessons.slice(-200);
+    saveTradingLessons(lessons);
+    console.log(`🍱 Fed lesson: ${direction} ${coin} (${won ? 'WIN' : 'LOSS'}) — ${note}`);
+    return { success: true, total: lessons.lessons.length };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+// Backtest trainer — replay history, mass-generate data-driven lessons. FREE.
+function _rsiSeries(closes, period = 14) {
+  const out = new Array(closes.length).fill(null);
+  let g = 0, l = 0;
+  for (let i = 1; i <= period; i++) { const d = closes[i] - closes[i-1]; if (d > 0) g += d; else l -= d; }
+  let ag = g / period, al = l / period;
+  out[period] = 100 - 100 / (1 + (al === 0 ? 100 : ag / al));
+  for (let i = period + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i-1];
+    ag = (ag * (period-1) + Math.max(d, 0)) / period;
+    al = (al * (period-1) + Math.max(-d, 0)) / period;
+    out[i] = 100 - 100 / (1 + (al === 0 ? 100 : ag / al));
+  }
+  return out;
+}
+
+async function runBacktestTraining(coins) {
+  const results = [];
+  for (const coin of coins) {
+    try {
+      const candles = await getCandles(coin, '1h', 1000);
+      if (!candles || candles.length < 100) continue;
+      const closes = candles.map(c => c.close);
+      const rsi = _rsiSeries(closes);
+      const setups = {}; // name → {wins, total}
+      const record = (name, win) => { if (!setups[name]) setups[name] = { wins: 0, total: 0 }; setups[name].total++; if (win) setups[name].wins++; };
+      const outcome = (i, dir) => {
+        const entry = closes[i];
+        for (let j = i + 1; j < Math.min(i + 25, candles.length); j++) {
+          if (dir === 'long') {
+            if (candles[j].high >= entry * 1.025) return true;
+            if (candles[j].low <= entry * 0.985) return false;
+          } else {
+            if (candles[j].low <= entry * 0.975) return true;
+            if (candles[j].high >= entry * 1.015) return false;
+          }
+        }
+        return null; // unresolved
+      };
+      for (let i = 30; i < candles.length - 26; i++) {
+        const c = candles[i], p = candles[i-1];
+        const trendUp = closes[i] > closes[i-20];
+        if (rsi[i] !== null && rsi[i] < 30) {
+          const w = outcome(i, 'long'); if (w !== null) record(`RSI<30 long (${trendUp ? 'uptrend' : 'downtrend'})`, w);
+        }
+        if (rsi[i] !== null && rsi[i] > 70) {
+          const w = outcome(i, 'short'); if (w !== null) record(`RSI>70 short (${trendUp ? 'uptrend' : 'downtrend'})`, w);
+        }
+        const body = Math.abs(c.close - c.open), lw = Math.min(c.open, c.close) - c.low;
+        if (lw > body * 2 && c.close > c.open && c.low === Math.min(...candles.slice(i-10, i+1).map(x => x.low))) {
+          const w = outcome(i, 'long'); if (w !== null) record('hammer at 10-bar low long', w);
+        }
+        if (p.close < p.open && c.close > c.open && c.close > p.open && c.open < p.close) {
+          const w = outcome(i, 'long'); if (w !== null) record('bullish engulfing long', w);
+        }
+      }
+      // Write lessons for patterns with enough samples
+      const lessons = loadTradingLessons();
+      lessons.lessons = lessons.lessons.filter(L => !(L.source === 'backtest' && L.coin === coin)); // refresh
+      let written = 0;
+      for (const [name, s] of Object.entries(setups)) {
+        if (s.total < 8) continue;
+        const wr = Math.round(s.wins / s.total * 100);
+        const verdict = wr >= 58 ? 'TAKE these setups' : wr <= 42 ? 'AVOID these setups' : 'neutral edge';
+        lessons.lessons.push({
+          lesson: `${coin} ${name}: ${wr}% win rate over ${s.total} historical setups (1000h backtest) — ${verdict}`,
+          pattern: `backtest: ${coin} ${name}`,
+          coin, direction: name.includes('short') ? 'short' : 'long',
+          won: wr >= 50, pnl: '0', source: 'backtest', timestamp: Date.now()
+        });
+        written++;
+      }
+      if (lessons.lessons.length > 250) lessons.lessons = lessons.lessons.slice(-250);
+      saveTradingLessons(lessons);
+      results.push({ coin, patterns: Object.keys(setups).length, lessonsWritten: written });
+      console.log(`🏋️ Backtest ${coin}: ${written} lessons from ${Object.keys(setups).length} patterns`);
+    } catch(e2) { console.error(`Backtest ${coin}:`, e2.message); }
+  }
+  return results;
+}
+
+ipcMain.handle('run-backtest-training', async (e, coins) => {
+  const list = coins?.length ? coins : (loadSettings().tradingCoins || ['BTC','ETH','SOL']);
+  const r = await runBacktestTraining(list.slice(0, 10));
+  return { success: true, results: r };
+});
+
+// Brain export / import — Experienced vs Fresh Asuka
+const BRAIN_FILES = () => ({
+  lessons: loadTradingLessons(),
+  agentStats: loadJSON(AGENT_STATS_FILE, {}),
+  shadow: loadJSON(SHADOW_FILE, { shadows: [], stats: {} }),
+  bench: loadJSON(BENCH_FILE, {}),
+});
+
+ipcMain.handle('export-brain', async () => {
+  try {
+    const { dialog } = require('electron');
+    const r = await dialog.showSaveDialog({ title: 'Export Asuka Brain', defaultPath: `asuka-brain-${new Date().toISOString().slice(0,10)}.json` });
+    if (r.canceled) return { success: false, error: 'canceled' };
+    const brain = { version: 1, exported: Date.now(), ...BRAIN_FILES() };
+    fs.writeFileSync(r.filePath, JSON.stringify(brain, null, 2));
+    return { success: true, path: r.filePath, lessons: brain.lessons.lessons.length };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+ipcMain.handle('import-brain', async () => {
+  try {
+    const { dialog } = require('electron');
+    const r = await dialog.showOpenDialog({ title: 'Import Asuka Brain', filters: [{ name: 'Brain', extensions: ['json'] }], properties: ['openFile'] });
+    if (r.canceled || !r.filePaths.length) return { success: false, error: 'canceled' };
+    const brain = JSON.parse(fs.readFileSync(r.filePaths[0], 'utf8'));
+    // Merge lessons (dedupe by timestamp+pattern)
+    const lessons = loadTradingLessons();
+    const seen = new Set(lessons.lessons.map(L => `${L.timestamp}|${L.pattern}`));
+    for (const L of (brain.lessons?.lessons || [])) {
+      if (!seen.has(`${L.timestamp}|${L.pattern}`)) lessons.lessons.push(L);
+    }
+    if (lessons.lessons.length > 300) lessons.lessons = lessons.lessons.slice(-300);
+    saveTradingLessons(lessons);
+    // Merge agent experience (sum)
+    const stats = getAgentStats();
+    for (const [role, s] of Object.entries(brain.agentStats || {})) {
+      if (!stats[role]) stats[role] = { votes: 0, correct: 0 };
+      stats[role].votes += s.votes || 0; stats[role].correct += s.correct || 0;
+    }
+    saveJSON(AGENT_STATS_FILE, stats);
+    if (brain.bench) saveJSON(BENCH_FILE, { ...loadJSON(BENCH_FILE, {}), ...brain.bench });
+    console.log(`🧠 Brain imported: ${lessons.lessons.length} total lessons`);
+    return { success: true, lessons: lessons.lessons.length };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+// ─── SPONSORED CAMPAIGNS — remote-controlled, no backend needed ────────────
+// Dev edits a JSON on GitHub → all apps fetch it → banner + Asuka context.
+const DEFAULT_SPONSOR_URL = 'https://raw.githubusercontent.com/slandhop/crypto-ai-config/main/sponsored.json';
+let _sponsorCache = { data: null, ts: 0 };
+
+async function fetchSponsoredConfig() {
+  try {
+    const url = loadSettings().sponsoredConfigUrl || DEFAULT_SPONSOR_URL;
+    const res = await fetchT(url + '?t=' + Date.now());
+    if (!res.ok) { _sponsorCache = { data: null, ts: Date.now() }; return; }
+    const cfg = await res.json();
+    const now = Date.now();
+    const active = (cfg.campaigns || []).filter(c =>
+      (!c.start || now >= new Date(c.start).getTime()) &&
+      (!c.end || now <= new Date(c.end).getTime()) && c.active !== false);
+    _sponsorCache = { data: active[0] || null, ts: now, prompts: cfg.suggestedPrompts || [] };
+    if (active[0]) console.log(`📢 Sponsored campaign active: ${active[0].name}`);
+
+    // 🧠 Intelligence push — merge dev-broadcast lessons into her brain (dedupe by id)
+    if (Array.isArray(cfg.globalLessons) && cfg.globalLessons.length) {
+      const lessons = loadTradingLessons();
+      const have = new Set(lessons.lessons.filter(L => L.source === 'remote').map(L => L.id));
+      let added = 0;
+      for (const L of cfg.globalLessons) {
+        if (L.id && !have.has(L.id)) {
+          lessons.lessons.push({ ...L, won: true, pnl: '0', direction: L.direction || 'long', pattern: L.pattern || ('remote: ' + (L.coin || 'GLOBAL')) });
+          added++;
+        }
+      }
+      if (added) {
+        if (lessons.lessons.length > 300) lessons.lessons = lessons.lessons.slice(-300);
+        saveTradingLessons(lessons);
+        console.log(`🧠 Intelligence push: ${added} lessons received from dev broadcast`);
+      }
+    }
+  } catch(e) { _sponsorCache = { data: null, ts: Date.now() }; }
+}
+setTimeout(fetchSponsoredConfig, 10000);
+setInterval(fetchSponsoredConfig, 6 * 60 * 60 * 1000);
+
+function getSponsoredContext() {
+  const c = _sponsorCache.data;
+  if (!c?.asukaContext) return '';
+  return `\n\nSPONSORED (disclose as sponsored if you mention it, never present as your own trading advice): ${c.asukaContext}`;
+}
+
+ipcMain.handle('get-sponsored', () => _sponsorCache.data);
+ipcMain.handle('get-suggested-prompts', () => _sponsorCache.prompts || []);
+ipcMain.handle('refresh-sponsored', async () => { await fetchSponsoredConfig(); return _sponsorCache.data; });
+
+// ─── DEX SNIPER v1 — paste CA → instant analysis → paper snipe ─────────────
+const SNIPES_FILE = path.join(DATA_DIR, 'dex-snipes.json');
+
+async function dexAnalyze(ca) {
+  const res = await fetchT(`https://api.dexscreener.com/latest/dex/tokens/${ca}`);
+  const data = await res.json();
+  if (!data?.pairs?.length) return { found: false };
+  const p = data.pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+  const liq = p.liquidity?.usd || 0;
+  const flags = [];
+  if (liq < 10000) flags.push('🚨 Liquidity under $10K — rug risk');
+  else if (liq < 50000) flags.push('⚠️ Low liquidity (<$50K)');
+  if ((p.volume?.h24 || 0) < 5000) flags.push('⚠️ Dead volume (<$5K/24h)');
+  const ageH = p.pairCreatedAt ? (Date.now() - p.pairCreatedAt) / 3.6e6 : null;
+  if (ageH !== null && ageH < 24) flags.push(`⚠️ Token is ${ageH.toFixed(0)}h old`);
+  if (Math.abs(p.priceChange?.h1 || 0) > 50) flags.push('🚨 ±50% in 1h — extreme volatility');
+  return {
+    found: true, ca, chain: p.chainId, dex: p.dexId,
+    symbol: p.baseToken?.symbol, name: p.baseToken?.name,
+    priceUsd: parseFloat(p.priceUsd), liquidity: liq,
+    volume24h: p.volume?.h24 || 0, fdv: p.fdv || null,
+    change: { h1: p.priceChange?.h1, h6: p.priceChange?.h6, h24: p.priceChange?.h24 },
+    ageHours: ageH, flags, url: p.url
+  };
+}
+
+ipcMain.handle('snipe-analyze', async (e, ca) => {
+  try { return await dexAnalyze(String(ca).trim()); }
+  catch(e2) { return { found: false, error: e2.message }; }
+});
+
+ipcMain.handle('snipe-buy', async (e, { ca, usd }) => {
+  try {
+    const info = await dexAnalyze(String(ca).trim());
+    if (!info.found || !info.priceUsd) return { success: false, error: 'Token not found' };
+    const d = loadJSON(SNIPES_FILE, { positions: [] });
+    const pos = {
+      id: Date.now(), ca: info.ca, chain: info.chain, symbol: info.symbol,
+      entryPrice: info.priceUsd, amountUsd: usd || 50,
+      tokens: (usd || 50) / info.priceUsd,
+      time: Date.now(), status: 'open', mode: 'paper'
+    };
+    d.positions.push(pos);
+    saveJSON(SNIPES_FILE, d);
+    console.log(`🎯 SNIPED (paper): ${info.symbol} $${usd} at $${info.priceUsd}`);
+    sendTelegramNotification(`🎯 Sniped ${info.symbol} (paper)\n$${usd} at $${info.priceUsd}\nLiq: $${(info.liquidity/1000).toFixed(0)}K`).catch(() => {});
+    return { success: true, position: pos, info };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+ipcMain.handle('snipe-positions', async () => {
+  try {
+    const d = loadJSON(SNIPES_FILE, { positions: [] });
+    const open = d.positions.filter(p => p.status === 'open').slice(-10);
+    for (const p of open) {
+      try {
+        const info = await dexAnalyze(p.ca);
+        if (info.found) {
+          p.currentPrice = info.priceUsd;
+          p.pnlPct = ((info.priceUsd - p.entryPrice) / p.entryPrice * 100);
+          p.pnlUsd = p.tokens * info.priceUsd - p.amountUsd;
+        }
+      } catch(e2) {}
+    }
+    return { positions: d.positions.slice(-30).reverse() };
+  } catch(e2) { return { positions: [] }; }
+});
+
+ipcMain.handle('snipe-sell', async (e, id) => {
+  try {
+    const d = loadJSON(SNIPES_FILE, { positions: [] });
+    const p = d.positions.find(x => x.id === id && x.status === 'open');
+    if (!p) return { success: false, error: 'Position not found' };
+    const info = await dexAnalyze(p.ca);
+    p.status = 'closed'; p.exitPrice = info.priceUsd || p.entryPrice;
+    p.pnlUsd = p.tokens * p.exitPrice - p.amountUsd;
+    p.pnlPct = (p.exitPrice - p.entryPrice) / p.entryPrice * 100;
+    p.closeTime = Date.now();
+    saveJSON(SNIPES_FILE, d);
+    sendTelegramNotification(`🎯 Snipe closed: ${p.symbol} ${p.pnlPct >= 0 ? '+' : ''}${p.pnlPct.toFixed(1)}% ($${p.pnlUsd.toFixed(2)})`).catch(() => {});
+    return { success: true, position: p };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+
+// ─── STUDY PROGRESS — picks up where you left off ──────────────────────────
+const STUDY_PROGRESS_FILE = path.join(DATA_DIR, 'study-progress.json');
+function saveStudyProgress(bookId, pageNum) {
+  try {
+    const p = loadJSON(STUDY_PROGRESS_FILE, {});
+    if (!p[bookId]) p[bookId] = { sessions: 0 };
+    p[bookId].lastPage = pageNum;
+    p[bookId].lastStudied = Date.now();
+    p[bookId].sessions = (p[bookId].sessions || 0) + 1;
+    saveJSON(STUDY_PROGRESS_FILE, p);
+  } catch(e) {}
+}
+function getStudyProgress(bookId) {
+  return loadJSON(STUDY_PROGRESS_FILE, {})[bookId] || null;
+}
+ipcMain.handle('get-study-progress', () => loadJSON(STUDY_PROGRESS_FILE, {}));
+
+
+// ─── BULK TRADE IMPORT — feed 1000+ trades, auto-aggregated into lessons ───
+ipcMain.handle('import-trade-csv', async () => {
+  try {
+    const { dialog } = require('electron');
+    const r = await dialog.showOpenDialog({ title: 'Import Trade History (CSV)', filters: [{ name: 'CSV', extensions: ['csv'] }], properties: ['openFile'] });
+    if (r.canceled || !r.filePaths.length) return { success: false, error: 'canceled' };
+    const raw = fs.readFileSync(r.filePaths[0], 'utf8');
+    const rows = raw.split(/\r?\n/).filter(Boolean);
+    const header = rows[0].toLowerCase().split(',').map(h => h.trim());
+    const col = name => header.findIndex(h => h.includes(name));
+    const ci = { coin: col('coin') >= 0 ? col('coin') : col('symbol'), dir: col('dir') >= 0 ? col('dir') : col('side'), pnl: col('pnl') >= 0 ? col('pnl') : col('profit') };
+    if (ci.coin < 0 || ci.pnl < 0) return { success: false, error: 'CSV needs columns: coin/symbol, direction/side (optional), pnl/profit' };
+    // Aggregate per coin+direction — 1000 rows become ~20 powerful lessons
+    const agg = {};
+    let parsed = 0;
+    for (const row of rows.slice(1)) {
+      const cells = row.split(',');
+      const coin = (cells[ci.coin] || '').trim().toUpperCase().replace('USDT', '').replace('PERP', '');
+      if (!coin) continue;
+      const dir = ci.dir >= 0 ? ((cells[ci.dir] || '').toLowerCase().includes('short') || (cells[ci.dir] || '').toLowerCase().includes('sell') ? 'short' : 'long') : 'long';
+      const pnl = parseFloat(cells[ci.pnl]);
+      if (isNaN(pnl)) continue;
+      const key = `${coin}|${dir}`;
+      if (!agg[key]) agg[key] = { wins: 0, total: 0, pnlSum: 0 };
+      agg[key].total++; agg[key].pnlSum += pnl;
+      if (pnl > 0) agg[key].wins++;
+      parsed++;
+    }
+    const lessons = loadTradingLessons();
+    lessons.lessons = lessons.lessons.filter(L => L.source !== 'csv-import');
+    let written = 0;
+    for (const [key, s] of Object.entries(agg)) {
+      if (s.total < 3) continue;
+      const [coin, dir] = key.split('|');
+      const wr = Math.round(s.wins / s.total * 100);
+      lessons.lessons.push({
+        lesson: `Imported history: ${coin} ${dir}s went ${wr}% win rate over ${s.total} real trades (net ${s.pnlSum >= 0 ? '+' : ''}$${s.pnlSum.toFixed(0)}) — ${wr >= 58 ? 'this works for this trader' : wr <= 42 ? 'this consistently fails' : 'mixed results'}`,
+        pattern: `csv: ${coin} ${dir}`, coin, direction: dir,
+        won: wr >= 50, pnl: s.pnlSum.toFixed(0), source: 'csv-import', timestamp: Date.now()
+      });
+      written++;
+    }
+    if (lessons.lessons.length > 300) lessons.lessons = lessons.lessons.slice(-300);
+    saveTradingLessons(lessons);
+    console.log(`📊 CSV import: ${parsed} trades → ${written} aggregated lessons`);
+    return { success: true, trades: parsed, lessons: written };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+// ─── RELIABILITY: daily brain backup + scanner watchdog ────────────────────
+const BACKUP_DIR = path.join(DATA_DIR, 'backups');
+function backupBrain() {
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const brain = { version: 1, backed: Date.now(), ...BRAIN_FILES() };
+    const fname = path.join(BACKUP_DIR, `brain-${new Date().toISOString().slice(0,10)}.json`);
+    fs.writeFileSync(fname, JSON.stringify(brain));
+    // Keep last 7 backups
+    const files = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith('brain-')).sort();
+    while (files.length > 7) fs.unlinkSync(path.join(BACKUP_DIR, files.shift()));
+    console.log(`💾 Brain backed up: ${fname}`);
+  } catch(e) {}
+}
+setTimeout(backupBrain, 60000);
+setInterval(backupBrain, 24 * 60 * 60 * 1000);
+
+let _lastScanHeartbeat = Date.now();
+// Watchdog — if scanner silently dies, restart it
+setInterval(() => {
+  try {
+    const expected = getEffectiveScanInterval() * 60 * 1000 * 2.5;
+    if (Date.now() - _lastScanHeartbeat > expected) {
+      console.log('🐕 Watchdog: scanner appears dead — restarting');
+      _lastScanHeartbeat = Date.now();
+      startIndependentScanner();
+    }
+  } catch(e) {}
+}, 5 * 60 * 1000);
+
+
+// ─── LAUNCH SUITE — token site builder, caller guide, launch advisor ───────
+// Works for ANY chain (SOL/ETH/BSC/Base) — DexScreener resolves automatically
+const LAUNCH_SITES_DIR = path.join(DATA_DIR, 'launch-sites');
+
+ipcMain.handle('launch-generate-site', async (e, form) => {
+  try {
+    if (!fs.existsSync(LAUNCH_SITES_DIR)) fs.mkdirSync(LAUNCH_SITES_DIR, { recursive: true });
+    let live = null;
+    if (form.ca) { try { live = await dexAnalyze(form.ca.trim()); } catch(e2) {} }
+    const stats = live?.found ? `Live data: price $${live.priceUsd}, liquidity $${(live.liquidity/1000).toFixed(0)}K, 24h volume $${(live.volume24h/1000).toFixed(0)}K, chain ${live.chain}, FDV ${live.fdv ? '$' + (live.fdv/1e6).toFixed(2) + 'M' : 'n/a'}` : '';
+    const res = await anthropic.messages.create({
+      model: CLAUDE_MODEL, max_tokens: 8000,
+      messages: [{ role: 'user', content: `Generate a COMPLETE premium single-file HTML website for a crypto token. Requirements:
+- Token: ${form.name} ($${form.symbol})${form.ca ? ` — contract: ${form.ca}` : ''}
+- Chain: ${live?.chain || form.chain || 'solana'}
+- Tagline/vibe: ${form.tagline || 'fun meme coin with strong community'}
+- Theme: ${form.theme || 'dark premium'} with accent color ${form.color || '#00d4ff'}
+- Socials: ${form.twitter ? 'Twitter ' + form.twitter : ''} ${form.telegram ? 'Telegram ' + form.telegram : ''}
+${stats ? '- ' + stats : ''}
+Design rules: dark luxury aesthetic, animated gradient background, canvas particle system (~150 particles in accent color), large hero with floating animated token symbol/emoji, glassmorphism stat cards (price/liquidity/volume baked in from live data), copy-to-clipboard contract address button, how-to-buy section (3 steps for ${live?.chain || 'solana'}), social links, FAQ (4 items), footer disclaimer "not financial advice, DYOR". Mobile responsive. AI-write punchy degen-friendly copy matching the vibe. NO external dependencies except Google Fonts. Output ONLY the raw HTML, no markdown fences.` }]
+    });
+    let html = res.content[0].text.trim().replace(/^```html\n?/, '').replace(/```$/, '');
+    const fname = path.join(LAUNCH_SITES_DIR, `${(form.symbol || 'token').toLowerCase()}-${Date.now()}.html`);
+    fs.writeFileSync(fname, html);
+    console.log(`🚀 Launch site generated: ${fname}`);
+    return { success: true, path: fname, chain: live?.chain || form.chain || 'solana', sizeKB: (html.length/1024).toFixed(0) };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+ipcMain.handle('open-file-path', (e, p) => {
+  try { require('electron').shell.openPath(p); return true; } catch(e2) { return false; }
+});
+
+// Caller guide — ranked from REAL tracked outcomes (data nobody else has)
+ipcMain.handle('launch-caller-guide', () => {
+  try {
+    const td = loadTelegramData();
+    const callers = Object.entries(td.callerStats || {})
+      .filter(([_, s]) => s.total >= 2)
+      .map(([name, s]) => ({ name, ...s }))
+      .sort((a, b) => b.winRate - a.winRate);
+    const verdict = c => c.winRate >= 60 ? '🟢 USE for launch — proven mover' : c.winRate >= 45 ? '🟡 Decent — secondary tier' : '🔴 AVOID — exit liquidity maker';
+    return { callers: callers.map(c => ({ ...c, verdict: verdict(c) })) };
+  } catch(e2) { return { callers: [] }; }
+});
+
+// Launch Advisor — she guides the launch: buybacks, volume, timing
+ipcMain.handle('launch-advisor', async (e, { ca, question }) => {
+  try {
+    let live = null;
+    if (ca) { try { live = await dexAnalyze(ca.trim()); } catch(e2) {} }
+    const regime = await detectMarketRegime().catch(() => null);
+    const btc = await getBTCLeadSignal().catch(() => null);
+    const res = await anthropic.messages.create({
+      model: CLAUDE_MODEL, max_tokens: 600,
+      messages: [{ role: 'user', content: `You are Asuka, an experienced crypto launch advisor. Be specific, tactical, honest about risks.
+${live?.found ? `TOKEN LIVE DATA: ${live.symbol} on ${live.chain} — price $${live.priceUsd}, liquidity $${(live.liquidity/1000).toFixed(0)}K, vol24h $${(live.volume24h/1000).toFixed(0)}K, 1h ${live.change?.h1}%, 24h ${live.change?.h24}%, age ${live.ageHours?.toFixed(0)}h, flags: ${live.flags?.join('; ') || 'none'}` : 'No token data provided.'}
+MARKET: regime ${regime?.regime || '?'}, BTC 30min ${btc?.changePct?.toFixed(1) || '?'}%
+TEAM QUESTION: ${question}
+Give concrete advice: timing (now vs wait), buyback strategy if relevant, volume tactics that are LEGAL (community pushes, caller timing — never wash trading), which tier of callers to deploy when, and one risk warning. Max 200 words, punchy.` }]
+    });
+    return { success: true, advice: res.content[0].text };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
 
 async function openPaperTrade(signal) {
   // Check rage lock

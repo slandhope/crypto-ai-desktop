@@ -1409,6 +1409,16 @@
 
 <!-- PAGE 1 — DASHBOARD -->
 <div class="page active" id="page-1">
+<div id="sponsor-banner" style="display:none;margin:8px 12px 0;padding:10px 12px;border-radius:12px;background:linear-gradient(135deg,rgba(251,191,36,0.08),rgba(0,212,255,0.08));border:1px solid rgba(251,191,36,0.25);backdrop-filter:blur(10px);">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+    <div style="flex:1;">
+      <span style="font-size:8px;background:rgba(251,191,36,0.2);color:#fbbf24;border-radius:4px;padding:1px 5px;font-weight:700;letter-spacing:.5px;">SPONSORED</span>
+      <div id="sponsor-text" style="font-size:11px;margin-top:3px;"></div>
+    </div>
+    <button id="sponsor-link-btn" style="display:none;background:linear-gradient(135deg,#00d4ff,#7c3aed);border:none;color:#fff;font-size:10px;font-weight:700;border-radius:8px;padding:6px 10px;cursor:pointer;white-space:nowrap;">View</button>
+    <button id="sponsor-close" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:13px;">✕</button>
+  </div>
+</div>
 <!-- MAIN 4-COL -->
 <div id="main">
 
@@ -1710,9 +1720,71 @@
     <button class="trade-tab" data-tab="maintrade">📈 Main</button>
     <button class="trade-tab" data-tab="scalp">⚡ Scalp</button>
     <button class="trade-tab" data-tab="spot">🟢 Spot</button>
+    <button class="trade-tab" data-tab="sniper">🎯 Sniper</button>
+    <button class="trade-tab" data-tab="launch">🚀 Launch</button>
   </div>
 
   <!-- ══════ OVERVIEW TAB ══════ -->
+  <div class="trade-tab-content" id="tab-launch">
+
+    <div class="tg-section" style="margin:12px 0 10px;padding:14px;">
+      <div style="font-size:13px;font-weight:700;">🚀 Launch Suite <span style="font-size:9px;background:rgba(52,211,153,0.15);color:#34d399;border:1px solid rgba(52,211,153,0.3);border-radius:6px;padding:2px 6px;margin-left:6px;">B2B — ANY CHAIN</span></div>
+      <div style="font-size:11px;color:var(--text2);margin:4px 0 10px;">Token site builder + caller intelligence + launch advisor. SOL / ETH / BSC / Base — auto-detected from CA.</div>
+
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px;">🌐 WEBSITE BUILDER</div>
+      <input class="tg-input" id="ls-ca" placeholder="Contract address (auto-fills name, chain, live stats)" style="margin:0 0 6px;font-family:monospace;font-size:11px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+        <input class="tg-input" id="ls-name" placeholder="Token name" style="margin:0;">
+        <input class="tg-input" id="ls-symbol" placeholder="Symbol (BULL)" style="margin:0;">
+      </div>
+      <input class="tg-input" id="ls-tagline" placeholder="Vibe / tagline — 'built different, born strong'" style="margin:0 0 6px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+        <input class="tg-input" id="ls-twitter" placeholder="Twitter URL" style="margin:0;">
+        <input class="tg-input" id="ls-telegram" placeholder="Telegram URL" style="margin:0;">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+        <select class="tg-input" id="ls-theme" style="margin:0;">
+          <option value="dark premium">Dark Premium</option><option value="degen neon">Degen Neon</option>
+          <option value="clean minimal">Clean Minimal</option><option value="cyberpunk">Cyberpunk</option>
+        </select>
+        <input class="tg-input" id="ls-color" type="text" placeholder="Accent #00d4ff" style="margin:0;">
+      </div>
+      <button class="tg-add-btn" id="ls-generate-btn" style="width:100%;background:linear-gradient(135deg,rgba(0,212,255,0.2),rgba(124,58,237,0.2));border-color:rgba(0,212,255,0.4);">✨ Asuka, Build The Site</button>
+      <div id="ls-status" style="font-size:11px;margin-top:6px;display:none;"></div>
+    </div>
+
+    <div class="tg-section" style="margin-bottom:10px;padding:14px;">
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px;">📊 CALLER INTELLIGENCE — real tracked win rates</div>
+      <button class="tg-add-btn" id="ls-callers-btn" style="width:100%;">Generate Caller Launch Guide</button>
+      <div id="ls-callers-out" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="tg-section" style="padding:14px;">
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px;">🧭 LAUNCH ADVISOR — ask her anything about the launch</div>
+      <div style="display:flex;gap:6px;">
+        <input class="tg-input" id="ls-question" placeholder="'Should we buy back now or wait?' 'How to grow volume legally?'" style="margin:0;flex:1;">
+        <button class="tg-add-btn" id="ls-ask-btn" style="white-space:nowrap;">Ask</button>
+      </div>
+      <div id="ls-advice" style="display:none;margin-top:8px;padding:10px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.2);border-radius:10px;font-size:11px;line-height:1.5;white-space:pre-wrap;"></div>
+    </div>
+  </div>
+
+  <div class="trade-tab-content" id="tab-sniper">
+    <div class="tg-section" style="margin:12px 0 10px;padding:14px;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">🎯 DEX Sniper <span style="font-size:9px;background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);border-radius:6px;padding:2px 6px;margin-left:6px;">PAPER MODE</span></div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Paste a contract address — instant analysis, snipe in one tap. Real wallet execution comes in Phase 4.</div>
+      <div style="display:flex;gap:6px;">
+        <input class="tg-input" id="snipe-ca" placeholder="Paste contract address (Solana / ETH / BSC / Base)" style="margin:0;flex:1;font-family:monospace;font-size:11px;">
+        <button class="tg-add-btn" id="snipe-analyze-btn" style="white-space:nowrap;">🔍 Analyze</button>
+      </div>
+      <div id="snipe-result" style="display:none;margin-top:10px;"></div>
+    </div>
+    <div class="tg-section" style="padding:14px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📋 Snipe Positions</div>
+      <div id="snipe-positions"><div style="font-size:11px;color:var(--text2);text-align:center;padding:10px;">No snipes yet</div></div>
+    </div>
+  </div>
+
   <div class="trade-tab-content active" id="tab-overview">
 
     <!-- Quick-glance strip -->
@@ -2490,6 +2562,7 @@
       <div id="book-index-status" style="display:none;padding:8px;background:var(--bg3);border-radius:8px;margin-bottom:8px;font-size:12px;"></div>
 
       <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;">YOUR BOOKS</div>
+      <div id="study-progress-line" style="display:none;font-size:11px;color:var(--accent);margin-bottom:8px;padding:8px;background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.2);border-radius:8px;"></div>
       <div id="books-list" style="margin-bottom:12px;"><div style="color:var(--text2);font-size:12px;text-align:center;padding:12px;">No textbooks yet</div></div>
 
       <!-- Page viewer -->
@@ -2586,6 +2659,35 @@
 
   <!-- ══ MEMORY TAB ══ -->
   <div class="others-tab-content" id="others-memory">
+
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:4px;">🧪 Intelligence Lab</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Feed Asuka trades, train her on history, export or import her brain</div>
+
+      <div style="font-size:10px;font-weight:600;color:var(--text2);margin-bottom:6px;">FEED A TRADE (yours or a friend's)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px;">
+        <input class="tg-input" id="feed-coin" placeholder="Coin (SOL)" style="margin:0;">
+        <select class="tg-input" id="feed-dir" style="margin:0;"><option value="long">Long</option><option value="short">Short</option></select>
+        <select class="tg-input" id="feed-won" style="margin:0;"><option value="1">✅ Won</option><option value="0">❌ Lost</option></select>
+      </div>
+      <input class="tg-input" id="feed-note" placeholder="What happened? e.g. 'Friend longed SOL on CPI dip at $128, +8% in 4h'" style="margin:0 0 6px;">
+      <button class="tg-add-btn" id="feed-trade-btn" style="width:100%;">🍱 Teach Asuka This Trade</button>
+      <button class="tg-add-btn" id="csv-import-btn" style="width:100%;margin-top:6px;background:rgba(52,211,153,0.12);border-color:rgba(52,211,153,0.35);">📊 Import Trade History CSV (1000+ trades OK)</button>
+      <div id="feed-status" style="font-size:11px;margin-top:6px;display:none;"></div>
+
+      <div style="border-top:1px solid var(--border);margin:12px 0;"></div>
+      <div style="font-size:10px;font-weight:600;color:var(--text2);margin-bottom:6px;">BACKTEST TRAINING — learn from 1000h of history per coin</div>
+      <button class="tg-add-btn" id="backtest-btn" style="width:100%;background:rgba(124,58,237,0.15);border-color:rgba(124,58,237,0.4);">🏋️ Train on Historical Data (free)</button>
+      <div id="backtest-status" style="font-size:11px;margin-top:6px;display:none;"></div>
+
+      <div style="border-top:1px solid var(--border);margin:12px 0;"></div>
+      <div style="font-size:10px;font-weight:600;color:var(--text2);margin-bottom:6px;">BRAIN TRANSFER — Experienced vs Fresh Asuka</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+        <button class="tg-add-btn" id="brain-export-btn">📤 Export Brain</button>
+        <button class="tg-add-btn" id="brain-import-btn">📥 Import Brain</button>
+      </div>
+      <div id="brain-status" style="font-size:11px;margin-top:6px;display:none;"></div>
+    </div>
 
     <div class="tg-section" style="margin-bottom:10px;">
       <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🧠 Second Brain</div>
@@ -2852,7 +2954,7 @@
     </div>
 
     <!-- Dev Access Section -->
-    <div class="s-section" id="dev-settings-section">
+    <div class="s-section" id="dev-settings-section" style="display:none;">
       <div class="s-title">⚙️ Developer Access</div>
       
       <!-- Lock state -->
@@ -5464,6 +5566,220 @@ function initBookDropZone() {
 
 // Init after DOM ready
 setTimeout(initBookDropZone, 800)
+
+// ── Launch Suite ──────────────────────────────────────────────────────────
+document.getElementById('ls-ca')?.addEventListener('blur', async function() {
+  const ca = this.value.trim()
+  if (!ca || ca.length < 20) return
+  const r = await ipcRenderer.invoke('snipe-analyze', ca).catch(() => null)
+  if (r?.found) {
+    const n = document.getElementById('ls-name'), s = document.getElementById('ls-symbol')
+    if (n && !n.value) n.value = r.name || ''
+    if (s && !s.value) s.value = r.symbol || ''
+  }
+})
+document.getElementById('ls-generate-btn')?.addEventListener('click', async function() {
+  const st = document.getElementById('ls-status')
+  const form = {
+    ca: document.getElementById('ls-ca').value.trim(),
+    name: document.getElementById('ls-name').value.trim(),
+    symbol: document.getElementById('ls-symbol').value.trim(),
+    tagline: document.getElementById('ls-tagline').value.trim(),
+    twitter: document.getElementById('ls-twitter').value.trim(),
+    telegram: document.getElementById('ls-telegram').value.trim(),
+    theme: document.getElementById('ls-theme').value,
+    color: document.getElementById('ls-color').value.trim() || '#00d4ff'
+  }
+  if (!form.name || !form.symbol) { st.style.display='block'; st.style.color='var(--red)'; st.textContent='Need at least name + symbol'; return }
+  this.disabled = true; this.textContent = '✨ Building... (~30s)'
+  st.style.display='block'; st.style.color='var(--accent)'; st.textContent='Asuka is designing the site...'
+  const r = await ipcRenderer.invoke('launch-generate-site', form).catch(() => null)
+  this.disabled = false; this.textContent = '✨ Asuka, Build The Site'
+  if (r?.success) {
+    st.style.color = 'var(--green)'
+    st.innerHTML = `✅ Site built (${r.sizeKB}KB, ${r.chain}) — <span id="ls-open" style="color:var(--accent);cursor:pointer;text-decoration:underline;">Open in browser</span>`
+    document.getElementById('ls-open')?.addEventListener('click', () => ipcRenderer.invoke('open-file-path', r.path))
+  } else { st.style.color='var(--red)'; st.textContent = '❌ ' + (r?.error || 'Failed') }
+})
+document.getElementById('ls-callers-btn')?.addEventListener('click', async () => {
+  const out = document.getElementById('ls-callers-out')
+  const r = await ipcRenderer.invoke('launch-caller-guide').catch(() => null)
+  if (!r?.callers?.length) { out.innerHTML = '<div style="font-size:11px;color:var(--text2);">No caller data yet — track TG signals first, the guide builds itself from real outcomes</div>'; return }
+  out.innerHTML = r.callers.map((c, i) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:rgba(15,23,42,0.5);border-radius:8px;margin-bottom:4px;border:1px solid var(--border);">
+      <div style="font-size:11px;"><b>#${i+1} @${c.name}</b><div style="font-size:9px;color:var(--text2);">${c.total} signals tracked</div></div>
+      <div style="text-align:right;"><div style="font-size:12px;font-weight:800;color:${c.winRate >= 60 ? '#34d399' : c.winRate >= 45 ? '#fbbf24' : '#ef4444'};">${c.winRate}%</div><div style="font-size:9px;">${c.verdict}</div></div>
+    </div>`).join('')
+})
+document.getElementById('ls-ask-btn')?.addEventListener('click', async function() {
+  const q = document.getElementById('ls-question').value.trim()
+  const box = document.getElementById('ls-advice')
+  if (!q) return
+  this.textContent = '⏳'
+  box.style.display = 'block'; box.textContent = 'Thinking through the launch...'
+  const r = await ipcRenderer.invoke('launch-advisor', { ca: document.getElementById('ls-ca').value.trim(), question: q }).catch(() => null)
+  this.textContent = 'Ask'
+  box.textContent = r?.success ? r.advice : '❌ ' + (r?.error || 'Failed')
+})
+document.getElementById('ls-question')?.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('ls-ask-btn').click() })
+
+
+// CSV bulk import
+document.getElementById('csv-import-btn')?.addEventListener('click', async function() {
+  const st = document.getElementById('feed-status')
+  this.textContent = '⏳ Importing...'
+  const r = await ipcRenderer.invoke('import-trade-csv').catch(() => null)
+  this.textContent = '📊 Import Trade History CSV (1000+ trades OK)'
+  if (st && r && r.error !== 'canceled') {
+    st.style.display = 'block'
+    st.style.color = r.success ? 'var(--green)' : 'var(--red)'
+    st.textContent = r.success ? `✅ ${r.trades} trades → ${r.lessons} pattern lessons learned` : `❌ ${r.error}`
+  }
+})
+// Study progress display
+async function showStudyProgress() {
+  try {
+    const prog = await ipcRenderer.invoke('get-study-progress')
+    const books = await ipcRenderer.invoke('get-books')
+    const line = document.getElementById('study-progress-line')
+    if (!line || !books?.books?.length) return
+    const active = books.books.find(b => b.id === _activeBookId) || books.books[0]
+    const p = prog?.[active?.id]
+    if (p?.lastPage) {
+      line.style.display = 'block'
+      line.innerHTML = `📖 <b>${active.name}</b> — last studied page ${p.lastPage}/${active.pageCount} (${p.sessions || 0} sessions). Say <b>"continue studying"</b> to resume!`
+    }
+  } catch(e) {}
+}
+setTimeout(showStudyProgress, 2500)
+
+
+// ── Intelligence Lab ──────────────────────────────────────────────────────
+document.getElementById('feed-trade-btn')?.addEventListener('click', async () => {
+  const coin = document.getElementById('feed-coin')?.value.trim()
+  const note = document.getElementById('feed-note')?.value.trim()
+  const st = document.getElementById('feed-status')
+  if (!coin || !note) { if (st) { st.style.display='block'; st.style.color='var(--red)'; st.textContent='Need coin + what happened' } return }
+  const r = await ipcRenderer.invoke('feed-trade-lesson', {
+    coin, direction: document.getElementById('feed-dir').value,
+    won: document.getElementById('feed-won').value === '1', note
+  }).catch(() => null)
+  if (st) {
+    st.style.display = 'block'
+    st.style.color = r?.success ? 'var(--green)' : 'var(--red)'
+    st.textContent = r?.success ? `✅ Asuka learned it (${r.total} lessons total)` : '❌ Failed'
+  }
+  if (r?.success) { document.getElementById('feed-coin').value=''; document.getElementById('feed-note').value='' }
+})
+
+document.getElementById('backtest-btn')?.addEventListener('click', async function() {
+  const st = document.getElementById('backtest-status')
+  this.disabled = true; this.textContent = '🏋️ Training... (30-60s)'
+  if (st) { st.style.display='block'; st.style.color='var(--accent)'; st.textContent='Replaying 1000 hours per coin...' }
+  const r = await ipcRenderer.invoke('run-backtest-training').catch(() => null)
+  this.disabled = false; this.textContent = '🏋️ Train on Historical Data (free)'
+  if (st && r?.success) {
+    const total = r.results.reduce((s, x) => s + x.lessonsWritten, 0)
+    st.style.color = 'var(--green)'
+    st.textContent = `✅ ${total} data-driven lessons written from ${r.results.length} coins — she's smarter now`
+  } else if (st) { st.style.color='var(--red)'; st.textContent='❌ Training failed' }
+})
+
+document.getElementById('brain-export-btn')?.addEventListener('click', async () => {
+  const st = document.getElementById('brain-status')
+  const r = await ipcRenderer.invoke('export-brain').catch(() => null)
+  if (st) { st.style.display='block'; st.style.color = r?.success ? 'var(--green)' : 'var(--red)'
+    st.textContent = r?.success ? `✅ Brain exported (${r.lessons} lessons) → ${r.path}` : (r?.error==='canceled'?'':'❌ Export failed') }
+})
+document.getElementById('brain-import-btn')?.addEventListener('click', async () => {
+  const st = document.getElementById('brain-status')
+  const r = await ipcRenderer.invoke('import-brain').catch(() => null)
+  if (st) { st.style.display='block'; st.style.color = r?.success ? 'var(--green)' : 'var(--red)'
+    st.textContent = r?.success ? `✅ Brain merged — ${r.lessons} total lessons now` : (r?.error==='canceled'?'':'❌ Import failed') }
+})
+
+// ── DEX Sniper ────────────────────────────────────────────────────────────
+let _lastSnipeCA = null
+document.getElementById('snipe-analyze-btn')?.addEventListener('click', async () => {
+  const ca = document.getElementById('snipe-ca')?.value.trim()
+  const box = document.getElementById('snipe-result')
+  if (!ca || !box) return
+  box.style.display = 'block'
+  box.innerHTML = '<div style="font-size:11px;color:var(--accent);">⏳ Analyzing...</div>'
+  const r = await ipcRenderer.invoke('snipe-analyze', ca).catch(() => null)
+  if (!r?.found) { box.innerHTML = '<div style="font-size:11px;color:var(--red);">❌ Token not found on any DEX</div>'; return }
+  _lastSnipeCA = ca
+  const ch = r.change || {}
+  const pct = v => v == null ? '—' : `<span style="color:${v >= 0 ? '#34d399' : '#ef4444'};">${v >= 0 ? '+' : ''}${v}%</span>`
+  box.innerHTML = `
+    <div style="background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:10px;padding:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:13px;font-weight:800;">${r.symbol} <span style="font-size:9px;color:var(--text2);font-weight:400;">${r.name} • ${r.chain}</span></div>
+        <div style="font-size:13px;font-weight:800;">$${r.priceUsd < 0.01 ? r.priceUsd.toExponential(2) : r.priceUsd.toLocaleString()}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0;font-size:10px;color:var(--text2);">
+        <div>Liq: <b style="color:var(--text);">$${(r.liquidity/1000).toFixed(0)}K</b></div>
+        <div>Vol24h: <b style="color:var(--text);">$${(r.volume24h/1000).toFixed(0)}K</b></div>
+        <div>Age: <b style="color:var(--text);">${r.ageHours ? r.ageHours < 48 ? r.ageHours.toFixed(0)+'h' : (r.ageHours/24).toFixed(0)+'d' : '—'}</b></div>
+        <div>1h: ${pct(ch.h1)}</div><div>6h: ${pct(ch.h6)}</div><div>24h: ${pct(ch.h24)}</div>
+      </div>
+      ${r.flags?.length ? `<div style="font-size:10px;color:#fbbf24;margin-bottom:8px;">${r.flags.join('<br>')}</div>` : '<div style="font-size:10px;color:var(--green);margin-bottom:8px;">✅ No red flags detected</div>'}
+      <div style="display:flex;gap:6px;">
+        <button class="tg-add-btn snipe-buy-btn" data-usd="25" style="flex:1;">⚡ Snipe $25</button>
+        <button class="tg-add-btn snipe-buy-btn" data-usd="50" style="flex:1;">⚡ Snipe $50</button>
+        <button class="tg-add-btn snipe-buy-btn" data-usd="100" style="flex:1;">⚡ Snipe $100</button>
+      </div>
+    </div>`
+  box.querySelectorAll('.snipe-buy-btn').forEach(b => b.addEventListener('click', async function() {
+    this.textContent = '⏳'
+    const res = await ipcRenderer.invoke('snipe-buy', { ca: _lastSnipeCA, usd: parseInt(this.dataset.usd) }).catch(() => null)
+    this.textContent = res?.success ? '✅ Sniped!' : '❌'
+    loadSnipePositions()
+  }))
+})
+document.getElementById('snipe-ca')?.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('snipe-analyze-btn').click() })
+
+async function loadSnipePositions() {
+  const el = document.getElementById('snipe-positions')
+  if (!el) return
+  const r = await ipcRenderer.invoke('snipe-positions').catch(() => null)
+  if (!r?.positions?.length) { el.innerHTML = '<div style="font-size:11px;color:var(--text2);text-align:center;padding:10px;">No snipes yet</div>'; return }
+  el.innerHTML = r.positions.map(p => {
+    const pnl = p.pnlPct != null ? p.pnlPct : 0
+    const color = pnl >= 0 ? '#34d399' : '#ef4444'
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:rgba(15,23,42,0.5);border-radius:8px;margin-bottom:4px;border:1px solid var(--border);">
+      <div><div style="font-size:11px;font-weight:700;">${p.symbol || '?'} <span style="font-size:9px;color:var(--text2);">${p.chain || ''} • $${p.amountUsd}</span></div>
+      <div style="font-size:9px;color:var(--text2);">${p.status === 'open' ? 'entry' : 'closed'} $${p.entryPrice < 0.01 ? p.entryPrice.toExponential(2) : p.entryPrice}</div></div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span style="font-size:12px;font-weight:800;color:${color};">${pnl >= 0 ? '+' : ''}${pnl.toFixed(1)}%</span>
+        ${p.status === 'open' ? `<button data-sell="${p.id}" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">Sell</button>` : '<span style="font-size:9px;color:var(--text2);">closed</span>'}
+      </div></div>`
+  }).join('')
+  el.querySelectorAll('[data-sell]').forEach(b => b.addEventListener('click', async function() {
+    await ipcRenderer.invoke('snipe-sell', parseInt(this.dataset.sell)).catch(() => null)
+    loadSnipePositions()
+  }))
+}
+setInterval(() => { if (document.getElementById('tab-sniper')?.classList.contains('active')) loadSnipePositions() }, 20000)
+document.querySelector('[data-tab="sniper"]')?.addEventListener('click', () => setTimeout(loadSnipePositions, 300))
+
+// ── Sponsor banner ────────────────────────────────────────────────────────
+ipcRenderer.invoke('get-sponsored').then(c => {
+  if (!c || localStorage.getItem('sponsor_dismissed') === String(c.name)) return
+  const b = document.getElementById('sponsor-banner')
+  if (!b) return
+  document.getElementById('sponsor-text').textContent = c.banner || c.name
+  if (c.url) {
+    const lb = document.getElementById('sponsor-link-btn')
+    lb.style.display = 'block'
+    lb.addEventListener('click', () => ipcRenderer.invoke('open-url', c.url).catch(() => {}))
+  }
+  document.getElementById('sponsor-close')?.addEventListener('click', () => {
+    b.style.display = 'none'; localStorage.setItem('sponsor_dismissed', String(c.name))
+  })
+  b.style.display = 'block'
+}).catch(() => {})
+
 
 // ── Overview Quick-Glance Strip ───────────────────────────────────────────
 async function updateOverviewStrip() {
