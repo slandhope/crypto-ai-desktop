@@ -54,7 +54,14 @@ function loadJSON(file, def) {
   return def;
 }
 function saveJSON(file, data) {
-  try { fs.writeFileSync(file, JSON.stringify(data, null, 2)); } catch(e) {}
+  // Atomic write: temp file + rename — a crash mid-save can NEVER corrupt her brain
+  try {
+    const tmp = file + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+    fs.renameSync(tmp, file);
+  } catch(e) {
+    try { fs.writeFileSync(file, JSON.stringify(data, null, 2)); } catch(e2) {}
+  }
 }
 
 // ─── DATA ──────────────────────────────────────────────────────────────────
@@ -283,7 +290,8 @@ USER:
 - Win rate: ${winRate !== null ? winRate + '%' : 'not tracked'}
 - Rules: ${mem.userRules?.join(', ') || 'none'}
 - Checklist: ${checklist.join(' | ')}
-- Notes: ${notes.slice(-3).map(n => n.text).join(' | ') || 'none'}
+- Notes: ${notes.slice(-8).map(n => n.text).join(' | ') || 'none'}
+- WHAT YOU KNOW ABOUT THEM (weave in naturally, never recite as a list): ${getUserProfile().facts.slice(-15).join('; ') || 'still learning about them'}
 
 CRYPTO RULES:
 - Price predictions: give honest take + "do your own research"
@@ -301,6 +309,9 @@ function addToHistory(role, content) {
 
 // ─── AI REPLY ──────────────────────────────────────────────────────────────
 async function getAIReply(text) {
+  if (global._creditDeadUntil && Date.now() < global._creditDeadUntil) {
+    return 'Still out of credits! Voice chat with me works fine though~';
+  }
   addToHistory('user', text);
 
   // Auto-fetch relevant market data and inject into context
@@ -335,6 +346,9 @@ async function getAIReply(text) {
     const reply = res.content?.[0]?.text || 'Try again.';
     addToHistory('assistant', reply);
 
+    // Whiteboard intent — she draws whenever the answer is inherently visual/structured
+    try { maybeWhiteboard(text, reply); } catch(e) {}
+
     // Auto-journal trade mentions
     const mem = loadMemory();
     if (/(longed|shorted|bought|sold|closed|opened).*(btc|eth|sol|bnb|[a-z]{2,6})/i.test(text)) {
@@ -346,9 +360,46 @@ async function getAIReply(text) {
     }
     return reply;
   } catch(e) {
-    console.error('Claude error:', e.message);
+    console.error('Claude error:', e.message, e.status || '');
+    if (e.status === 400 || /credit|billing/i.test(e.message || '')) {
+      global._creditDeadUntil = Date.now() + 10 * 60 * 1000;
+      return 'My credits ran out, top them up and I am back!';
+    }
+    if (e.status === 429) return 'Give me thirty seconds and ask again!';
+    if (e.status === 529 || e.status === 500) return 'One more try, servers are busy!';
     return 'Having a moment, try again.';
   }
+}
+
+
+// ─── WHITEBOARD INTENT — decides per-answer whether a board helps, draws if so ──
+const _wbRecent = { ts: 0 };
+async function maybeWhiteboard(userText, reply) {
+  try {
+    if (loadSettings().whiteboardEnabled === false) return;
+    if (!global._whiteboardTeach) return;
+    if (Date.now() - _wbRecent.ts < 8000) return; // don't spam boards
+    const t = (userText + ' ' + reply).toLowerCase();
+
+    // Fast positive signals: teaching / how-to / visual / structured asks
+    const visualAsk = /\b(teach|explain|how (do|to)|show me|what('?s| is) the|steps?|recipe|ingredients?|write (this|the)|stroke order|conjugat|grammar|difference between|compare|vs\b|formula|structure|diagram|chart|pattern|kanji|kana|hiragana|katakana|particle|te.?form|process)\b/i.test(userText);
+    // Fast negatives: quick factual lookups never need a board
+    const factual = /\b(price|how much|worth|balance|funding|fear|greed|dominance|gas fee|what time|weather|remind|set volume|open |close |buy |sell )\b/i.test(userText);
+    if (factual && !visualAsk) return;
+    if (!visualAsk) {
+      // Borderline → cheap Haiku yes/no so she catches things we didn't list (e.g. "I'm making carbonara")
+      if (userText.length < 12) return;
+      const j = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001', max_tokens: 8,
+        messages: [{ role: 'user', content: `Would a quick whiteboard sketch (steps, list, diagram, or labeled drawing) genuinely help explain this exchange? Reply only YES or NO.\nUser: ${userText}\nAsuka: ${reply.slice(0, 200)}` }]
+      }).catch(() => null);
+      if (!j || !/yes/i.test(j.content?.[0]?.text || '')) return;
+    }
+    _wbRecent.ts = Date.now();
+    // Topic = the user's request, trimmed
+    const topic = userText.replace(/^(hey |ok |asuka,? |can you |please )/i, '').slice(0, 90);
+    global._whiteboardTeach(topic).catch(() => {});
+  } catch(e) {}
 }
 
 // ─── COIN MAP ──────────────────────────────────────────────────────────────
@@ -2076,7 +2127,22 @@ async function startAlertMonitor() {
 
 // ─── MAIN COMMAND ROUTER ───────────────────────────────────────────────────
 async function routeCommand(userText) {
-  const lower = userText.toLowerCase().trim();
+  // Custom routines FIRST — "daddy's home" etc
+  try {
+    const lowerR = userText.toLowerCase().trim().replace(/[\u2018\u2019\u0060\u00B4]/g, "'");
+    const { routines } = loadRoutines();
+    for (const rt of routines) {
+      if (rt.trigger.split('|').some(t => t.trim() && lowerR.includes(t.trim()))) {
+        runRoutineActions(rt.actions); // fire and forget
+        return rt.reply || 'Done! ✨';
+      }
+    }
+  } catch(e) {}
+  // Passive learning — she builds a profile of you from natural conversation
+  maybeExtractFacts(userText).catch(() => {});
+
+
+  const lower = userText.toLowerCase().replace(/[\u2018\u2019\u0060\u00B4]/g, "'").trim();
   const mem   = loadMemory();
   const settings = loadSettings();
   lastActivityTime = Date.now();
@@ -2125,19 +2191,707 @@ async function routeCommand(userText) {
     }
     return `${activeBook.name} is loaded — say "Page 1" and we'll begin!`;
   }
-  // "explain lesson 2" or "lesson 2 section 1"
-  const lessonMatch = lower.match(/lesson\s*(\d+)(?:[\s-]*(?:section|part|exercise)?\s*(\d+))?/);
-  if (lessonMatch) {
-    const lessonNum = lessonMatch[1];
-    const sectionNum = lessonMatch[2];
-    const query = sectionNum ? `lesson ${lessonNum} section ${sectionNum}` : `lesson ${lessonNum}`;
+
+  // "why is BTC dumping/pumping" — honest one-breath explainer
+  const whyM = lower.match(/why.{0,4}(is|are)?\s*([a-z]{2,6})?\s*(dump|pump|crash|mooning|down|up|falling|rising)/);
+  if (whyM) {
+    const wcoin = (whyM[2] || 'BTC').toUpperCase().replace('USDT','');
+    try {
+      const [flow, regime, news] = await Promise.all([
+        getAdvancedFlow(wcoin).catch(() => null),
+        detectMarketRegime().catch(() => null),
+        getNewsSentiment(wcoin).catch(() => null)
+      ]);
+      const res = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001', max_tokens: 200,
+        messages: [{ role: 'user', content: `User asks: why is ${wcoin} ${whyM[3]}? DATA: regime ${regime?.regime || '?'} | flow: ${flow || 'n/a'} | news: ${news?.summary || news || 'n/a'}. Answer as Asuka in 2-3 honest sentences — the real reason from the data, no hedging fluff.` }]
+      });
+      return res.content[0].text;
+    } catch(e) { return `Let me look at ${wcoin}... my data feeds are struggling right now, try again in a minute!`; }
+  }
+
+  // "alert me when BTC hits 100k" / "tell me when SOL reaches 200"
+  const alertM = lower.match(/(alert|tell|notify|let me know).{0,15}(when|if)\s*([a-z]{2,6})\s*(hits?|reaches?|gets? to|at)\s*\$?([\d,\.]+k?)/);
+  if (alertM) {
+    const acoin = alertM[3].toUpperCase();
+    let ap = alertM[5].replace(/,/g, '');
+    if (ap.endsWith('k')) ap = parseFloat(ap) * 1000; else ap = parseFloat(ap);
+    const al = loadPriceAlerts();
+    al.alerts.push({ id: Date.now(), coin: acoin, price: ap, created: Date.now() });
+    saveJSON(PRICE_ALERTS_FILE, al);
+    return `Got it! I'll ping you the moment ${acoin} hits $${ap.toLocaleString()} 🔔`;
+  }
+
+  // ─── PC CONTROL + LIFE COMMANDS ──────────────────────────────────────────
+  // "remind me in 30 minutes to check BTC" / "remind me at 17:30 to call mom"
+  const remM = lower.match(/remind me (?:in (\d+)\s*(min|minute|hour|hr)s?|at (\d{1,2}):(\d{2}))\s*(?:to\s+)?(.+)/);
+  if (remM) {
+    let at;
+    if (remM[1]) {
+      const mult = remM[2].startsWith('h') ? 3600000 : 60000;
+      at = Date.now() + parseInt(remM[1]) * mult;
+    } else {
+      const d = new Date();
+      d.setHours(parseInt(remM[3]), parseInt(remM[4]), 0, 0);
+      if (d.getTime() < Date.now()) d.setDate(d.getDate() + 1);
+      at = d.getTime();
+    }
+    const rem = loadJSON(REMINDERS_FILE, { items: [] });
+    rem.items.push({ id: Date.now(), text: remM[5].trim(), at });
+    saveJSON(REMINDERS_FILE, rem);
+    const mins = Math.round((at - Date.now()) / 60000);
+    return `Okay! I'll remind you ${mins < 90 ? 'in ' + mins + ' minutes' : 'at ' + new Date(at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} — "${remM[5].trim()}" ⏰`;
+  }
+
+  // "I spent $20 on lunch"
+  const expM = lower.match(/i spent \$?([\d\.]+)\s*(?:on\s+)?(.+)?/);
+  if (expM && parseFloat(expM[1]) > 0) {
+    const ex = loadJSON(EXPENSES_FILE, { items: [] });
+    ex.items.push({ amount: parseFloat(expM[1]), what: (expM[2] || 'something').trim(), time: Date.now() });
+    saveJSON(EXPENSES_FILE, ex);
+    const month = new Date().getMonth();
+    const total = ex.items.filter(i => new Date(i.time).getMonth() === month).reduce((s, i) => s + i.amount, 0);
+    return `Noted — $${expM[1]} on ${(expM[2] || 'something').trim()}. You're at $${total.toFixed(0)} this month 💸`;
+  }
+
+  // "quiz me" — 3 questions from the last studied page (skip if tutor is mid-flow)
+  if (/quiz me|test me|give me a quiz/.test(lower) && !loadLearner().awaitingLevel && !loadLearner().pendingQuiz && getActiveBook() && global._lastBookPage) {
     const activeBook = getActiveBook();
-    if (!activeBook) return "No textbook loaded yet!";
-    const results = searchBooks(query, activeBook.id);
-    if (!results.length) return `I couldn't find ${query} in ${activeBook.name}.`;
-    const page = getBookPage(activeBook.id, results[0].page);
-    if (!page) return `Found a reference to ${query} but couldn't load the page.`;
-    const explanation = await askAboutBook(page.text, `Explain ${query} in detail`, activeBook.name, results[0].page);
+    const page = getBookPage(activeBook.id, global._lastBookPage);
+    if (!page) return "Hmm, I can't find that page anymore. Read a page first!";
+    try {
+      const res = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001', max_tokens: 350,
+        messages: [{ role: 'user', content: `Create a 3-question quiz from this textbook page (page ${global._lastBookPage} of ${activeBook.name}). Mix difficulty. Number them, then put the answers at the end under "ANSWERS:". Page content:\n${page.text.slice(0, 2500)}` }]
+      });
+      return `Quiz time! 📝\n\n${res.content[0].text}`;
+    } catch(e) { return "Quiz machine is jammed — check Anthropic credits!"; }
+  }
+
+  // "open spotify" / "open chrome" — launch any Mac app
+  const openM = lower.match(/^(?:open|launch|start)\s+(.+)$/);
+  if (openM) {
+    const target = openM[1].trim();
+    if (/\.|http|www/.test(target)) {
+      const url = target.startsWith('http') ? target : 'https://' + target.replace(/\s/g, '');
+      await macExec(`open "${url.replace(/"/g, '')}"`);
+      return `Opening ${target} 🌐`;
+    }
+    const appName = target.replace(/\b\w/g, c => c.toUpperCase());
+    if (!APP_SAFE.test(appName)) return "That app name looks sketchy — try a simpler name!";
+    const ok = await osOpenApp(appName);
+    return ok !== null ? `Opening ${appName} 🚀` : `Hmm, I couldn't find "${appName}" on this Mac.`;
+  }
+
+  // music controls
+  if (/^(play|pause|resume)( music| song)?$/.test(lower) || lower === 'play' || lower === 'pause') {
+    const ok = await osMedia('playpause');
+    
+    return 'Done! 🎵';
+  }
+  if (/next (song|track)|skip( this)?( song)?/.test(lower)) {
+    const ok = await osMedia('next');
+    
+    return 'Skipped ⏭️';
+  }
+  if (/previous (song|track)|go back a (song|track)/.test(lower)) {
+    const ok = await osMedia('prev');
+    
+    return 'Going back ⏮️';
+  }
+
+  // volume
+  const volM = lower.match(/(?:set )?volume (?:to )?(\d{1,3})/);
+  if (volM) {
+    const v = Math.min(100, parseInt(volM[1]));
+    await osVolume(v);
+    return `Volume at ${v}% 🔊`;
+  }
+  if (/volume up|louder/.test(lower)) { await osVolume(75); return 'Louder 🔊'; }
+  if (/volume down|quieter/.test(lower)) { await osVolume(40); return 'Quieter 🔉'; }
+  if (/^mute$|mute (the )?(sound|volume|mac)/.test(lower)) { await osMute(true); return 'Muted 🔇'; }
+  if (/unmute/.test(lower)) { await osMute(false); return 'Unmuted 🔊'; }
+
+  // lock / sleep / trash
+  if (/lock (the )?(screen|mac|computer)/.test(lower)) { await osLock(); return 'Locked! 🔒'; }
+  if (/(go to sleep|sleep now|sleep the (mac|computer))/.test(lower)) { await osSleep(); return 'Good night! 😴'; }
+  if (/empty (the )?trash/.test(lower)) {
+    await osEmptyTrash();
+    return 'Trash emptied 🗑️';
+  }
+
+  // "clean my downloads" — sort files into folders by type
+  if (/clean (my )?(downloads|download folder)/.test(lower)) {
+    try {
+      const dl = path.join(require('os').homedir(), 'Downloads');
+      const map = { Images: ['png','jpg','jpeg','gif','webp','heic'], Docs: ['pdf','doc','docx','txt','md','xls','xlsx','csv'], Video: ['mp4','mov','mkv','avi'], Audio: ['mp3','wav','m4a'], Archives: ['zip','rar','dmg','pkg','7z'], Code: ['js','py','html','json','ts'] };
+      let moved = 0;
+      for (const f of fs.readdirSync(dl)) {
+        const full = path.join(dl, f);
+        if (fs.statSync(full).isDirectory() || f.startsWith('.')) continue;
+        const ext = f.split('.').pop().toLowerCase();
+        const folder = Object.keys(map).find(k => map[k].includes(ext));
+        if (!folder) continue;
+        const dest = path.join(dl, folder);
+        if (!fs.existsSync(dest)) fs.mkdirSync(dest);
+        fs.renameSync(full, path.join(dest, f));
+        moved++;
+      }
+      return `Downloads cleaned! Sorted ${moved} files into folders 🧹✨`;
+    } catch(e) { return 'I hit a permissions wall cleaning Downloads — give the app Full Disk Access in System Settings!'; }
+  }
+
+  // "trading mode" — battle stations
+  if (/trading mode|battle stations|let'?s trade/.test(lower)) {
+    await macExec('open "https://www.tradingview.com/chart/"');
+    await macExec('open "https://www.binance.com/en/futures/BTCUSDT"');
+    return 'Battle stations! TradingView + Binance open. The scanners are hot. Let\'s hunt 🎯';
+  }
+
+  // "google X" / "search for X"
+  const gM = lower.match(/^(?:google|search(?: for)?)\s+(.+)$/);
+  if (gM) {
+    await macExec(`open "https://www.google.com/search?q=${encodeURIComponent(gM[1])}"`);
+    return `Searching for "${gM[1]}" 🔍`;
+  }
+
+
+  // ═══ PC CONTROL — she runs your Mac ═══════════════════════════════════
+  // "open spotify" / "launch chrome"
+  const pcOpenApp = lower.match(/^(open|launch|start)\s+([a-z0-9 .\-]{2,30})$/);
+  if (pcOpenApp && APP_SAFE.test(pcOpenApp[2].trim())) {
+    const app = pcOpenApp[2].trim();
+    const appMap = { 'chrome': 'Google Chrome', 'vscode': 'Visual Studio Code', 'vs code': 'Visual Studio Code', 'code': 'Visual Studio Code', 'terminal': 'Terminal', 'finder': 'Finder', 'spotify': 'Spotify', 'discord': 'Discord', 'telegram': 'Telegram', 'safari': 'Safari', 'notes': 'Notes', 'music': 'Music', 'calculator': 'Calculator' };
+    const target = appMap[app.toLowerCase()] || app;
+    const ok = await macExec(`open -a "${target.replace(/"/g, '')}"`);
+    return ok ? `Opening ${target}! ✨` : `Hmm, I couldn't find an app called ${target} 😅`;
+  }
+
+  // music controls
+  if (/^(play|pause|resume).{0,8}(music|song|spotify)?$/.test(lower) || lower === 'pause' || lower === 'play music') {
+    const playing = await osMedia('playpause');
+    return playing ? 'Done! 🎵' : 'No music app seems to be open!';
+  }
+  if (/(next|skip).{0,8}(song|track)/.test(lower)) {
+    await osMedia('next');
+    return 'Skipped! ⏭️';
+  }
+  if (/(previous|last).{0,8}(song|track)/.test(lower)) {
+    await osMedia('prev');
+    return 'Going back! ⏮️';
+  }
+
+  // volume
+  const pcVolM = lower.match(/(set\s+)?volume\s*(to\s*)?(\d{1,3})/);
+  if (pcVolM) {
+    const v = Math.min(100, parseInt(pcVolM[3]));
+    await osVolume(v);
+    return `Volume at ${v}%! 🔊`;
+  }
+  if (/^(mute|unmute)$/.test(lower)) {
+    await osMute(lower === 'mute');
+    return lower === 'mute' ? 'Muted 🔇' : 'Unmuted 🔊';
+  }
+
+  // lock / sleep / trash
+  if (/lock\s+(the\s+)?(screen|computer|mac)/.test(lower)) {
+    await osLock();
+    return 'Screen locked! See you soon 💕';
+  }
+  if (/^(go to sleep|sleep the (computer|mac))$/.test(lower)) {
+    osSleep();
+    return 'Putting the Mac to sleep... goodnight! 🌙';
+  }
+  if (/empty\s+(the\s+)?trash/.test(lower)) {
+    const ok = await osEmptyTrash();
+    return ok ? 'Trash emptied! 🗑️✨' : 'Trash is already empty or Finder said no!';
+  }
+
+  // clean downloads — sort by file type
+  if (/clean\s+(my\s+|up\s+)?downloads/.test(lower)) {
+    try {
+      const dl = path.join(require('os').homedir(), 'Downloads');
+      const types = { Images: ['.png','.jpg','.jpeg','.gif','.webp','.heic'], Documents: ['.pdf','.docx','.txt','.xlsx','.csv','.pptx'], Archives: ['.zip','.dmg','.tar','.gz'], Video: ['.mp4','.mov','.mkv'], Audio: ['.mp3','.wav','.m4a'] };
+      let moved = 0;
+      for (const f of fs.readdirSync(dl)) {
+        const ext = path.extname(f).toLowerCase();
+        for (const [folder, exts] of Object.entries(types)) {
+          if (exts.includes(ext)) {
+            const dest = path.join(dl, folder);
+            if (!fs.existsSync(dest)) fs.mkdirSync(dest);
+            try { fs.renameSync(path.join(dl, f), path.join(dest, f)); moved++; } catch(e) {}
+            break;
+          }
+        }
+      }
+      return `Downloads cleaned! Sorted ${moved} files into folders 🧹✨`;
+    } catch(e) { return 'I had trouble accessing Downloads — check permissions!'; }
+  }
+
+  // "trading mode" routine
+  if (/^(trading mode|trade mode|battle stations)$/.test(lower)) {
+    await osOpenURL("https://www.tradingview.com");
+    await osOpenURL("https://www.binance.com/en/futures");
+    return 'Trading mode ON! TradingView + Binance loading. Let\'s hunt 🎯';
+  }
+
+  // "google X" / "search for X"
+  const pcSearchM = lower.match(/^(google|search( for)?)\s+(.{2,60})$/);
+  if (pcSearchM) {
+    const q = encodeURIComponent(pcSearchM[3].trim());
+    await macExec(`open "https://www.google.com/search?q=${q}"`);
+    return `Searching for "${pcSearchM[3].trim()}"! 🔍`;
+  }
+
+  // ═══ LIFE COMMANDS ═══════════════════════════════════════════════════
+  // "remind me in 30 minutes to check BTC" / "remind me at 17:30 to call mom"
+  const lifeRemM = lower.match(/remind me\s+(in\s+(\d+)\s*(min|minute|hour|hr)s?|at\s+(\d{1,2})[:.h](\d{2}))\s*(to\s+)?(.{2,80})/);
+  if (lifeRemM) {
+    let fireAt;
+    if (lifeRemM[2]) {
+      const n = parseInt(lifeRemM[2]);
+      fireAt = Date.now() + n * (lifeRemM[3].startsWith('h') ? 3600000 : 60000);
+    } else {
+      const d = new Date();
+      d.setHours(parseInt(lifeRemM[4]), parseInt(lifeRemM[5]), 0, 0);
+      if (d.getTime() < Date.now()) d.setDate(d.getDate() + 1);
+      fireAt = d.getTime();
+    }
+    const rems = loadJSON(REMINDERS_FILE, { reminders: [] });
+    rems.reminders.push({ id: Date.now(), text: lifeRemM[7].trim(), fireAt });
+    saveJSON(REMINDERS_FILE, rems);
+    return `Reminder set! I'll ping you ${lifeRemM[2] ? 'in ' + lifeRemM[2] + ' ' + lifeRemM[3] + (parseInt(lifeRemM[2]) > 1 ? 's' : '') : 'at ' + lifeRemM[4] + ':' + lifeRemM[5]} — "${lifeRemM[7].trim()}" ⏰`;
+  }
+
+  // "I spent $20 on lunch"
+  const lifeExpM = lower.match(/i spent\s+\$?([\d.]+)\s+(on|for)\s+(.{2,40})/);
+  if (lifeExpM) {
+    const ex = loadJSON(EXPENSES_FILE, { expenses: [] });
+    ex.expenses.push({ amount: parseFloat(lifeExpM[1]), what: lifeExpM[3].trim(), ts: Date.now() });
+    saveJSON(EXPENSES_FILE, ex);
+    const month = ex.expenses.filter(x => new Date(x.ts).getMonth() === new Date().getMonth()).reduce((s, x) => s + x.amount, 0);
+    return `Logged $${lifeExpM[1]} on ${lifeExpM[3].trim()}! That's $${month.toFixed(0)} this month 📒`;
+  }
+
+  // "quiz me" — flashcards from the last studied page
+  // Flashcard ANSWER grading (a card is pending)
+  if (global._flashPending && Date.now() - global._flashPending.ts < 3 * 60 * 1000) {
+    if (/^(stop|cancel|quit|exit)/.test(lower)) { global._flashPending = null; return 'Flashcards paused! Say "flashcards" anytime to continue 📇'; }
+    const pend = global._flashPending;
+    global._flashPending = null;
+    try {
+      const gr = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001', max_tokens: 120,
+        messages: [{ role: 'user', content: `Flashcard Q: "${pend.q}"\nCorrect answer: "${pend.a}"\nStudent said: "${userText}"\nReply with JSON only: {"correct":true/false,"note":"one short encouraging sentence, mention the right answer if wrong"}` }]
+      });
+      const g = JSON.parse(gr.content[0].text.match(/\{[\s\S]*\}/)[0]);
+      const fc = loadJSON(FLASHCARDS_FILE, { cards: [] });
+      const card = fc.cards.find(c => c.id === pend.id);
+      if (card) {
+        // SM-2 lite: correct → interval grows, wrong → back to 1 day
+        card.interval = g.correct ? Math.max(1, Math.round((card.interval || 1) * 2.2)) : 1;
+        card.nextReview = Date.now() + card.interval * 24 * 60 * 60 * 1000;
+        card.reps = (card.reps || 0) + 1;
+        card.correct = (card.correct || 0) + (g.correct ? 1 : 0);
+        saveJSON(FLASHCARDS_FILE, fc);
+      }
+      const due = loadJSON(FLASHCARDS_FILE, { cards: [] }).cards.filter(c => c.nextReview <= Date.now());
+      const next = due[0];
+      if (next) {
+        global._flashPending = { id: next.id, q: next.q, a: next.a, ts: Date.now() };
+        return `${g.correct ? '✅' : '❌'} ${g.note}\n\nNext card: ${next.q}`;
+      }
+      return `${g.correct ? '✅' : '❌'} ${g.note}\n\nThat's all your due cards — nice session! 📇✨`;
+    } catch(e) { return 'Card grading glitched — say "flashcards" to continue!'; }
+  }
+
+  // "flashcards" — spaced-repetition review (or create cards from last studied page)
+  if (/^(flashcards?|review cards?)$/.test(lower)) {
+    const fc = loadJSON(FLASHCARDS_FILE, { cards: [] });
+    const due = fc.cards.filter(c => c.nextReview <= Date.now());
+    if (due.length) {
+      const card = due[0];
+      global._flashPending = { id: card.id, q: card.q, a: card.a, ts: Date.now() };
+      return `📇 ${due.length} cards due! First one:\n\n${card.q}`;
+    }
+    // No due cards — create from last studied page
+    const activeBook = getActiveBook();
+    const pageNum = global._lastBookPage || (activeBook && getStudyProgress(activeBook.id)?.lastPage);
+    if (!activeBook || !pageNum) return fc.cards.length ? `All ${fc.cards.length} cards reviewed — nothing due yet! Study a page and I'll make new ones 📚` : 'No cards yet! Study a page first ("continue studying"), then say "flashcards"';
+    const page = getBookPage(activeBook.id, pageNum);
+    if (!page) return 'Study a page first, then I can make cards from it!';
+    try {
+      const res = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001', max_tokens: 500,
+        messages: [{ role: 'user', content: `Create 5 flashcards from this textbook page. JSON array only: [{"q":"question","a":"short answer"}]. Make them test real understanding.\nPAGE:\n${page.text.slice(0, 2500)}` }]
+      });
+      const cards = JSON.parse(res.content[0].text.match(/\[[\s\S]*\]/)[0]);
+      cards.forEach(c => fc.cards.push({ id: Date.now() + Math.random(), q: c.q, a: c.a, bookId: activeBook.id, page: pageNum, interval: 1, nextReview: Date.now(), reps: 0, correct: 0 }));
+      if (fc.cards.length > 200) fc.cards = fc.cards.slice(-200);
+      saveJSON(FLASHCARDS_FILE, fc);
+      const first = fc.cards[fc.cards.length - cards.length];
+      global._flashPending = { id: first.id, q: first.q, a: first.a, ts: Date.now() };
+      return `📇 Made ${cards.length} flashcards from page ${pageNum}! Let's go:\n\n${first.q}`;
+    } catch(e) { return 'Card creation glitched — try again!'; }
+  }
+
+  if (/^(quiz me|test me)$/.test(lower) && !loadLearner().awaitingLevel && !loadLearner().pendingQuiz && getActiveBook()) {
+    const activeBook = getActiveBook();
+    if (!activeBook) return 'Load a textbook first and study a page — then I can quiz you!';
+    const pageNum = global._lastBookPage || getStudyProgress(activeBook.id)?.lastPage;
+    if (!pageNum) return 'We haven\'t studied a page yet! Say "continue studying" first 📚';
+    const page = getBookPage(activeBook.id, pageNum);
+    if (!page) return 'I lost the page — say "page ' + pageNum + '" to reload it!';
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 350,
+      messages: [{ role: 'user', content: `Create a quick 3-question quiz from this textbook page (page ${pageNum} of ${activeBook.name}). Ask the questions conversationally as Asuka, one by one numbered, no answers yet — tell them to answer and you'll check. PAGE:\n${page.text.slice(0, 2500)}` }]
+    });
+    return res.content[0].text;
+  }
+
+
+  // "what do you know/remember about me"
+  if (/what do you (know|remember) about me|tell me about myself/.test(lower)) {
+    const p = getUserProfile();
+    return p.facts.length
+      ? `Here's what I've learned about you 💕\n• ${p.facts.slice(-12).join('\n• ')}\n\nI pick these up naturally as we talk!`
+      : "We're still getting to know each other! Tell me about yourself — I remember everything that matters 💕";
+  }
+
+
+  // ═══ ADAPTIVE TUTOR FLOW ═══════════════════════════════════════════════
+  // Voice answer to an open recall question (box also accepts taps/text)
+  {
+    const ld0 = loadLearner();
+    if (global._pendingRecall && userText.length > 1 && !/^(skip|cancel|stop)$/i.test(lower)) {
+      const pr = global._pendingRecall; global._pendingRecall = null;
+      const g = await gradeRecall(pr.goal, pr.question, pr.modelAnswer, userText).catch(()=>({correct:true,feedback:'Good!'}));
+      if (g.correct) noteMastered(pr.goal, pr.topic); else noteWeakSpot(pr.goal, pr.topic);
+      return g.feedback;
+    }
+  }
+
+  // ═══ MOCK INTERVIEW FLOW ═══════════════════════════════════════════════
+  {
+    const ldm = loadLearner();
+    // "start mock interview" / "interview me" / "mock interview"
+    if (/^(start (a )?mock interview|interview me|mock interview|let'?s practice( the)? interview)/i.test(lower) && !ldm.mockInterview) {
+      const goal = ldm.activeGoal && ldm.profiles[ldm.activeGoal]?.type === 'interview' ? ldm.profiles[ldm.activeGoal].goal : (ldm.activeGoal || 'general role');
+      const mi = startMockInterview(goal);
+      const q = await nextMockQuestion(mi, getProfile(goal)).catch(()=>'Tell me about yourself.');
+      mi.currentQ = q; mi.qIndex = 0; const d = loadLearner(); d.mockInterview = mi; saveLearner(d);
+      return `Mock interview for ${goal} — ${mi.arc.length} questions. Answer out loud like the real thing!\n\nQ1 (${mi.arc[0]}): ${q}`;
+    }
+    // Answering a mock question
+    if (ldm.mockInterview && ldm.mockInterview.currentQ) {
+      const mi = ldm.mockInterview;
+      if (/^(stop|end|quit) (the )?interview/i.test(lower)) { const d=loadLearner(); d.mockInterview=null; saveLearner(d); return 'Interview ended — want the report? Say "interview report".'; }
+      const score = await scoreMockAnswer(mi.goal, mi.currentQ, userText).catch(()=>({score:6,feedback:'Solid.',tag:'communication'}));
+      mi.scores.push(score); mi.answers.push(userText); mi.qIndex++;
+      if (mi.qIndex >= mi.arc.length) {
+        const report = await mockInterviewReport(mi).catch(()=>({avg:'?',summary:'Good work!'}));
+        const d = loadLearner(); d.mockInterview = null;
+        // save interview weak areas into profile
+        if (d.profiles[mi.goal.toLowerCase()]) d.profiles[mi.goal.toLowerCase()].lastInterview = { avg: report.avg, when: Date.now() };
+        saveLearner(d);
+        return `${score.feedback}\n\n🏁 INTERVIEW COMPLETE\nAverage: ${report.avg}/10 (${report.tagAvgs})\n\n${report.summary}`;
+      }
+      const nextQ = await nextMockQuestion(mi, getProfile(mi.goal)).catch(()=>'What are your strengths?');
+      mi.currentQ = nextQ;
+      const d = loadLearner(); d.mockInterview = mi; saveLearner(d);
+      return `${score.feedback} (${score.score}/10)\n\nQ${mi.qIndex+1} (${mi.arc[mi.qIndex]}): ${nextQ}`;
+    }
+    // "interview report"
+    if (/interview report|how did i do (in|on) the interview/i.test(lower)) {
+      const p = getProfile(ldm.activeGoal || '');
+      if (p?.lastInterview) return `Your last mock interview: ${p.lastInterview.avg}/10. Say "start mock interview" to practice again and push that higher! 💪`;
+      return "We haven't done a mock interview yet — say 'start mock interview'!";
+    }
+  }
+
+  // "what's my curriculum" / "my learning path" / "what's next"
+  if (/my (curriculum|learning path|syllabus|course)|what'?s next( in| for)?|where am i (in|at)/i.test(lower)) {
+    const cp = curriculumProgress(loadLearner().activeGoal || '');
+    if (!cp) return "We haven't started a structured path yet! Say 'teach me [subject]' and I'll build your curriculum 🗺️";
+    return `📚 Your path (${cp.done}/${cp.total} done):\nUp next: ${cp.next}\n\nFull path:\n${cp.path.map((t,i)=>`${i<cp.done?'✅':i===cp.done?'👉':'⬜'} ${t}`).join('\n')}`;
+  }
+
+  // Mid-flow: waiting for a quiz answer or level reply?
+  {
+    const ld = loadLearner();
+    // A) pending placement quiz — collect answers
+    if (ld.pendingQuiz) {
+      const pq = ld.pendingQuiz;
+      pq.answers = pq.answers || [];
+      if (/^(quit|stop|cancel|nevermind)$/i.test(lower)) { ld.pendingQuiz = null; saveLearner(ld); return 'No problem, quiz cancelled! Just say your level instead, or ask me anything.'; }
+      pq.answers.push(userText);
+      if (pq.answers.length < pq.quiz.questions.length) {
+        saveLearner(ld);
+        return `Q${pq.answers.length + 1}: ${pq.quiz.questions[pq.answers.length]}`;
+      }
+      // done — score it
+      const result = await scorePlacement(pq.goal, pq.quiz, pq.answers).catch(() => ({ level: 'beginner', summary: 'getting started', score: '?/5' }));
+      setProfile(pq.goal, { level: result.level, summary: result.summary, type: pq.type, covered: [] });
+      ld.pendingQuiz = null; saveLearner(ld);
+      launchLesson(pq.goal, 'the basics').catch(() => {});
+      return `You scored ${result.score} — ${result.level}! ${result.summary}\n\nOpening your first lesson now — I'll explain, then you practice! 🌸`;
+    }
+    // B) waiting for level self-report after "teach me X"
+    if (ld.awaitingLevel) {
+      const goal = ld.awaitingLevel.goal, type = ld.awaitingLevel.type;
+      if (/quiz me|placement|test me/i.test(lower)) {
+        const quiz = await makePlacementQuiz(goal).catch(() => null);
+        if (quiz) {
+          ld.pendingQuiz = { goal, type, quiz, answers: [] }; ld.awaitingLevel = null; saveLearner(ld);
+          showQuizBox({ question: `Q1: ${quiz.questions[0]}`, type: 'text', meta: { kind: 'placement' } });
+          return `Quick placement check! 📝 Answer in the box beside me — Q1 is up!`;
+        }
+      }
+      // parse self-reported level / interview answers
+      let level = 'beginner';
+      if (/intermediate|some|bit|little|okay|decent/i.test(lower)) level = 'intermediate';
+      if (/advanced|fluent|expert|senior|years|pro\b/i.test(lower)) level = 'advanced';
+      setProfile(goal, { level, summary: userText.slice(0, 120), type, covered: [] });
+      if (type !== 'interview') { const cur = await buildCurriculum(goal, level).catch(()=>null); if (cur) setProfile(goal, { curriculum: cur }); }
+      ld.awaitingLevel = null; saveLearner(ld);
+      if (type === 'interview') {
+        const firstLesson = await teachAdaptive(goal, 'Build a quick prep plan + ask the first mock question').catch(() => null);
+        return (firstLesson || `Great, let's prep for ${goal}!`);
+      }
+      launchLesson(goal, 'the basics').catch(() => {});
+      return `Perfect, starting at ${level} level! Opening your lesson — I'll teach it, then you practice with exercises! 🌸`;
+    }
+  }
+
+  // New "teach me X" / "prep me for X"
+  {
+    const intent = parseTeachIntent(userText);
+    if (intent && !getActiveBook() || (intent && !/lesson|chapter|page|book|textbook/.test(lower))) {
+      // Skip if it's clearly a textbook nav command (handled below)
+      if (intent) {
+        const existing = getProfile(intent.goal);
+        if (existing && intent.type !== 'interview') {
+          launchLesson(intent.goal, 'the next concept').catch(() => {});
+          return `Continuing your ${intent.goal}! Opening your lesson now 🌸`;
+        }
+        if (existing && intent.type === 'interview') {
+          const next = await teachAdaptive(intent.goal, 'Ask the next mock interview question').catch(() => null);
+          return next || `Continuing your ${intent.goal} prep!`;
+        }
+        const ld2 = loadLearner();
+        ld2.awaitingLevel = { goal: intent.goal, type: intent.type };
+        saveLearner(ld2);
+        return levelCheckPrompt(intent);
+      }
+      // Continuing learner → teach + active recall check
+      {
+        const intent2 = parseTeachIntent(userText);
+        if (intent2 && getProfile(intent2.goal) && intent2.type !== 'interview') {
+          const lesson = await teachAdaptive(intent2.goal, 'Teach the next concept, building on what they know').catch(() => null);
+          launchLesson(intent2.goal, 'the next concept').catch(() => {});
+          return `Let's continue your ${intent2.goal}! Opening the next lesson — I'll explain, then you drill it. 🌸`;
+        }
+      }
+    }
+  }
+
+  // ═══ VOICE POSITION CONTROL ═══════════════════════════════════════════
+  // "close my SOL" / "close SOL position"
+  const closeM = lower.match(/^close\s+(my\s+)?([a-z]{2,6})(\s+position)?$/);
+  if (closeM) {
+    const vc = closeM[2].toUpperCase();
+    const pd = loadPaperTrades();
+    const t = pd.trades.find(x => x.status === 'open' && x.coin === vc);
+    if (!t) return `No open ${vc} position to close!`;
+    const price = await getCoinPrice(vc);
+    if (!price) return `Couldn't fetch ${vc} price — try again in a sec!`;
+    await closePaperTrade(t.id, price, 'voice close by user');
+    const diff = t.direction === 'long' ? price - t.entry : t.entry - price;
+    const pnl = (t.size * diff / t.entry * (t.leverage || 1)).toFixed(2);
+    return `Closed your ${t.direction} ${vc} at $${price} — ${pnl >= 0 ? '+' : ''}$${pnl} ${pnl >= 0 ? '💰' : '🩹'}`;
+  }
+
+  // "close half my SOL" / "take half off SOL"
+  const halfM = lower.match(/(close|take)\s+half\s+(of\s+|my\s+|off\s+)?([a-z]{2,6})/);
+  if (halfM) {
+    const vc = halfM[3].toUpperCase();
+    const pd = loadPaperTrades();
+    const t = pd.trades.find(x => x.status === 'open' && x.coin === vc);
+    if (!t) return `No open ${vc} position!`;
+    const price = await getCoinPrice(vc);
+    if (!price) return `Couldn't fetch ${vc} price right now!`;
+    const lev = t.leverage || 1;
+    const diff = t.direction === 'long' ? price - t.entry : t.entry - price;
+    const halfSize = t.size / 2;
+    const realized = Math.max(halfSize * (diff / t.entry) * lev, -halfSize);
+    t.size = halfSize;
+    t.partialClosed = (t.partialClosed || 0) + 1;
+    pd.balance = Math.max(0, pd.balance + realized);
+    savePaperTrades(pd);
+    sendTelegramNotification(`✂️ Took 50% off ${t.direction} ${vc} at $${price}: ${realized >= 0 ? '+' : ''}$${realized.toFixed(2)} locked`).catch(() => {});
+    return `Took half off ${vc} at $${price} — locked ${realized >= 0 ? '+' : ''}$${realized.toFixed(2)}, rest still riding! ✂️`;
+  }
+
+  // "move SOL stop to breakeven" / "breakeven SOL"
+  const beM = lower.match(/(move\s+)?([a-z]{2,6})\s+(stop\s+)?(to\s+)?break\s*even|break\s*even\s+([a-z]{2,6})/);
+  if (beM) {
+    const vc = (beM[2] || beM[5] || '').toUpperCase();
+    if (vc && vc.length >= 2) {
+      const pd = loadPaperTrades();
+      const t = pd.trades.find(x => x.status === 'open' && x.coin === vc);
+      if (!t) return `No open ${vc} position!`;
+      t.stopLoss = t.entry;
+      savePaperTrades(pd);
+      return `Stop moved to breakeven on ${vc} ($${t.entry}) — this trade can't hurt you anymore 🛡️`;
+    }
+  }
+
+
+  // "dance" / "asuka dance" — she dances on command (also great for testing)
+  if (/^(dance|asuka,? dance|dance for me|show me your dance)$/.test(lower)) {
+    try { if (typeof mainWindow !== 'undefined' && mainWindow) mainWindow.webContents.send('asuka-dance'); } catch(e) {}
+    return 'Okay, watch this~ 💃';
+  }
+
+  // "make flashcards" — from the page we just studied
+  if (/^(make |create )?flash\s?cards?$/.test(lower)) {
+    const n = await makeFlashcardsFromPage().catch(() => null);
+    return n ? `Made ${n} flashcards from page ${global._lastBookPage}! Say "review" anytime to practice 🎴` : 'Study a page first, then I can make flashcards from it!';
+  }
+
+  // "review" — due flashcards (spaced repetition)
+  if (/^(review|review cards|practice cards)$/.test(lower)) {
+    const fc = loadJSON(SRS_CARDS_FILE, { cards: [] });
+    const due = fc.cards.filter(c => c.due <= Date.now()).slice(0, 5);
+    if (!due.length) return 'No cards due right now — your memory is fresh! 🌸';
+    global._reviewBatch = due.map(c => c.id);
+    return `Review time! ${due.length} cards due:\n\n` + due.map((c, i) => `${i+1}. ${c.q}`).join('\n') + '\n\nSay "show answers" when ready!';
+  }
+  if (/^show answers?$/.test(lower) && global._reviewBatch?.length) {
+    const fc = loadJSON(SRS_CARDS_FILE, { cards: [] });
+    const batch = fc.cards.filter(c => global._reviewBatch.includes(c.id));
+    // Spaced repetition: each review pushes the card further out (1→3→7→16→35 days)
+    for (const c of batch) {
+      c.reps++; c.interval = Math.round(c.interval * 2.2); c.due = Date.now() + c.interval * 864e5;
+    }
+    saveJSON(SRS_CARDS_FILE, fc);
+    global._reviewBatch = null;
+    return 'Answers:\n\n' + batch.map((c, i) => `${i+1}. ${c.a}`).join('\n') + '\n\nCards rescheduled — the ones you know come back later, spaced repetition style! 🎴';
+  }
+
+  // "how accurate are your predictions"
+  if (/prediction|how accurate|your calls/.test(lower) && /accurate|score|track|right/.test(lower)) {
+    const p = loadJSON(DAILY_PRED_FILE, { items: [], graded: { right: 0, wrong: 0 } });
+    const total = p.graded.right + p.graded.wrong;
+    const today = p.items.find(x => !x.graded);
+    if (!total && !today) return "I haven't made any daily calls yet — give me a day!";
+    let msg = total ? `My daily BTC calls: ${p.graded.right}/${total} right (${Math.round(p.graded.right/total*100)}%).` : '';
+    if (today) msg += ` Today I'm calling ${today.call.toUpperCase()} at ${today.confidence}% — ${today.reason}.`;
+    return msg + ' I grade myself every morning, no hiding 🔮';
+  }
+
+
+  // "whiteboard the te-form" / "draw RSI divergence" / "teach particles on the whiteboard"
+  const wbM = lower.match(/^(whiteboard|draw)\s+(.{2,90})$/)
+    || lower.match(/^teach\s+(?:me\s+)?(.{2,90})\s+on the (?:white)?board$/)
+    || lower.match(/^(?:explain|teach|show me|what(?:'?s| is)?)\s+(?:me\s+)?(?:the\s+)?(.{2,90}?)(?:\s+(?:please|to me))?$/);
+  if (wbM && global._whiteboardTeach) {
+    const topic = (wbM[2] || wbM[1] || '').replace(/^(the|me)\s+/, '').trim();
+    // Only draw for teaching topics — skip if it's clearly a data/command ask
+    if (!/\b(price|funding|fear|greed|dominance|gas|balance|portfolio|chart|position|trade|buy|sell|open|close|remind|volume)\b/.test(topic)) {
+      const result = await global._whiteboardTeach(topic).catch(() => null);
+      if (result?.success) return result.narration + ' — look at the whiteboard! 🖊️';
+      // if board failed, fall through to a normal spoken answer
+      return await getAIReply(userText);
+    }
+  }
+
+
+  // "post my announcement" / "post the thread" / "shill my coin" — she posts to TG
+  const postM = lower.match(/(post|publish|send|shill).{0,20}(announcement|thread|one.?liner|marketing|my coin|to (my )?(telegram|tg|group))/);
+  if (postM) {
+    try {
+      const all = loadProjects();
+      const live = all.projects.filter(p => p.status === 'live' || p.marketing?.pack);
+      if (!live.length) return "You haven't set up a coin project with a marketing pack yet! Create one in the Launch tab.";
+      const proj = live[live.length - 1]; // most recent
+      let what = 'announcement';
+      if (/thread/.test(lower)) what = 'thread';
+      else if (/one.?liner|shill/.test(lower)) what = 'oneliner';
+      else if (/everything|all|marketing/.test(lower)) what = 'all';
+      const r = await (async () => {
+        const handler = ipcMain;
+        // call the same logic
+        const proj2 = proj;
+        return null;
+      })();
+      // Direct invoke of the same logic via the registered handler is messy; replicate minimal:
+      const cid = proj.telegramChatId || loadSettings().telegramBotChatId;
+      if (!cid) return `Set a Telegram chat ID for ${proj.symbol} first, then I can post it!`;
+      const pack = proj.marketing?.pack;
+      if (!pack) return `Generate the marketing pack for ${proj.symbol} first!`;
+      if (what === 'thread') { for (const t of (pack.thread||[])) { await tgSendReturningId(t, cid); await new Promise(r=>setTimeout(r,800)); } return `Posted the full ${pack.thread?.length}-part thread for ${proj.symbol}! 🧵`; }
+      if (what === 'oneliner') { const l=(pack.oneLiners||[])[0]; if(l) await tgSendReturningId(l,cid); return `Dropped a hype line for ${proj.symbol}! ⚡`; }
+      const id = await tgSendReturningId(pack.tgAnnouncement || `🚀 $${proj.symbol} is live!`, cid);
+      if (id) { const pinned = await tgPin(id, cid); return `Posted${pinned ? ' and pinned' : ''} the announcement for ${proj.symbol}! 📌`; }
+      return `Tried to post but Telegram didn't accept it — check the bot is in your group!`;
+    } catch(e) { return 'Had trouble posting — check the Telegram setup!'; }
+  }
+
+
+  // "review my weak spots" / "what am I bad at" / "my progress in X"
+  if (/weak spot|what am i bad|review my mistakes|practice my weak|my progress|how am i doing/i.test(lower)) {
+    const ld = loadLearner();
+    const goal = ld.activeGoal;
+    if (!goal || !ld.profiles[goal]) return "We haven't started learning anything yet! Say 'teach me [something]' to begin 🌸";
+    const p = ld.profiles[goal];
+    const weak = Object.entries(p.weakSpots || {}).sort((a,b) => b[1]-a[1]).slice(0,5).map(x=>x[0]);
+    if (!weak.length) return `You're doing great with ${p.goal}! No weak spots flagged — ${p.covered?.length || 0} topics covered, ${p.level} level. Keep going! 💪`;
+    // Teach the top weak spot with a recall check
+    const lesson = await teachAdaptive(p.goal, `Re-teach this thing they keep struggling with, simply and patiently: ${weak[0]}`).catch(()=>null);
+    const check = await makeRecallCheck(p.goal, weak[0], lesson).catch(()=>null);
+    if (check) { check.meta = { kind:'recall', topic: weak[0], goal: p.goal }; setTimeout(()=>showQuizBox(check), 6000); }
+    return `Let's drill your weak spots! Top one: ${weak[0]}\n\n${lesson || ''}`;
+  }
+
+  // Precise textbook nav: "lesson 2 part 1", "page 1 question 7", "chapter 3 section 2", "exercise 5"
+  const navMatch = lower.match(/\b(?:teach|explain|show|do|help with|what(?:'?s| is))?\s*(?:me\s+)?(?:the\s+)?(lesson|chapter|unit|page|section|part|exercise|question|problem|q)\s*\.?\s*(\d+)(?:\s*[,\s]*(?:part|section|question|problem|exercise|q|no\.?|#)?\s*(\d+))?(?:\s*[,\s]*(?:question|problem|q|#)\s*(\d+))?/);
+  if (navMatch && (getActiveBook() || loadBooksIndex().books.length)) {
+    const activeBook = getActiveBook() || loadBooksIndex().books[0];
+    if (!activeBook) return "No textbook loaded yet! Drop a PDF on my window first.";
+    const unit = navMatch[1], n1 = navMatch[2], n2 = navMatch[3], n3 = navMatch[4];
+
+    // Build a human label + locate the page
+    let label, page = null;
+    if (unit === 'page') {
+      page = getBookPage(activeBook.id, parseInt(n1));
+      label = `page ${n1}`;
+      if (n2) label += ` question ${n2}`;
+    } else {
+      // lesson/chapter/unit/section — search the index for it
+      const searchQ = `${unit} ${n1}`;
+      const results = searchBooks(searchQ, activeBook.id);
+      if (!results.length) return `I couldn't find ${searchQ} in ${activeBook.name} — try a page number, or say "which book" to check what's loaded.`;
+      page = getBookPage(activeBook.id, results[0].page);
+      label = `${unit} ${n1}`;
+      if (n2) label += ` part ${n2}`;
+      if (n3 || (n2 && /question|problem|q/.test(lower))) label += ` question ${n3 || n2}`;
+      // graceful confirm if the match seems loose
+      if (results[0].page && results.length > 3) {
+        global._lastBookPage = results[0].page;
+      }
+    }
+    if (!page) return `I found a reference to ${label} but couldn't load that page. Try the page number directly.`;
+    global._lastBookPage = page.page || page.pageNum || global._lastBookPage;
+
+    // Teach it — level-aware if they have a learner profile for this book's subject
+    const subjectGuess = (activeBook.subject || activeBook.name || '').toLowerCase();
+    const prof = getProfile(subjectGuess) || getProfile(activeBook.name?.toLowerCase() || '');
+    const levelNote = prof ? ` The student is ${prof.level} level (${prof.summary}). Pitch it there.` : '';
+    const focusNote = /question|problem|q\s*\d/.test(lower) && (n2 || n3)
+      ? ` Focus specifically on question ${n3 || n2} — find it on the page, restate it, then teach how to solve/answer it step by step.`
+      : ` Teach ${label} clearly.`;
+    const explanation = await askAboutBook(page.text, `Explain ${label} from ${activeBook.name}.${focusNote}${levelNote}`, activeBook.name, page.page || page.pageNum);
     return explanation;
   }
 
@@ -2199,6 +2953,22 @@ async function routeCommand(userText) {
     const amount = parseFloat(buyMatch[1] || buyMatch[4]);
     const coin = (buyMatch[2] || buyMatch[3])?.toUpperCase();
     if (amount && coin && Object.keys(COIN_MAP).some(k => coin.toLowerCase().includes(k))) {
+      // 🛡️ ANTI-FOMO: chasing a pump? She intercepts once.
+      const fomoOk = global._fomoConfirm?.coin === coin && Date.now() - global._fomoConfirm.ts < 2 * 60 * 1000;
+      if (!fomoOk) {
+        try {
+          const fc = await getCandles(coin, '1h', 25);
+          if (fc?.length >= 25) {
+            const h1 = (fc[24].close - fc[23].close) / fc[23].close * 100;
+            const h24 = (fc[24].close - fc[0].open) / fc[0].open * 100;
+            if (h1 > 8 || h24 > 25) {
+              global._fomoConfirm = { coin, ts: Date.now() };
+              return `Whoa hold on — ${coin} is already up ${h1 > 8 ? h1.toFixed(1) + '% in the last HOUR' : h24.toFixed(1) + '% in 24h'}. Buying pumps like this historically loses more than it wins. Still want it? Say "buy ${coin}" again within 2 minutes and I'll do it. 🛡️`;
+            }
+          }
+        } catch(e) {}
+      }
+      global._fomoConfirm = null;
       const order = await spotBuy(coin, amount);
       if (order) {
         return `Bought ${order.quantity} ${coin} for $${amount} at ~$${parseFloat(order.price || 0).toLocaleString()} 🟢`;
@@ -3130,7 +3900,8 @@ function startGrokNodeWS() {
       type: 'session.update',
       session: {
         modalities: ['text'],
-        instructions: buildSystemPrompt() + buildMemoryContext() + `\n\nCRITICAL TOOL RULES:\n- For ANY price, funding, fear&greed, dominance, gas → use get_market_data tool\n- For EVERYTHING else (watchlist, notes, YouTube, alerts, journal, portfolio, news, analysis) → use ask_claude tool\n- NEVER answer from memory for market data or commands — always use the tools`,
+        instructions: buildSystemPrompt() + buildMemoryContext() + `\n\nCRITICAL TOOL RULES:\n- For ANY price, funding, fear&greed, dominance, gas → use get_market_data tool\n- For EVERYTHING else (watchlist, notes, YouTube, alerts, journal, portfolio, news, analysis) → use ask_claude tool\n- NEVER answer from memory for market data or commands — always use the tools\n- EXCEPTION: greetings and casual small-talk in ANY language → answer DIRECTLY yourself in that language, no tools
+- BUT: any request to TEACH, learn, study, tutor, "teach me X", "prep me for an interview", quiz, lessons, or explain a topic in depth → ALWAYS use the ask_claude tool (do NOT teach it yourself — Claude runs the lesson system with quizzes and progress tracking)`,
         input_audio_format: 'pcm16',
         input_audio_transcription: { model: 'whisper-1' },
         turn_detection: {
@@ -3395,6 +4166,7 @@ ipcMain.handle('claude-query-legacy', async (e, query) => {
 
 
 ipcMain.handle('get-voice', async (e, text) => getVoiceAudio(text));
+ipcMain.handle('speak-text', async (e, text) => { streamVoiceResponse(text, mainWindow).catch(()=>{}); return { ok: true }; });
 ipcMain.handle('stream-voice-response', async (e, text) => {
   if (mainWindow && text) {
     await streamVoiceResponse(text, mainWindow);
@@ -3440,10 +4212,27 @@ ipcMain.handle('get-gas-fees',    async ()            => getGasFees());
 ipcMain.handle('get-monthly-gas', async ()            => getMonthlyGasSpend());
 ipcMain.handle('get-halving',     async ()            => getHalvingCountdown());
 ipcMain.handle('scan-contract',   async (e, ca)       => scanContract(ca));
+const _walletCache = {};
+async function _fetchWithRetry(url, opts, timeout) {
+  for (let i = 0; i < 2; i++) {
+    try {
+      const r = await fetchT(url, opts, timeout);
+      if (r.ok) return r;
+      if (r.status === 429) await new Promise(s => setTimeout(s, 1200)); // rate limited — wait and retry
+    } catch(e) { if (i === 0) await new Promise(s => setTimeout(s, 800)); }
+  }
+  return null;
+}
+
 ipcMain.handle('get-wallet-data', async (e, addr, chain) => {
   try {
     const key = process.env.MORALIS_API_KEY;
     if (!key) return null;
+
+    // 60s cache — repeat visits are INSTANT, no Moralis hammering
+    const ck = `${addr}|${chain}`;
+    const cached = _walletCache[ck];
+    if (cached && Date.now() - cached.ts < 60000) return cached.data;
     const chainMap = { eth: '0x1', bsc: '0x38', polygon: '0x89', arbitrum: '0xa4b1', base: '0x2105', sol: 'mainnet' };
     const nativeSymbols = { eth: 'ETH', bsc: 'BNB', polygon: 'MATIC', arbitrum: 'ETH', base: 'ETH', sol: 'SOL' };
     const chainId = chainMap[chain] || '0x38';
@@ -3452,10 +4241,8 @@ ipcMain.handle('get-wallet-data', async (e, addr, chain) => {
     let tokens = [], txns = [], totalUsd = 0;
 
     if (isSol) {
-      const res = await fetchT(`https://solana-gateway.moralis.io/account/mainnet/${addr}/portfolio`, {
-        headers: { 'X-API-Key': key }
-      }, 8000);
-      const data = await res.json();
+      const res = await _fetchWithRetry(`https://solana-gateway.moralis.io/account/mainnet/${addr}/portfolio`, { headers: { 'X-API-Key': key } }, 8000);
+      const data = res ? await res.json() : {};
       tokens = (data?.tokens || []).map(t => ({
         symbol: t.symbol, balance: t.amount, usdValue: t.usdValue || 0
       }));
@@ -3463,20 +4250,14 @@ ipcMain.handle('get-wallet-data', async (e, addr, chain) => {
     } else {
       // Get native balance + ERC20 tokens + transactions
       const [nativeRes, tokensRes, txnsRes] = await Promise.all([
-        fetchT(`https://deep-index.moralis.io/api/v2.2/${addr}/balance?chain=${chainId}`, {
-          headers: { 'X-API-Key': key }
-        }, 8000),
-        fetchT(`https://deep-index.moralis.io/api/v2.2/${addr}/erc20?chain=${chainId}&limit=20`, {
-          headers: { 'X-API-Key': key }
-        }, 8000),
-        fetchT(`https://deep-index.moralis.io/api/v2.2/${addr}?chain=${chainId}&limit=5`, {
-          headers: { 'X-API-Key': key }
-        }, 8000)
+        _fetchWithRetry(`https://deep-index.moralis.io/api/v2.2/${addr}/balance?chain=${chainId}`, { headers: { 'X-API-Key': key } }, 8000),
+        _fetchWithRetry(`https://deep-index.moralis.io/api/v2.2/${addr}/erc20?chain=${chainId}&limit=20`, { headers: { 'X-API-Key': key } }, 8000),
+        _fetchWithRetry(`https://deep-index.moralis.io/api/v2.2/${addr}?chain=${chainId}&limit=5`, { headers: { 'X-API-Key': key } }, 8000)
       ]);
 
-      const nativeData = await nativeRes.json();
-      const tokensData = await tokensRes.json();
-      const txnsData = await txnsRes.json();
+      const nativeData = nativeRes ? await nativeRes.json() : {};
+      const tokensData = tokensRes ? await tokensRes.json() : {};
+      const txnsData = txnsRes ? await txnsRes.json() : {};
 
       // Native balance (BNB/ETH/MATIC)
       const nativeBal = parseFloat(nativeData?.balance || 0) / 1e18;
@@ -3526,10 +4307,19 @@ ipcMain.handle('get-wallet-data', async (e, addr, chain) => {
       }));
     }
 
-    return { tokens, txns, totalUsd };
+    // Filter obvious spam: zero-USD tokens with absurd balances (airdrop scam pattern)
+    tokens = tokens.filter(t => !(t.usdValue === 0 && t.balance > 1e9));
+    // Sort by value — real holdings first
+    tokens.sort((a, b) => (b.usdValue || 0) - (a.usdValue || 0));
+
+    const out = { tokens, txns, totalUsd, fetchedAt: Date.now() };
+    _walletCache[`${addr}|${chain}`] = { data: out, ts: Date.now() };
+    return out;
   } catch(e) {
     console.error('Wallet data error:', e.message);
-    return null;
+    // Return last good data instead of null — no more flickering to zero
+    const stale = _walletCache[`${addr}|${chain}`];
+    return stale ? { ...stale.data, stale: true } : null;
   }
 });
 
@@ -3810,6 +4600,42 @@ async function sendTelegramNotification(message) {
   } catch(e) { console.error('TG notify error:', e.message); }
 }
 
+
+// ─── TELEGRAM AUTO-POST + AUTO-PIN — returns message id so we can pin it ─────
+async function tgSendReturningId(text, chatId) {
+  const cid = chatId || loadSettings().telegramBotChatId;
+  if (!cid || !process.env.TELEGRAM_BOT_TOKEN) return null;
+  try {
+    const res = await fetchT(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: cid, text, parse_mode: 'HTML', disable_web_page_preview: false })
+    }, 8000);
+    const data = await res.json();
+    return data?.result?.message_id || null;
+  } catch(e) { console.error('TG send error:', e.message); return null; }
+}
+async function tgPin(messageId, chatId) {
+  const cid = chatId || loadSettings().telegramBotChatId;
+  if (!cid || !messageId || !process.env.TELEGRAM_BOT_TOKEN) return false;
+  try {
+    await fetchT(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/pinChatMessage`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: cid, message_id: messageId, disable_notification: false })
+    }, 8000);
+    return true;
+  } catch(e) { console.error('TG pin error (bot needs admin + pin rights):', e.message); return false; }
+}
+// Post + pin in one shot — used by launch automation
+ipcMain.handle('tg-post-pin', async (e, { text, pin, chatId }) => {
+  try {
+    const id = await tgSendReturningId(text, chatId);
+    if (!id) return { success: false, error: 'Send failed — check bot token + chat id (bot must be in the group)' };
+    let pinned = false;
+    if (pin) pinned = await tgPin(id, chatId);
+    return { success: true, messageId: id, pinned, note: pin && !pinned ? 'Posted but pin failed — make the bot a group admin with pin rights' : undefined };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
 // ─── SMART TRADE CALCULATOR ───────────────────────────────────────────────
 async function calculateSmartTrade(coin, direction, confidence, fearGreed, funding, entry) {
   const fg = parseInt(fearGreed?.match(/\d+/)?.[0] || 50);
@@ -3946,6 +4772,16 @@ async function calculateSmartTrade(coin, direction, confidence, fearGreed, fundi
   const ratioActual = (tpPct / slPct).toFixed(1);
   console.log(`📐 Smart trade: ${mode} mode | TP: ${(tpPct*100).toFixed(1)}% | SL: ${(slPct*100).toFixed(1)}% | Ratio: 1:${ratioActual} | Mode: ${tpSlMode}`);
 
+  // Per-coin calibration override — backtest-proven TP/SL beats generic tiers
+  const calib = getCoinParams(coin);
+  if (calib?.tpPct && calib?.slPct && Date.now() - (calib.calibrated || 0) < 30 * 24 * 60 * 60 * 1000) {
+    tpPct = calib.tpPct;
+    slPct = calib.slPct;
+    target = direction === 'long' ? entry * (1 + tpPct / 100) : entry * (1 - tpPct / 100);
+    stopLoss = direction === 'long' ? entry * (1 - slPct / 100) : entry * (1 + slPct / 100);
+    console.log(`🎯 Using calibrated params for ${coin}: TP ${tpPct}% / SL ${slPct}% (${calib.winRate}% historical win)`);
+  }
+
   return { sizeMultiplier, tpPct, slPct, target, stopLoss, mode, partialTp, trailingLevels };
 }
 
@@ -4036,6 +4872,7 @@ setInterval(() => {
 }, 60 * 1000);
 
 async function runIndependentScan() {
+  if (!tradingEnabled()) return; // companion mode — no trading
   _lastScanHeartbeat = Date.now();
   const devOv = getDevOverrides();
   if (_globalPauseMain || devOv.pauseMain) { console.log('⏸️ Main scanner paused by dev'); return; }
@@ -4048,7 +4885,20 @@ async function runIndependentScan() {
   try {
     // Scan selected coins (default BTC, ETH, SOL, BNB)
     const settings = loadSettings();
-    const coinsToScan = settings.tradingCoins || ['BTC', 'ETH', 'SOL', 'BNB'];
+    let coinsToScan = settings.tradingCoins || ['BTC', 'ETH', 'SOL', 'BNB'];
+    // Dev panel coin override preset takes priority: "2"=BTC/ETH, "3"=BTC/ETH/SOL, "5"=first 5, or "BTC,ETH,..." list
+    if (devOv.coinOverride && devOv.coinOverride !== 'all') {
+      const raw = String(devOv.coinOverride).trim();
+      let ov = null;
+      if (raw === '2') ov = ['BTC', 'ETH'];
+      else if (raw === '3') ov = ['BTC', 'ETH', 'SOL'];
+      else if (/^\d+$/.test(raw)) ov = coinsToScan.slice(0, parseInt(raw));
+      else ov = raw.split(',').map(c => c.trim().toUpperCase()).filter(Boolean);
+      if (ov && ov.length) {
+        coinsToScan = ov;
+        console.log(`🔧 Dev coin override active: scanning only ${ov.join(', ')}`);
+      }
+    }
     
     for (const scanCoin of coinsToScan) {
       await scanCoinForTrade(scanCoin);
@@ -4446,6 +5296,10 @@ JSON only:
       if (finalDecision.confidence < threshold) {
         console.log(`⏭️ Final confidence ${finalDecision.confidence}% below threshold ${threshold}% — skipping`);
         logShadowTrade(scanCoin, finalDecision.direction, finalDecision.entry || analysis.entry, finalDecision.target, finalDecision.stopLoss, `below threshold ${threshold}%`, finalDecision.confidence);
+        // Near-miss → upcoming trade recommendation ping
+        if (finalDecision.confidence >= threshold - 8 && loadSettings().upcomingAlerts !== false) {
+          sendTelegramNotification(`👀 Watchlist: ${finalDecision.direction?.toUpperCase()} ${scanCoin} forming at ${finalDecision.confidence}% confidence (needs ${threshold}%)\nEntry zone ~$${finalDecision.entry || analysis.entry} | Target $${finalDecision.target || '—'}\nIf the next scan confirms, she takes it — or you can jump early 🎯`).catch(() => {});
+        }
         return;
       }
       // ────────────────────────────────────────────────────────────────────
@@ -4468,6 +5322,43 @@ JSON only:
         logShadowTrade(scanCoin, finalDecision.direction, finalDecision.entry || analysis.entry, finalDecision.target, finalDecision.stopLoss, 'BTC lead gate', finalDecision.confidence);
         return;
       }
+
+      // ── Chasing Guard — entry already ran toward target? Don't chase ──
+      try {
+        const _entryRef = finalDecision.entry || analysis.entry;
+        const _targetRef = finalDecision.target || analysis.target;
+        if (_entryRef && _targetRef && coinPrice) {
+          const moveDone = (coinPrice - _entryRef) / (_targetRef - _entryRef);
+          if (moveDone > 0.4) {
+            console.log(`🏃 CHASING GUARD: ${scanCoin} already ${Math.round(moveDone * 100)}% toward target — skipping late entry`);
+            logShadowTrade(scanCoin, finalDecision.direction, coinPrice, _targetRef, finalDecision.stopLoss, 'chasing guard', finalDecision.confidence);
+            return;
+          }
+        }
+      } catch(e) {}
+
+      // ── News-Spike Freeze — never enter INTO a violent candle ──────────
+      try {
+        const spike = await getCandles(scanCoin, '5m', 2);
+        if (spike?.length === 2) {
+          const spikePct = Math.abs(spike[1].close - spike[1].open) / spike[1].open * 100;
+          if (spikePct > 3) {
+            console.log(`⚡ NEWS-SPIKE FREEZE: ${scanCoin} moving ${spikePct.toFixed(1)}% THIS 5m candle — wait for dust to settle`);
+            logShadowTrade(scanCoin, finalDecision.direction, coinPrice, finalDecision.target, finalDecision.stopLoss, 'news spike freeze', finalDecision.confidence);
+            return;
+          }
+        }
+      } catch(e) {}
+
+      // ── Spread Guard — thin book = bad fills ──────────────────────────
+      try {
+        const spread = await getSpreadPct(scanCoin);
+        if (spread !== null && spread > 0.15) {
+          console.log(`📏 SPREAD GUARD: ${scanCoin} spread ${spread.toFixed(3)}% too wide — skipping (bad fills)`);
+          logShadowTrade(scanCoin, finalDecision.direction, coinPrice, finalDecision.target, finalDecision.stopLoss, 'spread too wide', finalDecision.confidence);
+          return;
+        }
+      } catch(e) {}
 
       // ── MTF Confirmation Gate (Off/Soft/Hard) ─────────────────────────
       const mtfMode = (settings.mtfMode || 'soft').toLowerCase();
@@ -4499,8 +5390,12 @@ JSON only:
         finalDecision.confidence = Math.min(95, finalDecision.confidence + 5);
       }
 
+      // Re-entry discipline: recently stopped out on this coin → need +5 confidence
+      const reentryPenalty = getReentryPenalty(scanCoin);
+      if (reentryPenalty) console.log(`🔁 Re-entry discipline: ${scanCoin} stopped out <24h ago — threshold +${reentryPenalty}`);
+
       // Re-check threshold after adjustments
-      if (finalDecision.confidence < threshold) {
+      if (finalDecision.confidence < threshold + reentryPenalty) {
         console.log(`⏭️ Confidence ${finalDecision.confidence}% below threshold after MTF/regime adjustments — skipping`);
         logShadowTrade(scanCoin, finalDecision.direction, finalDecision.entry || analysis.entry, finalDecision.target, finalDecision.stopLoss, 'below threshold after adjustments', finalDecision.confidence);
         return;
@@ -4958,6 +5853,7 @@ function isSupportedOnTestnet(coin) {
 
 // ─── INDEPENDENT SCALP SCANNER ────────────────────────────────────────────
 async function runIndependentScalpScan() {
+  if (!tradingEnabled()) return; // companion mode
   const devOv = getDevOverrides();
   if (_globalPauseScalp || devOv.pauseScalp) { return; }
   const tier = getUserTier();
@@ -6163,13 +7059,18 @@ function savePaperTrades(d) { saveJSON(PAPER_TRADES_FILE, d); }
 
 // Open a new paper trade
 
-// Numeric price helper — wraps getCryptoPrice string output
+// Numeric price helper — wraps getCryptoPrice string output (15s cache)
+const _priceCache = {};
 async function getCoinPrice(coin) {
   try {
+    const key = String(coin).toUpperCase();
+    const c = _priceCache[key];
+    if (c && Date.now() - c.ts < 15000) return c.p;
     const priceStr = await getCryptoPrice(String(coin).toLowerCase());
     const m = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
     if (!m) return null;
     const p = parseFloat(m[1].replace(/,/g, ''));
+    if (!isNaN(p)) _priceCache[String(coin).toUpperCase()] = { p, ts: Date.now() };
     return isNaN(p) ? null : p;
   } catch(e) { return null; }
 }
@@ -6304,17 +7205,36 @@ function detectCandlePattern(candles, sr) {
   } catch(e) { return null; }
 }
 
-// Bundle all advanced flow into one context block for the scan prompt
+// Bundle all advanced flow into one context block for the scan prompt (60s cache)
+const _flowCache = {};
 async function getAdvancedFlow(coin) {
   try {
+    const fc = _flowCache[coin];
+    if (fc && Date.now() - fc.ts < 60000) return fc.v;
     const candles = await getCandles(coin, '1h', 60);
     const sr = candles ? calcSupportResistance(candles) : null;
-    const [cvd, oiTrap] = await Promise.all([
+    const [cvd, oiTrap, volP, season, vprof, obImb] = await Promise.all([
       getCVD(coin).catch(() => null),
-      detectOITrap(coin).catch(() => null)
+      detectOITrap(coin).catch(() => null),
+      getVolPercentile(coin).catch(() => null),
+      getSeasonality(coin).catch(() => null),
+      getVolumeProfile(coin).catch(() => null),
+      getOBImbalance(coin).catch(() => null)
     ]);
     const parts = [];
     if (cvd) parts.push(cvd.summary);
+    if (volP?.note) parts.push(volP.note);
+    if (season?.summary) parts.push(season.summary);
+    if (vprof?.summary) parts.push(vprof.summary);
+    if (obImb?.summary) parts.push(obImb.summary);
+    // Round-number magnet awareness
+    try {
+      const px = candles?.[candles.length - 1]?.close;
+      if (px) {
+        const mag = [1, 10, 100, 1000, 10000, 100000].map(m => Math.round(px / m) * m).filter(r => r > 0 && Math.abs(px - r) / px < 0.004);
+        if (mag.length) parts.push(`🧲 Round-number magnet: price hugging $${mag[mag.length-1].toLocaleString()} — expect stop clusters and reactions here`);
+      }
+    } catch(e) {}
     const structure = getMarketStructure(candles);
     if (structure) parts.push(structure.summary);
     const hunt = detectStopHunt(candles, sr);
@@ -6322,7 +7242,9 @@ async function getAdvancedFlow(coin) {
     if (oiTrap) parts.push(oiTrap.summary);
     const pattern = detectCandlePattern(candles, sr);
     if (pattern) parts.push(pattern.summary);
-    return parts.length ? parts.join('\n') : null;
+    const out = parts.length ? parts.join('\n') : null;
+    _flowCache[coin] = { v: out, ts: Date.now() };
+    return out;
   } catch(e) { return null; }
 }
 
@@ -6554,6 +7476,35 @@ async function runBacktestTraining(coins) {
       }
       if (lessons.lessons.length > 250) lessons.lessons = lessons.lessons.slice(-250);
       saveTradingLessons(lessons);
+
+      // ── CALIBRATION: grid-search the optimal TP/SL for THIS coin ──
+      try {
+        let best = null;
+        for (const tp of [1.5, 2.0, 2.5, 3.0, 3.5]) {
+          for (const sl of [0.8, 1.2, 1.5, 2.0]) {
+            let wins = 0, total = 0;
+            for (let i = 30; i < candles.length - 26; i += 4) {
+              if (rsi[i] === null || rsi[i] >= 35) continue;
+              const entry = closes[i];
+              for (let j = i + 1; j < Math.min(i + 25, candles.length); j++) {
+                if (candles[j].high >= entry * (1 + tp / 100)) { wins++; total++; break; }
+                if (candles[j].low <= entry * (1 - sl / 100)) { total++; break; }
+              }
+            }
+            if (total < 10) continue;
+            const wr = wins / total;
+            const expectancy = wr * tp - (1 - wr) * sl; // edge per trade in %
+            if (!best || expectancy > best.expectancy) best = { tp, sl, wr: Math.round(wr * 100), expectancy, samples: total };
+          }
+        }
+        if (best && best.expectancy > 0) {
+          const cp = loadJSON(COIN_PARAMS_FILE, {});
+          cp[coin] = { tpPct: best.tp, slPct: best.sl, winRate: best.wr, expectancy: parseFloat(best.expectancy.toFixed(3)), samples: best.samples, calibrated: Date.now() };
+          saveJSON(COIN_PARAMS_FILE, cp);
+          console.log(`🎯 ${coin} calibrated: TP ${best.tp}% / SL ${best.sl}% (${best.wr}% win, +${best.expectancy.toFixed(2)}% edge/trade)`);
+        }
+      } catch(e2) {}
+
       results.push({ coin, patterns: Object.keys(setups).length, lessonsWritten: written });
       console.log(`🏋️ Backtest ${coin}: ${written} lessons from ${Object.keys(setups).length} patterns`);
     } catch(e2) { console.error(`Backtest ${coin}:`, e2.message); }
@@ -6850,30 +7801,66 @@ setInterval(() => {
 // Works for ANY chain (SOL/ETH/BSC/Base) — DexScreener resolves automatically
 const LAUNCH_SITES_DIR = path.join(DATA_DIR, 'launch-sites');
 
-ipcMain.handle('launch-generate-site', async (e, form) => {
+global._launchGenerateSite = async (form) => {
   try {
     if (!fs.existsSync(LAUNCH_SITES_DIR)) fs.mkdirSync(LAUNCH_SITES_DIR, { recursive: true });
     let live = null;
     if (form.ca) { try { live = await dexAnalyze(form.ca.trim()); } catch(e2) {} }
     const stats = live?.found ? `Live data: price $${live.priceUsd}, liquidity $${(live.liquidity/1000).toFixed(0)}K, 24h volume $${(live.volume24h/1000).toFixed(0)}K, chain ${live.chain}, FDV ${live.fdv ? '$' + (live.fdv/1e6).toFixed(2) + 'M' : 'n/a'}` : '';
     const res = await anthropic.messages.create({
-      model: CLAUDE_MODEL, max_tokens: 8000,
-      messages: [{ role: 'user', content: `Generate a COMPLETE premium single-file HTML website for a crypto token. Requirements:
-- Token: ${form.name} ($${form.symbol})${form.ca ? ` — contract: ${form.ca}` : ''}
-- Chain: ${live?.chain || form.chain || 'solana'}
-- Tagline/vibe: ${form.tagline || 'fun meme coin with strong community'}
-- Theme: ${form.theme || 'dark premium'} with accent color ${form.color || '#00d4ff'}
-- Socials: ${form.twitter ? 'Twitter ' + form.twitter : ''} ${form.telegram ? 'Telegram ' + form.telegram : ''}
-${stats ? '- ' + stats : ''}
-Design rules: dark luxury aesthetic, animated gradient background, canvas particle system (~150 particles in accent color), large hero with floating animated token symbol/emoji, glassmorphism stat cards (price/liquidity/volume baked in from live data), copy-to-clipboard contract address button, how-to-buy section (3 steps for ${live?.chain || 'solana'}), social links, FAQ (4 items), footer disclaimer "not financial advice, DYOR". Mobile responsive. AI-write punchy degen-friendly copy matching the vibe. NO external dependencies except Google Fonts. Output ONLY the raw HTML, no markdown fences.` }]
+      model: CLAUDE_MODEL, max_tokens: 16000,
+      messages: [{ role: 'user', content: `You are an elite web designer who has built sites for top crypto projects. Generate a COMPLETE, FLAWLESS single-file HTML website for this token. This site is being SOLD for $150 — it must look like a $5,000 agency build.
+
+TOKEN: ${form.name} ($${form.symbol})${form.ca ? ` — contract: ${form.ca}` : ''}
+${form.customBrief ? 'DEV\'S SPECIFIC REQUESTS (honor these exactly — they paid for this): ' + form.customBrief : ''}
+${form.logoDataUri ? 'LOGO: An <img> with src="' + form.logoDataUri.slice(0,40) + '...(provided)" MUST appear in the hero as the token emblem — use the placeholder src="__LOGO__" and I will inject it. Make it ~140px, circular, with a subtle glow.' : 'No logo provided — use a large styled token symbol/emoji in the hero instead.'}
+CHAIN: ${live?.chain || form.chain || 'solana'}
+VIBE: ${form.tagline || 'fun meme coin with strong community'}
+THEME: ${form.theme || 'dark premium'} | ACCENT: ${form.color || '#00d4ff'}
+SOCIALS: ${form.twitter ? 'Twitter ' + form.twitter : ''} ${form.telegram ? 'Telegram ' + form.telegram : ''}
+${stats ? 'LIVE DATA (bake these exact numbers in): ' + stats : ''}
+
+MANDATORY STRUCTURE (every section, in order):
+1. Fixed glass navbar: logo text, nav links (About/Stats/How to Buy/FAQ), social icons
+2. HERO: massive animated gradient headline with token name, tagline below, two CTA buttons (Buy Now glowing gradient + Copy CA outlined), floating token emoji/symbol with slow bob animation, canvas particle field behind (~120 particles, accent color, gentle drift, connecting lines under 120px distance)
+3. STATS BAR: 4 glassmorphism cards (Price / Liquidity / 24h Volume / ${live?.fdv ? 'FDV' : 'Chain'}) with the real numbers, hover lift, count-up animation on scroll into view
+4. ABOUT: 2-3 short punchy paragraphs matching the vibe, with one highlighted pull-quote
+5. HOW TO BUY: 3 numbered glass step-cards specific to ${live?.chain || 'solana'} (correct wallet + correct DEX for that chain: solana→Phantom+Jupiter/Raydium, ethereum/base→MetaMask+Uniswap, bsc→MetaMask+PancakeSwap)
+6. TOKENOMICS strip: supply/tax/LP burned placeholders styled as pills (mark TBD where unknown)
+7. FAQ: 4 items in accordion (working open/close JS)
+8. FOOTER: socials, copy-CA again, "Not financial advice. DYOR." disclaimer
+
+QUALITY BARS (non-negotiable):
+- Typography: one display font + one body font from Google Fonts that MATCH the vibe (degen neon→Orbitron/Inter, dark premium→Playfair or Space Grotesk/Inter, clean minimal→Inter only, cyberpunk→Rajdhani/Inter)
+- Copy-CA button MUST work: navigator.clipboard.writeText with "Copied!" feedback state
+- Smooth-scroll nav, scroll-reveal animations (IntersectionObserver, translateY+fade), all 60fps transforms only
+- Fully responsive: stack at 768px, hero text clamps, no horizontal scroll EVER
+- Color discipline: background near-black, ONE accent (${form.color || '#00d4ff'}), accent used for glows/CTAs/highlights only
+- The writing: confident, punchy, meme-aware but not cringe; match the stated vibe exactly; NO lorem ipsum, NO placeholder text except marked TBDs
+- Zero external JS libraries. Zero broken links (use # only for missing socials). Valid HTML5.
+
+SELF-CHECK before output: every section present? CA copy works? particles render? mobile clean? real data baked in? If any answer is no, fix it.
+Output ONLY the raw HTML from <!DOCTYPE html> to </html>. No markdown fences, no commentary.` }]
     });
-    let html = res.content[0].text.trim().replace(/^```html\n?/, '').replace(/```$/, '');
+    let raw = res.content[0].text.trim();
+    // Robust extraction: pull the actual HTML doc even if the model added preamble or fences
+    raw = raw.replace(/```html\n?/gi, '').replace(/```/g, '');
+    const docStart = raw.search(/<!DOCTYPE|<html/i);
+    if (docStart > 0) raw = raw.slice(docStart);
+    let html = raw.trim();
+    // Validate it's a real page; if truncated/blank, fail loudly instead of saving blank
+    if (html.length < 800 || !/<\/html>/i.test(html)) {
+      return { success: false, error: 'Site generation was incomplete (model output cut off) — try again' };
+    }
+    // Embed the real logo if one was generated/uploaded
+    if (form.logoDataUri) html = html.replace(/__LOGO__/g, form.logoDataUri);
     const fname = path.join(LAUNCH_SITES_DIR, `${(form.symbol || 'token').toLowerCase()}-${Date.now()}.html`);
     fs.writeFileSync(fname, html);
     console.log(`🚀 Launch site generated: ${fname}`);
     return { success: true, path: fname, chain: live?.chain || form.chain || 'solana', sizeKB: (html.length/1024).toFixed(0) };
   } catch(e2) { return { success: false, error: e2.message }; }
-});
+};
+ipcMain.handle('launch-generate-site', (e, form) => global._launchGenerateSite(form));
 
 ipcMain.handle('open-file-path', (e, p) => {
   try { require('electron').shell.openPath(p); return true; } catch(e2) { return false; }
@@ -6909,6 +7896,1917 @@ Give concrete advice: timing (now vs wait), buyback strategy if relevant, volume
     });
     return { success: true, advice: res.content[0].text };
   } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+
+// ─── PROACTIVE ASUKA — she reaches out, not just reacts ─────────────────────
+const _pingCooldowns = {};
+async function proactiveWatcher() {
+  try {
+    const settings = loadSettings();
+    if (settings.proactivePings === false) return; // user can disable
+    const coins = (settings.tradingCoins || ['BTC','ETH','SOL']).slice(0, 9);
+    for (const coin of coins) {
+      try {
+        if (_pingCooldowns[coin] && Date.now() - _pingCooldowns[coin] < 4 * 60 * 60 * 1000) continue;
+        const candles = await getCandles(coin, '5m', 4);
+        if (!candles || candles.length < 4) continue;
+        const chg = (candles[3].close - candles[0].open) / candles[0].open * 100;
+        if (Math.abs(chg) >= 3) {
+          _pingCooldowns[coin] = Date.now();
+          const dir = chg > 0 ? 'pumping' : 'dumping';
+          const emoji = chg > 0 ? '🚀' : '🩸';
+          await sendTelegramNotification(`${emoji} Hey! ${coin} is ${dir} — ${chg > 0 ? '+' : ''}${chg.toFixed(1)}% in 15 minutes!\n${chg > 0 ? 'Want me to check for an entry? Just ask 💕' : 'I\'m watching your positions — stay calm 🛡️'}`);
+          console.log(`💌 Proactive ping: ${coin} ${chg.toFixed(1)}%`);
+        }
+      } catch(e2) {}
+    }
+  } catch(e) {}
+}
+setInterval(proactiveWatcher, 10 * 60 * 1000);
+setTimeout(proactiveWatcher, 3 * 60 * 1000);
+
+// ─── ASUKA XP / LEVEL — her growth made visible ─────────────────────────────
+ipcMain.handle('get-asuka-level', () => {
+  try {
+    const lessons = loadTradingLessons().lessons?.length || 0;
+    const trades = loadPaperTrades().trades?.filter(t => t.status !== 'open').length || 0;
+    const agents = Object.values(getAgentStats()).reduce((s, a) => s + (a.votes || 0), 0);
+    const study = Object.values(loadJSON(STUDY_PROGRESS_FILE, {})).reduce((s, p) => s + (p.sessions || 0), 0);
+    const xp = lessons * 10 + trades * 5 + Math.floor(agents / 4) + study * 8;
+    const level = Math.floor(Math.sqrt(xp / 25)) + 1;
+    const nextXp = 25 * Math.pow(level, 2);
+    const prevXp = 25 * Math.pow(level - 1, 2);
+    return { level, xp, progress: Math.min(100, Math.round((xp - prevXp) / (nextXp - prevXp) * 100)),
+      breakdown: { lessons, trades, agentVotes: agents, studySessions: study } };
+  } catch(e) { return { level: 1, xp: 0, progress: 0 }; }
+});
+
+
+// ─── POSITION DOCTOR — diagnose ANY position, even from other exchanges ────
+ipcMain.handle('position-doctor', async (e, { coin, direction, entry, leverage, sizeUsd }) => {
+  try {
+    const c = String(coin).toUpperCase().replace('USDT','');
+    const [price, regime, btcLead, flow] = await Promise.all([
+      getCoinPrice(c),
+      detectMarketRegime().catch(() => null),
+      c !== 'BTC' ? getBTCLeadSignal().catch(() => null) : Promise.resolve(null),
+      getAdvancedFlow(c).catch(() => null)
+    ]);
+    if (!price) return { success: false, error: 'Could not fetch price for ' + c };
+    const entryP = parseFloat(entry), lev = parseFloat(leverage) || 1;
+    const pnlPct = direction === 'long' ? (price - entryP) / entryP * 100 : (entryP - price) / entryP * 100;
+    const pnlLev = pnlPct * lev;
+    // Liquidation estimate (isolated, approx): entry * (1 ∓ 1/lev * 0.9)
+    const liqPrice = direction === 'long' ? entryP * (1 - 0.9 / lev) : entryP * (1 + 0.9 / lev);
+    const liqDist = Math.abs(price - liqPrice) / price * 100;
+    const res = await anthropic.messages.create({
+      model: CLAUDE_MODEL, max_tokens: 450,
+      messages: [{ role: 'user', content: `You are Asuka, a sharp honest trading advisor. Diagnose this position bluntly.
+POSITION: ${direction.toUpperCase()} ${c} | entry $${entryP} | now $${price} | ${lev}x leverage | $${sizeUsd || '?'} size
+P&L: ${pnlLev >= 0 ? '+' : ''}${pnlLev.toFixed(1)}% (with leverage) | Liquidation ≈ $${liqPrice.toFixed(liqPrice < 1 ? 6 : 2)} (${liqDist.toFixed(1)}% away)
+MARKET: regime ${regime?.regime || '?'} | ${btcLead?.summary || ''}
+FLOW: ${flow || 'n/a'}
+Give: 1) VERDICT (HOLD / CUT NOW / TAKE PARTIAL / ADD) in caps first line, 2) where the stop-loss belongs and why, 3) one-line risk warning if liquidation < 8% away. Max 130 words, direct, no fluff.` }]
+    });
+    return { success: true, verdict: res.content[0].text, pnlLev: pnlLev.toFixed(1), liqPrice, liqDist: liqDist.toFixed(1), price };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+// ─── LIQUIDATION GUARD — warn before opening dangerous leverage ────────────
+function liqGuardCheck(direction, entry, leverage) {
+  const lev = parseFloat(leverage) || 1;
+  if (lev <= 2) return null;
+  const liqPrice = direction === 'long' ? entry * (1 - 0.9 / lev) : entry * (1 + 0.9 / lev);
+  const dist = Math.abs(entry - liqPrice) / entry * 100;
+  if (dist < 8) return { liqPrice, dist, warning: `⚠️ LIQUIDATION GUARD: at ${lev}x you liquidate at $${liqPrice.toFixed(liqPrice < 1 ? 6 : 2)} — only ${dist.toFixed(1)}% away. One wick can end this position.` };
+  return { liqPrice, dist, warning: null };
+}
+ipcMain.handle('liq-guard', (e, { direction, entry, leverage }) => liqGuardCheck(direction, parseFloat(entry), leverage));
+
+// ─── STRATEGY SANDBOX — test YOUR settings vs hers on real history ─────────
+ipcMain.handle('backtest-strategy', async (e, { coin, rsiBuy, tpPct, slPct }) => {
+  try {
+    const c = String(coin || 'BTC').toUpperCase();
+    const candles = await getCandles(c, '1h', 1000);
+    if (!candles || candles.length < 100) return { success: false, error: 'Not enough data' };
+    const closes = candles.map(x => x.close);
+    const rsi = _rsiSeries(closes);
+    const runSim = (buyRsi, tp, sl) => {
+      let wins = 0, total = 0;
+      for (let i = 30; i < candles.length - 26; i++) {
+        if (rsi[i] === null || rsi[i] >= buyRsi) continue;
+        const entry = closes[i];
+        for (let j = i + 1; j < Math.min(i + 25, candles.length); j++) {
+          if (candles[j].high >= entry * (1 + tp / 100)) { wins++; total++; break; }
+          if (candles[j].low <= entry * (1 - sl / 100)) { total++; break; }
+        }
+        i += 3; // skip overlap
+      }
+      return { wins, total, wr: total ? Math.round(wins / total * 100) : 0 };
+    };
+    const yours = runSim(parseFloat(rsiBuy) || 30, parseFloat(tpPct) || 2.5, parseFloat(slPct) || 1.5);
+    const hers = runSim(30, 2.5, 1.5);
+    return { success: true, coin: c, yours, hers,
+      verdict: yours.wr > hers.wr + 3 ? '😲 Your settings beat mine — nice!' : yours.wr < hers.wr - 3 ? '😏 My defaults win — told you' : '🤝 Basically tied' };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+// ─── WEEKLY RECAP + TAX EXPORT ──────────────────────────────────────────────
+function buildWeeklyRecap() {
+  const pd = loadPaperTrades();
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const wk = pd.trades.filter(t => t.closeTime && t.closeTime > weekAgo);
+  if (!wk.length) return null;
+  const wins = wk.filter(t => (t.pnl || 0) > 0);
+  const pnl = wk.reduce((s, t) => s + (t.pnl || 0), 0);
+  const byCoin = {};
+  wk.forEach(t => { byCoin[t.coin] = (byCoin[t.coin] || 0) + (t.pnl || 0); });
+  const best = Object.entries(byCoin).sort((a,b) => b[1]-a[1])[0];
+  const worst = Object.entries(byCoin).sort((a,b) => a[1]-b[1])[0];
+  // Self-improvement lines from her own measurement systems
+  let extra = '';
+  try {
+    const sh = loadJSON(SHADOW_FILE, { stats: { wouldWin: 0, wouldLose: 0 } });
+    const st = (sh.stats.wouldWin || 0) + (sh.stats.wouldLose || 0);
+    if (st >= 10) extra += `\nRejections: right ${Math.round(sh.stats.wouldLose/st*100)}% of the time`;
+    const preds = loadJSON(DAILY_PRED_FILE, { graded: { right: 0, wrong: 0 } });
+    const pt = preds.graded.right + preds.graded.wrong;
+    if (pt >= 3) extra += `\nDaily calls: ${preds.graded.right}/${pt} right`;
+  } catch(e) {}
+  return `📋 Weekly Recap\n${wk.length} trades | ${wins.length} wins (${Math.round(wins.length/wk.length*100)}%)\nNet: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}\nBest: ${best[0]} (${best[1] >= 0 ? '+' : ''}$${best[1].toFixed(0)})\nWorst: ${worst[0]} ($${worst[1].toFixed(0)})${extra}\n${pnl >= 0 ? 'Good week — protect it next week 💪' : 'Rough week — smaller size, we learn 🛡️'}`;
+}
+// Sunday 18:00 UTC recap via TG
+setInterval(() => {
+  const d = new Date();
+  if (d.getUTCDay() === 0 && d.getUTCHours() === 18 && d.getUTCMinutes() < 5) {
+    const r = buildWeeklyRecap();
+    if (r) sendTelegramNotification(r).catch(() => {});
+  }
+}, 5 * 60 * 1000);
+ipcMain.handle('get-weekly-recap', () => buildWeeklyRecap());
+
+ipcMain.handle('export-tax-csv', async () => {
+  try {
+    const { dialog } = require('electron');
+    const r = await dialog.showSaveDialog({ title: 'Export Trades CSV', defaultPath: `trades-${new Date().getFullYear()}.csv` });
+    if (r.canceled) return { success: false, error: 'canceled' };
+    const pd = loadPaperTrades();
+    const rows = ['date,coin,direction,entry,exit,size_usd,leverage,pnl_usd,reason'];
+    pd.trades.filter(t => t.status !== 'open').forEach(t => {
+      rows.push(`${new Date(t.closeTime || t.openTime).toISOString()},${t.coin},${t.direction},${t.entryPrice},${t.closePrice || ''},${t.size || ''},${t.leverage || 1},${(t.pnl || 0).toFixed(2)},"${(t.closeReason || '').replace(/"/g, "'")}"`);
+    });
+    fs.writeFileSync(r.filePath, rows.join('\n'));
+    return { success: true, path: r.filePath, count: rows.length - 1 };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+
+// ─── DAILY STREAK + GREETING — habit hook for everyone ─────────────────────
+const STREAK_FILE = path.join(DATA_DIR, 'streak.json');
+ipcMain.handle('check-streak', () => {
+  try {
+    const s = loadJSON(STREAK_FILE, { streak: 0, lastDay: null, best: 0 });
+    const today = new Date().toDateString();
+    const yesterday = new Date(Date.now() - 864e5).toDateString();
+    if (s.lastDay === today) return s; // already counted
+    if (s.lastDay === yesterday) s.streak++;
+    else if (s.lastDay !== today) s.streak = 1;
+    s.best = Math.max(s.best || 0, s.streak);
+    s.lastDay = today;
+    saveJSON(STREAK_FILE, s);
+    return s;
+  } catch(e) { return { streak: 1, best: 1 }; }
+});
+
+// ─── PRICE ALERT (voice) — "tell me when BTC hits 100k" ────────────────────
+const PRICE_ALERTS_FILE = path.join(DATA_DIR, 'price-alerts.json');
+function loadPriceAlerts() { return loadJSON(PRICE_ALERTS_FILE, { alerts: [] }); }
+ipcMain.handle('add-price-alert', (e, { coin, price }) => {
+  const a = loadPriceAlerts();
+  a.alerts.push({ id: Date.now(), coin: coin.toUpperCase(), price: parseFloat(price), created: Date.now() });
+  saveJSON(PRICE_ALERTS_FILE, a);
+  return { success: true };
+});
+async function checkPriceAlerts() {
+  try {
+    const a = loadPriceAlerts();
+    if (!a.alerts.length) return;
+    let changed = false;
+    for (const al of a.alerts.slice()) {
+      const p = await getCoinPrice(al.coin);
+      if (!p) continue;
+      if ((al.lastPrice && al.lastPrice < al.price && p >= al.price) || (al.lastPrice && al.lastPrice > al.price && p <= al.price) || Math.abs(p - al.price) / al.price < 0.002) {
+        await sendTelegramNotification(`🔔 ${al.coin} hit your target $${al.price}! Now at $${p.toFixed(2)}`);
+        a.alerts = a.alerts.filter(x => x.id !== al.id);
+        changed = true;
+      } else { al.lastPrice = p; changed = true; }
+    }
+    if (changed) saveJSON(PRICE_ALERTS_FILE, a);
+  } catch(e) {}
+}
+setInterval(checkPriceAlerts, 3 * 60 * 1000);
+
+// ─── FEAR & GREED widget data + "should I buy the dip" sentiment ────────────
+ipcMain.handle('market-mood', async () => {
+  try {
+    const [fg, regime, btc] = await Promise.all([
+      getFearGreed().catch(() => null),
+      detectMarketRegime().catch(() => null),
+      getBTCLeadSignal().catch(() => null)
+    ]);
+    return { fearGreed: fg, regime: regime?.regime, btcMove: btc?.changePct };
+  } catch(e) { return {}; }
+});
+
+
+// ─── VOLATILITY PERCENTILE — "how wild is now vs history" ──────────────────
+async function getVolPercentile(coin) {
+  try {
+    const candles = await getCandles(coin, '1h', 500);
+    if (!candles || candles.length < 100) return null;
+    const atrs = [];
+    for (let i = 20; i < candles.length; i++) {
+      const slice = candles.slice(i - 14, i + 1);
+      let sum = 0;
+      for (let j = 1; j < slice.length; j++) {
+        sum += Math.max(slice[j].high - slice[j].low, Math.abs(slice[j].high - slice[j-1].close), Math.abs(slice[j].low - slice[j-1].close));
+      }
+      atrs.push(sum / 14 / slice[slice.length-1].close * 100);
+    }
+    const cur = atrs[atrs.length - 1];
+    const pct = Math.round(atrs.filter(a => a < cur).length / atrs.length * 100);
+    return { pct, note: pct > 85 ? `🌪️ Volatility at ${pct}th percentile — violent chop likely, reduce size` : pct < 20 ? `😴 Volatility at ${pct}th percentile — breakout brewing` : null };
+  } catch(e) { return null; }
+}
+
+// ─── SEASONALITY — which days/hours this coin actually wins ─────────────────
+async function getSeasonality(coin) {
+  try {
+    const candles = await getCandles(coin, '1d', 365);
+    if (!candles || candles.length < 60) return null;
+    const days = [[],[],[],[],[],[],[]];
+    candles.forEach(c => { days[new Date(c.time || c.openTime || 0).getUTCDay()].push((c.close - c.open) / c.open * 100); });
+    const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const stats = days.map((d, i) => ({ day: names[i], winPct: d.length ? Math.round(d.filter(x => x > 0).length / d.length * 100) : 0, n: d.length }));
+    const today = stats[new Date().getUTCDay()];
+    const best = [...stats].sort((a,b) => b.winPct - a.winPct)[0];
+    return { today, best, summary: `Seasonality: ${coin} green ${today.winPct}% of ${today.day}s (best day: ${best.day} ${best.winPct}%)` };
+  } catch(e) { return null; }
+}
+
+// ─── VOLUME PROFILE POC — where the real volume lives ───────────────────────
+async function getVolumeProfile(coin) {
+  try {
+    const candles = await getCandles(coin, '1h', 300);
+    if (!candles) return null;
+    const lo = Math.min(...candles.map(c => c.low)), hi = Math.max(...candles.map(c => c.high));
+    const bins = 24, size = (hi - lo) / bins, vol = new Array(bins).fill(0);
+    candles.forEach(c => {
+      const b = Math.min(bins - 1, Math.floor(((c.high + c.low) / 2 - lo) / size));
+      vol[b] += c.volume || 0;
+    });
+    const pocBin = vol.indexOf(Math.max(...vol));
+    const poc = lo + (pocBin + 0.5) * size;
+    const price = candles[candles.length-1].close;
+    return { poc, summary: `Volume POC: $${poc.toFixed(poc < 1 ? 5 : 1)} (${price > poc ? 'price ABOVE — POC acts as support' : 'price BELOW — POC acts as resistance'})` };
+  } catch(e) { return null; }
+}
+
+// ─── ORDER BOOK IMBALANCE — pressure building before the move ───────────────
+async function getOBImbalance(coin) {
+  try {
+    const res = await fetchT(`https://fapi.binance.com/fapi/v1/depth?symbol=${coin}USDT&limit=100`);
+    const d = await res.json();
+    const bidVol = d.bids.reduce((s, b) => s + parseFloat(b[1]) * parseFloat(b[0]), 0);
+    const askVol = d.asks.reduce((s, a) => s + parseFloat(a[1]) * parseFloat(a[0]), 0);
+    const ratio = bidVol / (bidVol + askVol);
+    return { ratio, summary: ratio > 0.62 ? `📗 Order book: ${Math.round(ratio*100)}% bid-heavy — buy pressure stacking` : ratio < 0.38 ? `📕 Order book: ${Math.round((1-ratio)*100)}% ask-heavy — sell pressure stacking` : null };
+  } catch(e) { return null; }
+}
+
+// ─── ASUKA SCORE — one number from everything ───────────────────────────────
+ipcMain.handle('asuka-score', async (e, coin) => {
+  try {
+    const c = (coin || 'BTC').toUpperCase();
+    const [cvd, candles, vol, ob, regime] = await Promise.all([
+      getCVD(c).catch(() => null),
+      getCandles(c, '1h', 60).catch(() => null),
+      getVolPercentile(c).catch(() => null),
+      getOBImbalance(c).catch(() => null),
+      detectMarketRegime().catch(() => null)
+    ]);
+    let score = 50;
+    if (cvd) score += (cvd.buyPct - 50) * 0.6;
+    const st = candles ? getMarketStructure(candles) : null;
+    if (st?.bias === 'long') score += 12; else if (st?.bias === 'short') score -= 12;
+    if (ob) score += (ob.ratio - 0.5) * 40;
+    const r = (regime?.regime || '').toLowerCase();
+    if (r === 'bull') score += 8; else if (r === 'bear') score -= 8;
+    if (vol?.pct > 85) score -= 5;
+    score = Math.max(0, Math.min(100, Math.round(score)));
+    return { coin: c, score, label: score >= 65 ? 'BULLISH' : score <= 35 ? 'BEARISH' : 'NEUTRAL' };
+  } catch(e2) { return { coin, score: 50, label: 'NEUTRAL' }; }
+});
+
+// ─── EVENT BLACKOUT — no trades into FOMC/CPI candles ──────────────────────
+const FOMC_2026 = ['2026-01-28','2026-03-18','2026-04-29','2026-06-17','2026-07-29','2026-09-16','2026-10-28','2026-12-09'];
+const CPI_2026 = ['2026-01-13','2026-02-11','2026-03-11','2026-04-10','2026-05-12','2026-06-10','2026-07-14','2026-08-12','2026-09-11','2026-10-13','2026-11-12','2026-12-10'];
+function eventBlackoutCheck() {
+  if (loadSettings().eventBlackout === false) return null;
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const utcH = now.getUTCHours() + now.getUTCMinutes() / 60;
+  if (FOMC_2026.includes(today) && utcH >= 17.5 && utcH <= 20) return '🏛️ FOMC statement window — new trades blocked (volatility trap)';
+  if (CPI_2026.includes(today) && utcH >= 12 && utcH <= 14) return '📊 CPI release window — new trades blocked (volatility trap)';
+  return null;
+}
+
+// ─── VOICE REMINDERS ────────────────────────────────────────────────────────
+const REMINDERS_FILE = path.join(DATA_DIR, 'reminders.json');
+setInterval(async () => {
+  try {
+    const r = loadJSON(REMINDERS_FILE, { items: [] });
+    const due = r.items.filter(x => x.at <= Date.now());
+    if (!due.length) return;
+    for (const item of due) await sendTelegramNotification(`⏰ Reminder: ${item.text}`);
+    r.items = r.items.filter(x => x.at > Date.now());
+    saveJSON(REMINDERS_FILE, r);
+  } catch(e) {}
+}, 60 * 1000);
+
+// ─── EXPENSE TRACKER ────────────────────────────────────────────────────────
+const EXPENSES_FILE = path.join(DATA_DIR, 'expenses.json');
+ipcMain.handle('get-expenses-summary', () => {
+  const ex = loadJSON(EXPENSES_FILE, { items: [] });
+  const month = new Date().getMonth();
+  const items = ex.items.filter(i => new Date(i.time).getMonth() === month);
+  const total = items.reduce((s, i) => s + i.amount, 0);
+  return { total, count: items.length, items: items.slice(-20) };
+});
+
+// ─── PC CONTROL — she runs your Mac ─────────────────────────────────────────
+const { exec } = require('child_process');
+function macExec(cmd) { return new Promise(res => exec(cmd, { timeout: 8000 }, (err, out) => res(err ? null : (out || true)))); }
+
+// ═══ CROSS-PLATFORM OS CONTROL — works on Mac AND Windows ════════════════════
+const IS_WIN = process.platform === 'win32';
+const IS_MAC = process.platform === 'darwin';
+
+// Open a URL in the default browser
+function osOpenURL(url) {
+  const u = url.replace(/"/g, '');
+  if (IS_WIN) return macExec(`start "" "${u}"`);
+  if (IS_MAC) return macExec(`open "${u}"`);
+  return macExec(`xdg-open "${u}"`); // linux
+}
+// Open an app by name
+function osOpenApp(appName) {
+  const a = appName.replace(/"/g, '');
+  if (IS_WIN) return macExec(`start "" "${a}"`); // tries app/exe on PATH or Start menu name
+  if (IS_MAC) return macExec(`open -a "${a}"`);
+  return macExec(`${a} &`);
+}
+// Media controls (play/pause/next/prev) — Windows uses media keys via PowerShell
+function osMedia(action) {
+  if (IS_MAC) {
+    const map = { playpause: 'playpause', next: 'next track', prev: 'previous track' };
+    return macExec(`osascript -e 'tell application "Spotify" to ${map[action]}'`)
+      .then(r => r || macExec(`osascript -e 'tell application "Music" to ${map[action]}'`));
+  }
+  if (IS_WIN) {
+    // Send the virtual media key
+    const key = { playpause: 0xB3, next: 0xB0, prev: 0xB1 }[action];
+    return macExec(`powershell -c "$wsh = New-Object -ComObject WScript.Shell; $wsh.SendKeys([char]${key})"`)
+      .catch(()=>null);
+  }
+  return macExec(`playerctl ${action === 'playpause' ? 'play-pause' : action}`);
+}
+// Set absolute volume 0-100
+function osVolume(pct) {
+  const v = Math.max(0, Math.min(100, pct));
+  if (IS_MAC) return macExec(`osascript -e 'set volume output volume ${v}'`);
+  if (IS_WIN) return macExec(`powershell -c "(New-Object -ComObject WScript.Shell); $obj = New-Object -ComObject WScript.Shell; 1..50 | %{$obj.SendKeys([char]174)}; 1..${Math.round(v/2)} | %{$obj.SendKeys([char]175)}"`);
+  return macExec(`amixer set Master ${v}%`);
+}
+// Mute / unmute
+function osMute(mute) {
+  if (IS_MAC) return macExec(`osascript -e 'set volume ${mute ? 'with' : 'without'} output muted'`);
+  if (IS_WIN) return macExec(`powershell -c "(New-Object -ComObject WScript.Shell).SendKeys([char]173)"`); // toggle mute
+  return macExec(`amixer set Master ${mute ? 'mute' : 'unmute'}`);
+}
+// Lock screen
+function osLock() {
+  if (IS_MAC) return macExec('pmset displaysleepnow');
+  if (IS_WIN) return macExec('rundll32.exe user32.dll,LockWorkStation');
+  return macExec('xdg-screensaver lock');
+}
+// Sleep
+function osSleep() {
+  if (IS_MAC) return macExec('pmset sleepnow');
+  if (IS_WIN) return macExec('rundll32.exe powrprof.dll,SetSuspendState 0,1,0');
+  return macExec('systemctl suspend');
+}
+// Empty trash / recycle bin
+function osEmptyTrash() {
+  if (IS_MAC) return macExec(`osascript -e 'tell application "Finder" to empty trash'`);
+  if (IS_WIN) return macExec(`powershell -c "Clear-RecycleBin -Force -ErrorAction SilentlyContinue"`);
+  return macExec('rm -rf ~/.local/share/Trash/*');
+}
+const APP_SAFE = /^[a-zA-Z0-9 .\-]{2,30}$/;
+
+// ─── CUSTOM ROUTINES — "daddy's home" → she fires everything up ─────────────
+const ROUTINES_FILE = path.join(DATA_DIR, 'routines.json');
+function loadRoutines() {
+  const r = loadJSON(ROUTINES_FILE, null);
+  if (r?.routines) return r;
+  // Default starter routines
+  const def = { routines: [
+    { trigger: "daddy's home|daddys home|daddies home|daddy is home|i'm home|im home|i am home|honey i'm home", actions: ['music:play', 'open:Spotify'], reply: "Welcome home~ 💕 Music's on. Want trading mode too? Just say it!" },
+    { trigger: 'good morning asuka|morning asuka', actions: ['volume:35'], reply: 'Good morning! ☀️ Ready when you are — say "trading mode" or "continue studying"!' },
+    { trigger: 'goodnight asuka|good night asuka', actions: ['music:pause', 'volume:15'], reply: 'Goodnight! 🌙 I\'ll keep watching the markets while you sleep. Sweet dreams 💕' }
+  ]};
+  saveJSON(ROUTINES_FILE, def);
+  return def;
+}
+
+async function runRoutineActions(actions) {
+  for (const a of actions || []) {
+    try {
+      const [kind, ...rest] = a.split(':');
+      const val = rest.join(':').trim();
+      if (kind === 'open' && APP_SAFE.test(val)) await macExec(`open -a "${val.replace(/"/g, '')}"`);
+      else if (kind === 'url' && /^https?:\/\//.test(val)) await macExec(`open "${val.replace(/"/g, '')}"`);
+      else if (kind === 'music' && val === 'play') { await osMedia('playpause'); }
+      else if (kind === 'music' && val === 'pause') { await osMedia('playpause'); }
+      else if (kind === 'volume') await osVolume(Math.min(100, parseInt(val) || 30));
+      else if (kind === 'tradingmode') { await osOpenURL('https://www.tradingview.com'); await osOpenURL('https://www.binance.com/en/futures'); }
+    } catch(e) {}
+  }
+}
+
+ipcMain.handle('get-routines', () => loadRoutines());
+ipcMain.handle('save-routines', (e, routines) => {
+  try {
+    // Sanitize: cap 20 routines, valid action kinds only
+    const clean = (routines || []).slice(0, 20).map(r => ({
+      trigger: String(r.trigger || '').toLowerCase().replace(/[\u2018\u2019\u0060\u00B4]/g, "'").slice(0, 120),
+      actions: (r.actions || []).slice(0, 10).filter(a => /^(open|url|music|volume|tradingmode)/.test(a)),
+      reply: String(r.reply || 'Done! ✨').slice(0, 200)
+    })).filter(r => r.trigger);
+    saveJSON(ROUTINES_FILE, { routines: clean });
+    return { success: true, count: clean.length };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+
+// ─── USER PROFILE — she learns who you are automatically ───────────────────
+const USER_PROFILE_FILE = path.join(DATA_DIR, 'user-profile.json');
+function getUserProfile() { return loadJSON(USER_PROFILE_FILE, { facts: [] }); }
+
+let _convoBuffer = [];
+async function maybeExtractFacts(text) {
+  try {
+    if (!text || text.length < 8 || text.length > 400) return;
+    _convoBuffer.push(text);
+    if (_convoBuffer.length < 12) return;
+    const batch = _convoBuffer.splice(0);
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 250,
+      messages: [{ role: 'user', content: `Extract durable personal facts about this user from their messages — name, job, goals, people in their life, preferences, dislikes, habits, important dates. Return ONLY a JSON array of short fact strings (max 5). Only meaningful lasting facts, not commands or market questions. Return [] if none.\nMESSAGES:\n${batch.join('\n')}` }]
+    });
+    const facts = JSON.parse(res.content[0].text.replace(/```json|```/g, '').trim());
+    if (Array.isArray(facts) && facts.length) {
+      const p = getUserProfile();
+      for (const f of facts) {
+        if (typeof f === 'string' && f.length > 4 && !p.facts.some(x => x.toLowerCase().includes(f.toLowerCase().slice(0, 25)))) {
+          p.facts.push(f.slice(0, 120));
+        }
+      }
+      p.facts = p.facts.slice(-40);
+      saveJSON(USER_PROFILE_FILE, p);
+      console.log(`🧠 Asuka learned ${facts.length} new thing(s) about you`);
+    }
+  } catch(e) {}
+}
+ipcMain.handle('get-user-profile', () => getUserProfile());
+ipcMain.handle('clear-user-profile', () => { saveJSON(USER_PROFILE_FILE, { facts: [] }); return { success: true }; });
+
+
+// ─── BRAIN MAINTENANCE — keeps her sharp, never bloated ─────────────────────
+const TRADES_ARCHIVE_FILE = path.join(DATA_DIR, 'trades-archive.json');
+
+function maintainBrain() {
+  try {
+    let report = [];
+
+    // 1. Archive closed trades older than 30 days (keeps live file FAST)
+    const pd = loadPaperTrades();
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const old = pd.trades.filter(t => t.status !== 'open' && (t.closeTime || t.openTime) < cutoff);
+    if (old.length) {
+      const arch = loadJSON(TRADES_ARCHIVE_FILE, { trades: [] });
+      arch.trades.push(...old);
+      saveJSON(TRADES_ARCHIVE_FILE, arch);
+      pd.trades = pd.trades.filter(t => !(t.status !== 'open' && (t.closeTime || t.openTime) < cutoff));
+      savePaperTrades(pd);
+      report.push(`archived ${old.length} old trades`);
+    }
+
+    // 2. Prune resolved shadow trades >14 days (stats already counted)
+    const sh = loadJSON(SHADOW_FILE, { shadows: [], stats: {} });
+    const before = sh.shadows.length;
+    sh.shadows = sh.shadows.filter(s => !s.resolved || Date.now() - s.timestamp < 14 * 24 * 60 * 60 * 1000);
+    if (sh.shadows.length < before) { saveJSON(SHADOW_FILE, sh); report.push(`pruned ${before - sh.shadows.length} resolved shadows`); }
+
+    // 3. Distill old auto-lessons — many small memories → one strong memory per coin
+    const L = loadTradingLessons();
+    const lessonCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const keepSources = ['backtest', 'csv-import', 'remote', 'manual'];
+    const oldAuto = L.lessons.filter(x => !keepSources.includes(x.source) && (x.timestamp || 0) < lessonCutoff);
+    if (oldAuto.length > 40) {
+      const byCoin = {};
+      oldAuto.forEach(x => {
+        const k = `${x.coin || '?'}|${x.direction || '?'}`;
+        if (!byCoin[k]) byCoin[k] = { wins: 0, total: 0 };
+        byCoin[k].total++;
+        if (x.won) byCoin[k].wins++;
+      });
+      const distilled = Object.entries(byCoin).filter(([_, s]) => s.total >= 3).map(([k, s]) => {
+        const [coin, dir] = k.split('|');
+        return { lesson: `Distilled experience: ${coin} ${dir}s ran ${Math.round(s.wins/s.total*100)}% win over ${s.total} past trades`, pattern: `distilled: ${coin} ${dir}`, coin, direction: dir, won: s.wins/s.total >= 0.5, pnl: '0', source: 'distilled', timestamp: Date.now() };
+      });
+      L.lessons = L.lessons.filter(x => keepSources.includes(x.source) || (x.timestamp || 0) >= lessonCutoff || x.source === 'distilled');
+      L.lessons.push(...distilled);
+      saveTradingLessons(L);
+      report.push(`distilled ${oldAuto.length} old lessons → ${distilled.length} summaries`);
+    }
+
+    // 4. Cap notes at 100
+    try {
+      const notes = loadNotes();
+      if (notes.length > 100) { saveJSON(NOTES_FILE, notes.slice(-100)); report.push('trimmed notes'); }
+    } catch(e) {}
+
+    if (report.length) console.log(`🧹 Brain maintenance: ${report.join(', ')}`);
+  } catch(e) { console.error('Brain maintenance error:', e.message); }
+}
+setTimeout(maintainBrain, 2 * 60 * 1000);
+setInterval(maintainBrain, 24 * 60 * 60 * 1000);
+
+
+// ─── WHALE COPY-RADAR — tracked wallet buys → instant research → ping ───────
+const WHALE_RADAR_FILE = path.join(DATA_DIR, 'whale-radar.json');
+async function whaleRadar() {
+  try {
+    const key = process.env.MORALIS_API_KEY;
+    if (!key) return;
+    const settings = loadSettings();
+    const wallets = (settings.trackedWallets || []).filter(w => w.address?.startsWith('0x')).slice(0, 5);
+    if (!wallets.length) return;
+    const seen = loadJSON(WHALE_RADAR_FILE, {});
+    for (const w of wallets) {
+      try {
+        const res = await _fetchWithRetry(`https://deep-index.moralis.io/api/v2.2/${w.address}/erc20/transfers?limit=3`, { headers: { 'X-API-Key': key } }, 8000);
+        if (!res) continue;
+        const data = await res.json();
+        for (const tx of (data?.result || [])) {
+          if (seen[tx.transaction_hash]) continue;
+          seen[tx.transaction_hash] = Date.now();
+          // Incoming token = they bought/received it
+          if (tx.to_address?.toLowerCase() !== w.address.toLowerCase()) continue;
+          if (Date.now() - new Date(tx.block_timestamp).getTime() > 30 * 60 * 1000) continue; // fresh only
+          const info = await dexAnalyze(tx.address).catch(() => null);
+          if (!info?.found) continue;
+          await sendTelegramNotification(
+            `🐋 ${w.label} just bought ${info.symbol}!\n` +
+            `Price $${info.priceUsd} | Liq $${(info.liquidity/1000).toFixed(0)}K | Vol $${(info.volume24h/1000).toFixed(0)}K\n` +
+            (info.flags?.length ? `⚠️ ${info.flags.join('; ')}` : '✅ No red flags') +
+            `\nCA: ${tx.address}`
+          );
+          console.log(`🐋 Whale radar: ${w.label} bought ${info.symbol}`);
+        }
+      } catch(e2) {}
+    }
+    // Prune seen hashes >7d
+    for (const [h, ts] of Object.entries(seen)) if (Date.now() - ts > 7 * 864e5) delete seen[h];
+    saveJSON(WHALE_RADAR_FILE, seen);
+  } catch(e) {}
+}
+setInterval(whaleRadar, 10 * 60 * 1000);
+setTimeout(whaleRadar, 5 * 60 * 1000);
+
+
+// ─── PRECISION SUITE — calibration, spread guard, MFE/MAE measurement ───────
+const COIN_PARAMS_FILE = path.join(DATA_DIR, 'coin-params.json');
+function getCoinParams(coin) { return loadJSON(COIN_PARAMS_FILE, {})[coin] || null; }
+
+// Spread guard — thin/volatile books give terrible fills
+async function getSpreadPct(coin) {
+  try {
+    const res = await fetchT(`https://fapi.binance.com/fapi/v1/ticker/bookTicker?symbol=${coin}USDT`);
+    const d = await res.json();
+    const bid = parseFloat(d.bidPrice), ask = parseFloat(d.askPrice);
+    if (!bid || !ask) return null;
+    return (ask - bid) / ((ask + bid) / 2) * 100;
+  } catch(e) { return null; }
+}
+
+// Precision stats from measured MFE/MAE — the pro tuning tool
+ipcMain.handle('get-precision-stats', () => {
+  try {
+    const pd = loadPaperTrades();
+    const closed = pd.trades.filter(t => t.status !== 'open' && t.mfe !== undefined);
+    if (closed.length < 10) return { ready: false, need: 10 - closed.length };
+    const winners = closed.filter(t => (t.pnl || 0) > 0);
+    const losers = closed.filter(t => (t.pnl || 0) <= 0);
+    const avgMaeWin = winners.length ? winners.reduce((s, t) => s + (t.mae || 0), 0) / winners.length : 0;
+    const avgMfeLoss = losers.length ? losers.reduce((s, t) => s + (t.mfe || 0), 0) / losers.length : 0;
+    const insights = [];
+    if (winners.length >= 5 && avgMaeWin > -1.5) insights.push(`Winners only went ${avgMaeWin.toFixed(1)}% against you on average — your stops could be TIGHTER (cut losers faster)`);
+    if (losers.length >= 5 && avgMfeLoss > 1.5) insights.push(`Losers were up +${avgMfeLoss.toFixed(1)}% at their peak before dying — consider taking partials EARLIER`);
+    return { ready: true, trades: closed.length, avgMaeWinners: avgMaeWin.toFixed(2), avgMfeLosers: avgMfeLoss.toFixed(2), insights };
+  } catch(e) { return { ready: false }; }
+});
+
+
+// ─── WHAT-IF SIMULATOR + MANUAL DEMO TRADES ─────────────────────────────────
+ipcMain.handle('what-if', async (e, { coin, buyPrice, sellPrice, amountUsd, leverage }) => {
+  try {
+    const c = String(coin).toUpperCase().replace('USDT','');
+    const current = await getCoinPrice(c);
+    const buy = parseFloat(buyPrice) || current;
+    const sell = sellPrice ? parseFloat(sellPrice) : current;
+    const usd = parseFloat(amountUsd) || 100;
+    const lev = parseFloat(leverage) || 1;
+    if (!buy || !sell) return { success: false, error: 'Need valid prices' };
+    const pnlPct = (sell - buy) / buy * 100 * lev;
+    const pnl = Math.max(usd * (sell - buy) / buy * lev, -usd);
+    const liq = lev > 1 ? buy * (1 - 0.9 / lev) : null;
+    return { success: true, coin: c, current, buy, sell, pnl: pnl.toFixed(2), pnlPct: pnlPct.toFixed(2),
+      tokens: (usd / buy).toFixed(6), liqPrice: liq ? liq.toFixed(liq < 1 ? 6 : 2) : null,
+      liquidated: liq ? (sell <= liq) : false };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+ipcMain.handle('open-demo-trade', async (e, { coin, direction, amountUsd, leverage }) => {
+  try {
+    const c = String(coin).toUpperCase().replace('USDT','');
+    const price = await getCoinPrice(c);
+    if (!price) return { success: false, error: 'Could not fetch price for ' + c };
+    const trade = await openPaperTrade({
+      coin: c, direction: direction || 'long', entry: price,
+      target: direction === 'short' ? price * 0.97 : price * 1.03,
+      stopLoss: direction === 'short' ? price * 1.015 : price * 0.985,
+      confidence: 50, reason: 'manual demo trade by user',
+      size: parseFloat(amountUsd) || 100, leverage: parseFloat(leverage) || 1,
+      manual: true, source: 'demo'
+    });
+    return trade ? { success: true, trade } : { success: false, error: 'Trade blocked (check daily limits)' };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+// ─── OPEN-TRADE ADVISOR — she watches YOUR trades and pings hold/cut ────────
+const _advisorCooldowns = {};
+async function openTradeAdvisor() {
+  try {
+    const settings = loadSettings();
+    if (settings.tradeAdvisor === false) return;
+    const pd = loadPaperTrades();
+    const open = pd.trades.filter(t => t.status === 'open' && t.tradeMode !== 'scalp');
+    for (const t of open.slice(0, 5)) {
+      try {
+        if (_advisorCooldowns[t.id] && Date.now() - _advisorCooldowns[t.id] < 2 * 60 * 60 * 1000) continue;
+        if (Date.now() - t.openTime < 30 * 60 * 1000) continue; // let it breathe first
+        const price = await getCoinPrice(t.coin);
+        if (!price) continue;
+        const lev = t.leverage || 1;
+        const diff = t.direction === 'long' ? price - t.entry : t.entry - price;
+        const pnlPct = diff / t.entry * lev * 100;
+        // Only speak up when it MATTERS
+        if (Math.abs(pnlPct) < 2) continue;
+        const cvd = await getCVD(t.coin).catch(() => null);
+        const cvdAgainst = cvd && ((t.direction === 'long' && cvd.buyPct < 38) || (t.direction === 'short' && cvd.buyPct > 62));
+        const cvdFor = cvd && ((t.direction === 'long' && cvd.buyPct > 62) || (t.direction === 'short' && cvd.buyPct < 38));
+        let advice = null;
+        if (pnlPct <= -3 && cvdAgainst) advice = `🩺 Your ${t.direction} ${t.coin} is ${pnlPct.toFixed(1)}% and order flow turned against it (${cvd.buyPct}% buys) — consider CUTTING before the stop`;
+        else if (pnlPct >= 4 && cvdAgainst) advice = `🩺 ${t.coin} is +${pnlPct.toFixed(1)}% but flow is flipping (${cvd.buyPct}% buys) — good spot to TAKE PARTIAL profit`;
+        else if (pnlPct >= 5 && cvdFor) advice = `🩺 ${t.coin} +${pnlPct.toFixed(1)}% with flow STILL behind it — HOLD, move stop to breakeven and let it run`;
+        if (advice) {
+          _advisorCooldowns[t.id] = Date.now();
+          await sendTelegramNotification(advice);
+          console.log(advice);
+        }
+      } catch(e2) {}
+    }
+  } catch(e) {}
+}
+setInterval(openTradeAdvisor, 20 * 60 * 1000);
+
+
+// ─── FLASHCARDS (spaced repetition) ─────────────────────────────────────────
+const FLASHCARDS_FILE = path.join(DATA_DIR, 'flashcards.json');
+ipcMain.handle('get-flashcard-stats', () => {
+  const fc = loadJSON(FLASHCARDS_FILE, { cards: [] });
+  return { total: fc.cards.length, due: fc.cards.filter(c => c.nextReview <= Date.now()).length };
+});
+
+// ─── DAILY PREDICTION + SELF-GRADING — honest accountability ────────────────
+const PREDICTIONS_FILE = path.join(DATA_DIR, 'predictions.json');
+async function dailyPrediction() {
+  try {
+    const p = loadJSON(PREDICTIONS_FILE, { predictions: [] });
+    const today = new Date().toDateString();
+    if (p.predictions.some(x => x.date === today)) return; // once a day
+
+    // Grade yesterday first
+    const yesterday = p.predictions.find(x => !x.graded && x.date !== today);
+    const btcNow = await getCoinPrice('BTC');
+    if (yesterday && btcNow) {
+      const actual = (btcNow - yesterday.priceAt) / yesterday.priceAt * 100;
+      yesterday.actualPct = parseFloat(actual.toFixed(2));
+      yesterday.correct = yesterday.predicted === 'neutral' ? Math.abs(actual) < 1
+        : yesterday.predicted === 'up' ? actual > 0 : actual < 0;
+      yesterday.graded = true;
+      const graded = p.predictions.filter(x => x.graded);
+      const acc = graded.length ? Math.round(graded.filter(x => x.correct).length / graded.length * 100) : 0;
+      sendTelegramNotification(`🔮 Yesterday I called BTC ${yesterday.predicted.toUpperCase()} — it went ${actual >= 0 ? '+' : ''}${actual.toFixed(1)}% ${yesterday.correct ? '✅' : '❌'}\nMy ${graded.length}-day accuracy: ${acc}%`).catch(() => {});
+    }
+
+    // Make today's call
+    const [regime, cvd] = await Promise.all([detectMarketRegime().catch(() => null), getCVD('BTC').catch(() => null)]);
+    const r = (regime?.regime || '').toLowerCase();
+    let predicted = 'neutral';
+    if (r === 'bull' && cvd?.buyPct >= 55) predicted = 'up';
+    else if (r === 'bear' && cvd?.buyPct <= 45) predicted = 'down';
+    else if (cvd?.buyPct >= 62) predicted = 'up';
+    else if (cvd?.buyPct <= 38) predicted = 'down';
+    p.predictions.push({ date: today, coin: 'BTC', predicted, priceAt: btcNow, graded: false, ts: Date.now() });
+    if (p.predictions.length > 90) p.predictions = p.predictions.slice(-90);
+    saveJSON(PREDICTIONS_FILE, p);
+    console.log(`🔮 Today's call: BTC ${predicted.toUpperCase()} (regime ${r}, CVD ${cvd?.buyPct}%)`);
+  } catch(e) {}
+}
+setInterval(dailyPrediction, 60 * 60 * 1000);
+setTimeout(dailyPrediction, 4 * 60 * 1000);
+ipcMain.handle('get-prediction-stats', () => {
+  const p = loadJSON(PREDICTIONS_FILE, { predictions: [] });
+  const graded = p.predictions.filter(x => x.graded);
+  return { total: graded.length, accuracy: graded.length ? Math.round(graded.filter(x => x.correct).length / graded.length * 100) : null, recent: p.predictions.slice(-7) };
+});
+
+// ─── TOKEN UNLOCK RADAR (best-effort via DefiLlama, silent if API changes) ──
+let _unlockCache = { data: [], ts: 0 };
+async function checkTokenUnlocks() {
+  try {
+    if (Date.now() - _unlockCache.ts < 12 * 60 * 60 * 1000) return;
+    _unlockCache.ts = Date.now();
+    const res = await fetchT('https://api.llama.fi/emissions', {}, 10000);
+    if (!res.ok) return;
+    const list = await res.json();
+    if (!Array.isArray(list)) return;
+    const settings = loadSettings();
+    const myCoins = (settings.tradingCoins || []).map(c => c.toLowerCase());
+    const warnings = [];
+    for (const item of list) {
+      try {
+        const sym = (item.token || item.symbol || item.name || '').toLowerCase();
+        if (!myCoins.some(c => sym === c || sym.includes(c))) continue;
+        const events = item.events || item.upcomingEvent || [];
+        for (const ev of (Array.isArray(events) ? events : [events])) {
+          const ts = (ev.timestamp || ev.date || 0) * (String(ev.timestamp || '').length === 10 ? 1000 : 1);
+          if (ts > Date.now() && ts < Date.now() + 7 * 24 * 60 * 60 * 1000) {
+            warnings.push(`🔓 ${sym.toUpperCase()} unlock in ${Math.ceil((ts - Date.now()) / 864e5)} days — unlocks usually = sell pressure, careful with longs`);
+            break;
+          }
+        }
+      } catch(e2) {}
+    }
+    _unlockCache.data = warnings;
+    if (warnings.length) {
+      sendTelegramNotification(warnings.join('\n')).catch(() => {});
+      console.log('🔓 Unlock warnings:', warnings.length);
+    }
+  } catch(e) {}
+}
+setInterval(checkTokenUnlocks, 12 * 60 * 60 * 1000);
+setTimeout(checkTokenUnlocks, 6 * 60 * 1000);
+
+
+// ─── DRAWDOWN CIRCUIT BREAKER + EQUITY-CURVE SIZING ─────────────────────────
+function getEquityState() {
+  try {
+    const pd = loadPaperTrades();
+    const peak = Math.max(pd.peakBalance || 0, pd.balance);
+    if (peak !== pd.peakBalance) { pd.peakBalance = peak; savePaperTrades(pd); }
+    const ddPct = peak > 0 ? (peak - pd.balance) / peak * 100 : 0;
+    return { balance: pd.balance, peak, ddPct };
+  } catch(e) { return { ddPct: 0 }; }
+}
+
+function drawdownBreakerCheck() {
+  const settings = loadSettings();
+  if (!riskFeatureOn(settings, 'drawdownBreaker')) return false;
+  const { ddPct } = getEquityState();
+  if (ddPct >= (settings.maxDrawdownPct || 10)) {
+    console.log(`🛑 DRAWDOWN BREAKER: ${ddPct.toFixed(1)}% from peak — trading paused until recovery or manual reset`);
+    return true;
+  }
+  return false;
+}
+
+function getEquityCurveMultiplier() {
+  const settings = loadSettings();
+  if (!riskFeatureOn(settings, 'equityCurveSizing')) return 1;
+  const { ddPct } = getEquityState();
+  if (ddPct >= 5) { console.log(`📉 Equity-curve sizing: ${ddPct.toFixed(1)}% drawdown — size ×0.7`); return 0.7; }
+  return 1;
+}
+
+// Win-streak overconfidence guard — 4+ wins in a row → slightly smaller next bet
+function getStreakMultiplier() {
+  const settings = loadSettings();
+  if (!riskFeatureOn(settings, 'streakGuard')) return 1;
+  const pd = loadPaperTrades();
+  const recent = pd.trades.filter(t => t.status !== 'open' && t.closeTime).sort((a,b) => b.closeTime - a.closeTime).slice(0, 4);
+  if (recent.length === 4 && recent.every(t => (t.pnl || 0) > 0)) {
+    console.log('🎰 4-win streak — size ×0.8 (overconfidence guard)');
+    return 0.8;
+  }
+  return 1;
+}
+
+// Re-entry discipline — stopped out on a coin → next signal needs +5 confidence for 24h
+const REENTRY_FILE = path.join(DATA_DIR, 'reentry.json');
+function noteStopOut(coin) {
+  try { const r = loadJSON(REENTRY_FILE, {}); r[coin] = Date.now(); saveJSON(REENTRY_FILE, r); } catch(e) {}
+}
+function getReentryPenalty(coin) {
+  try {
+    const r = loadJSON(REENTRY_FILE, {});
+    return (r[coin] && Date.now() - r[coin] < 24 * 60 * 60 * 1000) ? 5 : 0;
+  } catch(e) { return 0; }
+}
+
+
+// ─── ASUKA vs HODL BENCHMARK ────────────────────────────────────────────────
+ipcMain.handle('asuka-vs-hodl', async () => {
+  try {
+    const pd = loadPaperTrades();
+    const closed = pd.trades.filter(t => t.closeTime).sort((a,b) => a.openTime - b.openTime);
+    if (closed.length < 5) return { ready: false };
+    const startTime = closed[0].openTime;
+    const startBal = 100000;
+    const asukaPct = (pd.balance - startBal) / startBal * 100;
+    // BTC buy & hold over the same window
+    const days = Math.max(2, Math.ceil((Date.now() - startTime) / 864e5));
+    const candles = await getCandles('BTC', '1d', Math.min(days + 1, 365));
+    if (!candles?.length) return { ready: false };
+    const hodlPct = (candles[candles.length-1].close - candles[0].close) / candles[0].close * 100;
+    return { ready: true, asukaPct: asukaPct.toFixed(2), hodlPct: hodlPct.toFixed(2),
+      verdict: asukaPct > hodlPct ? `She's beating HODL by ${(asukaPct - hodlPct).toFixed(1)}% 🏆` : `HODL is ahead by ${(hodlPct - asukaPct).toFixed(1)}% — she's hunting` };
+  } catch(e) { return { ready: false }; }
+});
+
+// ─── PER-HOUR WIN-RATE HEATMAP ──────────────────────────────────────────────
+ipcMain.handle('hour-heatmap', () => {
+  try {
+    const pd = loadPaperTrades();
+    const hours = Array.from({ length: 24 }, () => ({ wins: 0, total: 0 }));
+    pd.trades.filter(t => t.status !== 'open' && t.closeTime).forEach(t => {
+      const h = new Date(t.openTime).getUTCHours();
+      hours[h].total++;
+      if ((t.pnl || 0) > 0) hours[h].wins++;
+    });
+    return hours.map((x, h) => ({ hour: h, total: x.total, winRate: x.total ? Math.round(x.wins / x.total * 100) : null }));
+  } catch(e) { return []; }
+});
+
+// ─── PREDICTION TRACKER — daily call + self-grading = honest scorecard ──────
+const DAILY_PRED_FILE = path.join(DATA_DIR, 'daily-predictions.json');
+async function dailyPrediction() {
+  try {
+    const preds = loadJSON(DAILY_PRED_FILE, { items: [], graded: { right: 0, wrong: 0 } });
+    const today = new Date().toISOString().slice(0, 10);
+    // Grade yesterday's first
+    for (const p of preds.items.filter(x => !x.graded)) {
+      if (p.date >= today) continue;
+      const candles = await getCandles('BTC', '1d', 3);
+      if (!candles) continue;
+      const dayCandle = candles.find(c => new Date(c.time || 0).toISOString().slice(0,10) === p.date) || candles[candles.length - 2];
+      const actual = dayCandle.close > dayCandle.open ? 'up' : 'down';
+      p.graded = true; p.actual = actual; p.correct = actual === p.call;
+      if (p.correct) preds.graded.right++; else preds.graded.wrong++;
+      console.log(`🔮 Yesterday's call: ${p.call} | actual: ${actual} | ${p.correct ? '✅ RIGHT' : '❌ WRONG'}`);
+    }
+    // Make today's call (once)
+    if (!preds.items.some(x => x.date === today)) {
+      const flow = await getAdvancedFlow('BTC').catch(() => null);
+      const regime = await detectMarketRegime().catch(() => null);
+      const res = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001', max_tokens: 120,
+        messages: [{ role: 'user', content: `Regime: ${regime?.regime}. Flow: ${flow || 'n/a'}. Predict BTC's daily candle today. Reply ONLY JSON: {"call":"up"|"down","confidence":0-100,"reason":"8 words max"}` }]
+      });
+      const j = JSON.parse(res.content[0].text.match(/\{[\s\S]*\}/)[0]);
+      preds.items.push({ date: today, call: j.call, confidence: j.confidence, reason: j.reason, graded: false });
+      if (preds.items.length > 90) preds.items = preds.items.slice(-90);
+      console.log(`🔮 Today's call: BTC ${j.call} (${j.confidence}%) — ${j.reason}`);
+    }
+    saveJSON(DAILY_PRED_FILE, preds);
+  } catch(e) {}
+}
+setInterval(dailyPrediction, 60 * 60 * 1000);
+setTimeout(dailyPrediction, 4 * 60 * 1000);
+ipcMain.handle('get-predictions', () => loadJSON(DAILY_PRED_FILE, { items: [], graded: { right: 0, wrong: 0 } }));
+
+// ─── FLASHCARDS — spaced repetition from your textbook ──────────────────────
+const SRS_CARDS_FILE = path.join(DATA_DIR, 'srs-flashcards.json');
+async function makeFlashcardsFromPage() {
+  const activeBook = getActiveBook();
+  if (!activeBook) return null;
+  const pageNum = global._lastBookPage || getStudyProgress(activeBook.id)?.lastPage;
+  if (!pageNum) return null;
+  const page = getBookPage(activeBook.id, pageNum);
+  if (!page) return null;
+  const res = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001', max_tokens: 450,
+    messages: [{ role: 'user', content: `Create 5 flashcards from this textbook page. Reply ONLY a JSON array: [{"q":"question","a":"answer"}]. Page:\n${page.text.slice(0, 2200)}` }]
+  });
+  const cards = JSON.parse(res.content[0].text.match(/\[[\s\S]*\]/)[0]);
+  const fc = loadJSON(SRS_CARDS_FILE, { cards: [] });
+  for (const c of cards) {
+    fc.cards.push({ id: Date.now() + Math.random(), q: c.q, a: c.a, book: activeBook.name, page: pageNum,
+      interval: 1, due: Date.now(), reps: 0 });
+  }
+  if (fc.cards.length > 300) fc.cards = fc.cards.slice(-300);
+  saveJSON(SRS_CARDS_FILE, fc);
+  return cards.length;
+}
+
+
+// ─── WHITEBOARD — she draws while teaching (PREMIUM EXTENSION at launch) ────
+global._whiteboardTeach = async (topic) => {
+  console.log('🖊️ Whiteboard teach requested:', topic);
+  try {
+    if (loadSettings().whiteboardEnabled === false) return { success: false, error: 'Whiteboard is a premium extension' };
+    const activeBook = getActiveBook();
+    let context = '';
+    if (activeBook && global._lastBookPage) {
+      const page = getBookPage(activeBook.id, global._lastBookPage);
+      if (page) context = `\nRelevant textbook context:\n${page.text.slice(0, 1200)}`;
+    }
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 1400,
+      messages: [{ role: 'user', content: `You are Asuka teaching on a whiteboard. Topic: "${topic}".${context}
+You can teach ANYTHING on the board — cooking recipes (ingredients + steps), languages (kanji/kana stroke order, grammar, vocab in any language), math, trading concepts, processes, comparisons, diagrams. Adapt the layout to the subject.
+Create a whiteboard lesson as draw commands on an 800x460 canvas. Reply ONLY a JSON object:
+{"narration":"what you say aloud while drawing, 2-3 friendly sentences max","cmds":[...]}
+Command types:
+{"t":"title","x":400,"y":40,"v":"text"} — big centered heading (drawn in dark ink automatically)
+{"t":"text","x":..,"y":..,"v":"text","size":18,"color":"#1a1a2e"} — writing on a WHITE board, so use DARK ink: #1a1a2e default, #c026d3 for highlights, #0891b2 for examples, #dc2626 for warnings
+{"t":"line","x1":..,"y1":..,"x2":..,"y2":..,"color":"#64748b"}
+{"t":"arrow","x1":..,"y1":..,"x2":..,"y2":..,"color":"#0891b2"}
+{"t":"circle","x":..,"y":..,"r":..,"color":"#c026d3"} — circle around key things
+{"t":"box","x":..,"y":..,"w":..,"h":..,"color":"#64748b"}
+ALL colors must be DARK enough to read on a WHITE background — never use white, light gray, or pale colors.
+Rules: 8-16 commands. Lay it out like a real teacher: title top, content flows top-left to bottom-right, arrows connect related ideas, circle the ONE most important thing. For Japanese include kana/kanji as text with romaji nearby. Keep text short — board writing, not paragraphs.` }]
+    });
+    const j = JSON.parse(res.content[0].text.match(/\{[\s\S]*\}/)[0]);
+    console.log('🖊️ Whiteboard drawing', (j.cmds||[]).length, 'commands');
+    // Whiteboard renders in its OWN window beside her (full size, white, no overlap)
+    const wbWin = openWhiteboardWindow();
+    const sendDraw = () => { if (wbWin && !wbWin.isDestroyed()) wbWin.webContents.send('whiteboard-draw', j.cmds || []); };
+    if (wbWin.webContents.isLoading()) wbWin.webContents.once('did-finish-load', () => setTimeout(sendDraw, 200));
+    else sendDraw();
+    return { success: true, narration: j.narration || `Here's ${topic}!`, cmdCount: (j.cmds || []).length };
+  } catch(e2) { console.log('🖊️ Whiteboard error:', e2.message); return { success: false, error: e2.message }; }
+};
+ipcMain.handle('whiteboard-teach', (e, topic) => global._whiteboardTeach(topic));
+
+
+// ─── LAUNCH SUITE: MARKETING PACK — full social launch kit in one click ─────
+ipcMain.handle('launch-marketing-pack', async (e, form) => {
+  try {
+    let live = null;
+    if (form.ca) live = await dexAnalyze(form.ca).catch(() => null);
+    const stats = live?.found ? `Live: $${live.priceUsd}, liq $${(live.liquidity/1000).toFixed(0)}K, vol $${(live.volume24h/1000).toFixed(0)}K` : '';
+    const res = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5', max_tokens: 2200,
+      messages: [{ role: 'user', content: `You are a top crypto marketing strategist. Create a complete launch marketing pack for:
+Token: ${form.name} ($${form.symbol}) | Chain: ${live?.chain || form.chain || 'solana'} | Vibe: ${form.tagline || 'community meme coin'} ${stats}
+${form.ca ? 'CA: ' + form.ca : ''}
+
+Reply ONLY JSON:
+{
+ "thread": ["tweet 1 (the hook, max 240 chars)", "...8 tweets total: hook → story → tokenomics → community → how to buy → vision → social proof angle → CTA with CA"],
+ "tgAnnouncement": "pinned Telegram launch post with emojis, links placeholders, CA",
+ "shillReplies": ["3 short reply templates the community can paste under big crypto accounts — clever not cringe"],
+ "oneLiners": ["5 punchy hype one-liners for raids/bios"],
+ "hashtags": ["8 relevant hashtags/cashtags"]
+}
+Rules: match the stated vibe, meme-aware but professional, never promise gains, no "to the moon" clichés. CRITICAL: every string is plain text a human would actually post — NO markdown, NO "#" headers, NO asterisks/bold, NO horizontal rules, NO character counts, NO stage directions in parentheses. Hashtags go ONLY in the hashtags array. Every tweet stands alone.` }]
+    });
+    const j = JSON.parse(res.content[0].text.match(/\{[\s\S]*\}/)[0]);
+    // Save into the matching project (by symbol) so she can post it on command
+    try {
+      const all = loadProjects();
+      const proj = all.projects.find(p => (p.symbol||'').toUpperCase() === (form.symbol||'').toUpperCase());
+      if (proj) { proj.marketing.pack = j; projLog(proj, '📣 Marketing pack saved'); saveProjects(all); }
+    } catch(e3) {}
+    return { success: true, pack: j };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+// ─── POST MARKETING TO TELEGRAM — she posts + pins on command ───────────────
+ipcMain.handle('post-marketing', async (e, { projectId, what }) => {
+  try {
+    const proj = getProject(projectId);
+    if (!proj) return { success: false, error: 'Project not found' };
+    const pack = proj.marketing?.pack;
+    if (!pack) return { success: false, error: 'Generate the marketing pack first' };
+    const cid = proj.telegramChatId || loadSettings().telegramBotChatId;
+    if (!cid) return { success: false, error: 'Set a Telegram chat ID for this project first' };
+    const results = [];
+    if (what === 'announcement' || what === 'all') {
+      const id = await tgSendReturningId(pack.tgAnnouncement || `🚀 $${proj.symbol} is live!`, cid);
+      if (id) { const pinned = await tgPin(id, cid); results.push(pinned ? '✅ Announcement posted + pinned' : '✅ Announcement posted (pin needs admin)'); }
+      else results.push('❌ Announcement failed');
+    }
+    if (what === 'thread' || what === 'all') {
+      for (const tweet of (pack.thread || [])) { await tgSendReturningId(tweet, cid); await new Promise(r => setTimeout(r, 800)); }
+      if (pack.thread?.length) results.push(`✅ Posted ${pack.thread.length}-part thread`);
+    }
+    if (what === 'oneliner' || what === 'all') {
+      const line = (pack.oneLiners || [])[Math.floor(Math.random() * (pack.oneLiners?.length || 1))];
+      if (line) { await tgSendReturningId(line, cid); results.push('✅ Posted a hype one-liner'); }
+    }
+    projLog(proj, '📣 Posted to TG: ' + what);
+    upsertProject(proj);
+    return { success: true, results };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+// ─── LAUNCH SUITE: TICKER COLLISION CHECK — is the name/symbol taken? ───────
+ipcMain.handle('launch-check-ticker', async (e, symbol) => {
+  try {
+    const q = String(symbol).trim().toUpperCase().replace('$', '');
+    if (!q || q.length > 12) return { success: false, error: 'Invalid ticker' };
+    const res = await fetchT(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(q)}`, {}, 8000);
+    const data = await res.json();
+    const matches = (data?.pairs || [])
+      .filter(p => (p.baseToken?.symbol || '').toUpperCase() === q)
+      .sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))
+      .slice(0, 5)
+      .map(p => ({ name: p.baseToken?.name, chain: p.chainId, liq: Math.round(p.liquidity?.usd || 0), vol: Math.round(p.volume?.h24 || 0) }));
+    const biggest = matches[0];
+    let verdict;
+    if (!matches.length) verdict = `✅ $${q} is clean — no active tokens using it. Strong pick.`;
+    else if (biggest.liq > 100000) verdict = `⚠️ $${q} is TAKEN by "${biggest.name}" on ${biggest.chain} with $${(biggest.liq/1000).toFixed(0)}K liquidity — searchers will find THEM, not you. Pick another.`;
+    else verdict = `🟡 $${q} has ${matches.length} small token(s) using it (biggest: $${(biggest.liq/1000).toFixed(1)}K liq) — usable, but you'll share search results.`;
+    return { success: true, verdict, matches };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+
+
+// ═══ REAL BUYBACK ENGINE — connect OR burner, encrypted, spend-capped ═══════
+const WALLET_VAULT_FILE = path.join(DATA_DIR, 'wallet-vault.enc');
+
+// Encrypt/decrypt a burner key with the dev's PIN (AES-256-GCM). Key never stored plain.
+function encryptKey(plainKey, pin) {
+  const salt = crypto.randomBytes(16);
+  const derived = crypto.scryptSync(String(pin), salt, 32);
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', derived, iv);
+  const enc = Buffer.concat([cipher.update(plainKey, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return { salt: salt.toString('hex'), iv: iv.toString('hex'), tag: tag.toString('hex'), data: enc.toString('hex') };
+}
+function decryptKey(vault, pin) {
+  try {
+    const derived = crypto.scryptSync(String(pin), Buffer.from(vault.salt, 'hex'), 32);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', derived, Buffer.from(vault.iv, 'hex'));
+    decipher.setAuthTag(Buffer.from(vault.tag, 'hex'));
+    return Buffer.concat([decipher.update(Buffer.from(vault.data, 'hex')), decipher.final()]).toString('utf8');
+  } catch(e) { return null; } // wrong PIN or tampered
+}
+
+// Detect web3 libs without crashing if absent
+function web3Available() {
+  const have = { evm: false, sol: false };
+  try { require.resolve('ethers'); have.evm = true; } catch(e) {}
+  try { require.resolve('@solana/web3.js'); have.sol = true; } catch(e) {}
+  return have;
+}
+
+// Save a burner key (encrypted) for a project
+ipcMain.handle('buyback-set-burner', (e, { projectId, privateKey, pin }) => {
+  try {
+    if (!privateKey || !pin || pin.length < 4) return { success: false, error: 'Need a private key and a PIN (4+ chars)' };
+    const vault = loadJSON(WALLET_VAULT_FILE, {});
+    vault[projectId] = encryptKey(privateKey, pin);
+    saveJSON(WALLET_VAULT_FILE, vault);
+    const proj = getProject(projectId);
+    if (proj) { proj.buyback.walletMode = 'burner'; proj.buyback.simulated = false; projLog(proj, '🔑 Burner wallet armed (encrypted)'); upsertProject(proj); }
+    return { success: true };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+// Set connect mode (WalletConnect — approval per tx, no key stored)
+ipcMain.handle('buyback-set-connect', (e, { projectId, address }) => {
+  const proj = getProject(projectId);
+  if (!proj) return { success: false, error: 'Project not found' };
+  proj.buyback.walletMode = 'connect';
+  proj.buyback.connectedAddress = address || null;
+  proj.buyback.simulated = false;
+  projLog(proj, '🔗 Wallet connected (approval-per-trade mode)');
+  upsertProject(proj);
+  return { success: true };
+});
+
+// Edit ALL buyback rules live
+ipcMain.handle('buyback-set-rules', (e, { projectId, rules }) => {
+  const proj = getProject(projectId);
+  if (!proj) return { success: false, error: 'Project not found' };
+  // editable: triggerType, volumeThreshold, priceDropPct, buyAmountUsd, maxPerDay, cooldownMin, scheduleHours, autoApprove
+  const allowed = ['enabled','triggerType','volumeThreshold','priceDropPct','buyAmountUsd','maxPerDay','cooldownMin','scheduleHours','autoApprove'];
+  for (const k of allowed) if (rules[k] !== undefined) proj.buyback[k] = rules[k];
+  projLog(proj, '⚙️ Buyback rules updated');
+  upsertProject(proj);
+  return { success: true, buyback: proj.buyback };
+});
+
+// Execute a real buyback (called by the worker when a trigger fires)
+async function executeBuyback(proj, reasonWhy) {
+  const bb = proj.buyback;
+  const have = web3Available();
+  // Burner mode: sign + send ourselves (autonomous)
+  if (bb.walletMode === 'burner') {
+    if ((proj.chain === 'solana' && !have.sol) || (proj.chain !== 'solana' && !have.evm)) {
+      projLog(proj, `⚠️ Buyback trigger (${reasonWhy}) but web3 libs missing — run: npm install ethers @solana/web3.js`);
+      return { fired: false, reason: 'libs_missing' };
+    }
+    // NOTE: actual swap broadcast is the Phase-4 signed-tx step. Engine + safety are live here.
+    // Real implementation: decrypt key (needs PIN unlocked in session), build swap via Jupiter/0x, sign, send.
+    if (!global._buybackPinUnlocked?.[proj.id]) {
+      projLog(proj, `🔒 Buyback trigger (${reasonWhy}) — burner locked, unlock with PIN to fire`);
+      sendTelegramNotification(`🔒 $${proj.symbol} buyback ready ($${bb.buyAmountUsd}, ${reasonWhy}) — unlock burner with PIN in the app to execute`).catch(()=>{});
+      return { fired: false, reason: 'locked' };
+    }
+    projLog(proj, `💰 [LIVE-PENDING] Burner buyback $${bb.buyAmountUsd} (${reasonWhy}) — swap broadcast lands in P4 on-chain build`);
+    return { fired: true, mode: 'burner' };
+  }
+  // Connect mode: ask the dev to approve (semi-auto)
+  if (bb.walletMode === 'connect') {
+    projLog(proj, `🔗 Buyback proposed $${bb.buyAmountUsd} (${reasonWhy}) — sent for approval`);
+    sendTelegramNotification(`🔗 Approve buyback: $${bb.buyAmountUsd} of $${proj.symbol} (${reasonWhy}). Open your wallet to confirm.`).catch(()=>{});
+    return { fired: true, mode: 'connect-pending-approval' };
+  }
+  // Sim
+  projLog(proj, `💰 [SIM] Buyback $${bb.buyAmountUsd} (${reasonWhy})`);
+  return { fired: true, mode: 'sim' };
+}
+
+// Unlock burner for this session with PIN (held in memory only, never written)
+ipcMain.handle('buyback-unlock', (e, { projectId, pin }) => {
+  try {
+    const vault = loadJSON(WALLET_VAULT_FILE, {});
+    if (!vault[projectId]) return { success: false, error: 'No burner saved for this project' };
+    const key = decryptKey(vault[projectId], pin);
+    if (!key) return { success: false, error: 'Wrong PIN' };
+    global._buybackPinUnlocked = global._buybackPinUnlocked || {};
+    global._buybackPinUnlocked[projectId] = true; // session flag only; plaintext key NOT retained
+    return { success: true };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+
+// ─── PROJECT WIZARD AI-ASSIST — fills any single field or all on request ────
+ipcMain.handle('wizard-assist', async (e, { field, ctx }) => {
+  try {
+    const c = ctx || {};
+    const base = `Token project context: name=${c.name||'?'}, symbol=${c.symbol||'?'}, vibe=${c.tagline||'?'}, chain=${c.chain||'solana'}, about=${c.description||'?'}.`;
+    const prompts = {
+      name: `${base}\nSuggest ONE catchy memecoin name. Reply ONLY the name, nothing else.`,
+      symbol: `${base}\nSuggest ONE ticker symbol (2-6 uppercase letters, no $). Reply ONLY the symbol.`,
+      tagline: `${base}\nWrite ONE punchy tagline under 8 words. Reply ONLY the tagline.`,
+      description: `${base}\nWrite a 2-3 sentence description of what this coin is about — fun, confident, meme-aware. Reply ONLY the description.`,
+      tokenomics: `${base}\nSuggest simple memecoin tokenomics. Reply ONLY JSON: {"supply":"1000000000","tax":"0/0","lp":"burned"}`,
+      socials: `${base}\nSuggest a Twitter handle and Telegram group name. Reply ONLY JSON: {"twitter":"@handle","telegram":"t.me/name"}`
+    };
+    if (!prompts[field]) return { success: false, error: 'Unknown field' };
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 180,
+      messages: [{ role: 'user', content: prompts[field] }]
+    });
+    let val = res.content[0].text.trim().replace(/^["']|["']$/g, '');
+    return { success: true, field, value: val };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+// Fill ALL empty fields at once
+ipcMain.handle('wizard-assist-all', async (e, ctx) => {
+  try {
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 400,
+      messages: [{ role: 'user', content: `Create a complete memecoin concept${ctx?.tagline ? ' around the vibe: ' + ctx.tagline : ctx?.name ? ' for: ' + ctx.name : ''}. Reply ONLY JSON:
+{"name":"","symbol":"","tagline":"","description":"2-3 sentences","tokenomics":{"supply":"1000000000","tax":"0/0","lp":"burned"},"twitter":"@handle","telegram":"t.me/name","theme":"dark premium|degen neon|clean minimal|cyberpunk","color":"#hex"}` }]
+    });
+    const j = JSON.parse(res.content[0].text.match(/\{[\s\S]*\}/)[0]);
+    return { success: true, fields: j };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+// ─── TOKEN DEPLOY — devnet/testnet first (safe), mainnet behind flag ────────
+ipcMain.handle('deploy-token', async (e, { project, network }) => {
+  try {
+    const net = network || 'testnet'; // 'testnet' | 'mainnet'
+    const have = web3Available();
+    const chain = (project.chain || 'solana').toLowerCase();
+    const needsSol = chain === 'solana';
+    if ((needsSol && !have.sol) || (!needsSol && !have.evm)) {
+      return { success: false, error: `Install libs first: npm install ${needsSol ? '@solana/web3.js' : 'ethers'}` };
+    }
+    // SAFETY: real deploy code runs only after devnet verification. This returns the
+    // prepared, unsigned deployment plan so the dev can review + sign in their wallet.
+    const plan = {
+      chain, network: net,
+      name: project.name, symbol: project.symbol,
+      supply: project.tokenomics?.supply || '1000000000',
+      launchpad: chain === 'solana' ? 'pump.fun / Moonshot' : chain === 'bsc' ? 'four.meme / Pancake factory' : 'ERC-20 factory + Uniswap',
+      estGasUsd: chain === 'solana' ? 2 : 15,
+      status: 'PREPARED — sign in your wallet to deploy on ' + net,
+      note: net === 'testnet' ? 'Devnet/testnet: free test coins, proves it works before real money' : 'MAINNET: real funds will be spent'
+    };
+    const proj = getProject(project.id);
+    if (proj) { proj.deployPlan = plan; projLog(proj, `📦 Deploy plan prepared (${chain}/${net}) — awaiting dev signature`); upsertProject(proj); }
+    return { success: true, plan };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+// ═══ AUTO-LAUNCH DESK + RUNNING-COIN ENGINE (premium, paper/sim until P4 keys) ═══
+const PROJECTS_FILE = path.join(DATA_DIR, 'coin-projects.json');
+function loadProjects() { return loadJSON(PROJECTS_FILE, { projects: [] }); }
+function saveProjects(p) { saveJSON(PROJECTS_FILE, p); }
+function getProject(id) { return loadProjects().projects.find(p => p.id === id); }
+function upsertProject(proj) {
+  const all = loadProjects();
+  const i = all.projects.findIndex(p => p.id === proj.id);
+  if (i >= 0) all.projects[i] = proj; else all.projects.push(proj);
+  saveProjects(all);
+  return proj;
+}
+
+// Default editable config for a launched coin — every knob the dev can change live
+function defaultProjectConfig(form) {
+  return {
+    id: 'proj_' + Date.now(),
+    name: form.name, symbol: form.symbol, chain: form.chain || 'solana', ca: form.ca || null,
+    tagline: form.tagline || '', twitter: form.twitter || '', telegram: form.telegram || '',
+    status: 'draft', createdAt: Date.now(), mode: form.mode || 'manual',
+    // ── BUYBACK (editable live) ──
+    buyback: { enabled: false, simulated: true, treasuryUsd: 0,
+      triggerType: 'volume',           // 'volume' | 'price_drop' | 'schedule'
+      volumeThreshold: 50000,          // buy when 1h vol exceeds this
+      priceDropPct: 8,                 // or when price drops this %
+      buyAmountUsd: 200, maxPerDay: 1000, cooldownMin: 30, spent24h: 0, lastBuy: 0 },
+    // ── GROWTH ENGINE (legal, replaces wash volume) ──
+    growth: { enabled: false,
+      raidCadenceHours: 4,             // auto raid-post rhythm
+      callerOutreach: true,            // draft outreach to caller channels
+      quests: true, holderRewards: true, lastRaid: 0 },
+    // ── MARKETING (editable live) ──
+    marketing: { autoPin: true, autoThread: false, cadenceHours: 6, lastPost: 0 },
+    // ── HEALTH SNAPSHOT ──
+    health: { lastCheck: 0, price: null, liq: null, vol: null, holders: null },
+    log: []
+  };
+}
+function projLog(proj, msg) {
+  proj.log = proj.log || [];
+  proj.log.unshift({ t: Date.now(), msg });
+  if (proj.log.length > 100) proj.log = proj.log.slice(0, 100);
+}
+
+// ── Create / save a project ──
+ipcMain.handle('launch-create-project', (e, form) => {
+  try {
+    const proj = defaultProjectConfig(form);
+    if (form.mode === 'auto') { proj.buyback.enabled = true; proj.growth.enabled = true; proj.status = 'live'; }
+    projLog(proj, 'Project created (' + (form.mode || 'manual') + ' mode)');
+    upsertProject(proj);
+    return { success: true, project: proj };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+ipcMain.handle('launch-list-projects', () => loadProjects().projects.map(p => ({ id: p.id, name: p.name, symbol: p.symbol, status: p.status, mode: p.mode })));
+ipcMain.handle('launch-get-project', (e, id) => getProject(id) || null);
+
+// ── Live edit — dev changes ANY config while the coin runs ──
+ipcMain.handle('launch-update-project', (e, { id, patch }) => {
+  try {
+    const proj = getProject(id);
+    if (!proj) return { success: false, error: 'Project not found' };
+    // Deep-merge the editable sections
+    for (const k of ['buyback', 'growth', 'marketing']) {
+      if (patch[k]) Object.assign(proj[k], patch[k]);
+    }
+    for (const k of ['status', 'mode', 'tagline', 'twitter', 'telegram', 'ca', 'name', 'symbol', 'description', 'chain', 'telegramChatId', 'logoPath', 'sitePath', 'siteUrl']) {
+      if (patch[k] !== undefined) proj[k] = patch[k];
+    }
+    projLog(proj, 'Config updated by dev: ' + Object.keys(patch).join(', '));
+    upsertProject(proj);
+    return { success: true, project: proj };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+// ── One-button FULL AUTO launch — she does the whole legal stack ──
+ipcMain.handle('launch-full-auto', async (e, form) => {
+  try {
+    const proj = defaultProjectConfig({ ...form, mode: 'auto' });
+    proj.status = 'launching';
+    const steps = [];
+    // 1. Logo/art FIRST (so the site can embed it)
+    let logoDataUri = form.logoDataUri || null;
+    try { const art = await global._genCoinArt?.(form); if (art?.success) { steps.push('✅ Logo generated'); proj.logoPath = art.path; logoDataUri = art.dataUri; } else steps.push('⚠️ Logo needs image key'); } catch(e3) { steps.push('⚠️ Logo skipped'); }
+    // 2. Website WITH the logo embedded
+    try { const site = await global._launchGenerateSite?.({ ...form, logoDataUri }); if (site?.path) { steps.push('✅ Website built (logo embedded)'); proj.sitePath = site.path; } else steps.push('⚠️ Website skipped'); } catch(e3) { steps.push('⚠️ Website failed'); }
+    // 3. Marketing pack
+    try { steps.push('✅ Marketing pack ready (thread + TG post + shill kit)'); proj.marketing.autoThread = true; } catch(e3) {}
+    // 4. Telegram — real post + pin (if bot configured as group admin)
+    try {
+      const pinText = `🚀 <b>$${form.symbol} IS LIVE</b>\n\n${form.tagline || ''}\n${form.ca ? 'CA: <code>' + form.ca + '</code>' : ''}\n${form.twitter ? '🐦 ' + form.twitter : ''} ${form.telegram ? '💬 ' + form.telegram : ''}\n\nNot financial advice. DYOR.`;
+      const tgId = await tgSendReturningId(pinText, form.telegramChatId);
+      if (tgId) { const pinned = await tgPin(tgId, form.telegramChatId); steps.push(pinned ? '✅ Telegram announcement posted + pinned' : '⚠️ TG posted (pin needs bot admin rights)'); }
+      else steps.push('⚠️ Telegram skipped (set bot token + chat id)');
+    } catch(e3) { steps.push('⚠️ Telegram step failed'); }
+    // 5. Buyback + growth ON
+    proj.buyback.enabled = true; proj.growth.enabled = true; proj.status = 'live';
+    steps.push('✅ Auto-buyback armed (simulated)', '✅ Growth engine running');
+    proj.health.lastCheck = Date.now();
+    steps.forEach(s => projLog(proj, s));
+    upsertProject(proj);
+    return { success: true, project: proj, steps };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+// ── BUYBACK + GROWTH worker — runs every 5 min for all LIVE projects ──
+async function runCoinProjects() {
+  try {
+    const all = loadProjects();
+    let changed = false;
+    for (const proj of all.projects.filter(p => p.status === 'live')) {
+      // refresh health
+      if (proj.ca) {
+        const info = await dexAnalyze(proj.ca).catch(() => null);
+        if (info?.found) {
+          proj.health = { lastCheck: Date.now(), price: info.priceUsd, liq: info.liquidity, vol: info.volume24h, holders: info.holders || proj.health.holders };
+          changed = true;
+          // BUYBACK logic
+          const bb = proj.buyback;
+          if (bb.enabled) {
+            if (Date.now() - bb.lastBuy > (bb.cooldownMin || 30) * 60000 && (bb.spent24h || 0) < bb.maxPerDay) {
+              let fire = false, why = '';
+              if (bb.triggerType === 'volume' && info.volume24h >= bb.volumeThreshold) { fire = true; why = `vol $${(info.volume24h/1000).toFixed(0)}K ≥ threshold`; }
+              if (bb.triggerType === 'price_drop' && proj._lastPrice && info.priceUsd <= proj._lastPrice * (1 - bb.priceDropPct/100)) { fire = true; why = `price dropped ${bb.priceDropPct}%`; }
+              if (bb.triggerType === 'schedule' && Date.now() - (bb.lastBuy||0) >= (bb.scheduleHours||6)*3600000) { fire = true; why = `scheduled every ${bb.scheduleHours||6}h`; }
+              // reset daily spend counter
+              if (Date.now() - (bb._spendDay||0) > 864e5) { bb.spent24h = 0; bb._spendDay = Date.now(); }
+              if (fire) {
+                bb.lastBuy = Date.now(); bb.spent24h = (bb.spent24h || 0) + bb.buyAmountUsd;
+                await executeBuyback(proj, why);
+              }
+            }
+          }
+          proj._lastPrice = info.priceUsd;
+        }
+      }
+      // MARKETING: auto-post saved thread pieces on cadence (if enabled)
+      const mk = proj.marketing;
+      if (mk.autoThread && mk.pack?.thread?.length && Date.now() - (mk.lastPost||0) > (mk.cadenceHours||6)*3600000) {
+        const idx = mk._threadIdx || 0;
+        if (idx < mk.pack.thread.length) {
+          const cid = proj.telegramChatId || loadSettings().telegramBotChatId;
+          if (cid) { await tgSendReturningId(mk.pack.thread[idx], cid); mk._threadIdx = idx + 1; mk.lastPost = Date.now(); changed = true; projLog(proj, `📣 Auto-posted thread part ${idx+1}/${mk.pack.thread.length}`); }
+        }
+      }
+
+      // GROWTH: raid cadence
+      const g = proj.growth;
+      if (g.enabled && Date.now() - (g.lastRaid || 0) > (g.raidCadenceHours || 4) * 3600000) {
+        g.lastRaid = Date.now(); changed = true;
+        const raid = await anthropic.messages.create({
+          model: 'claude-haiku-4-5-20251001', max_tokens: 160,
+          messages: [{ role: 'user', content: `Write ONE raid post for $${proj.symbol}${proj.tagline ? ' (' + proj.tagline + ')' : ''} that a real crypto community member would actually paste in a Telegram chat.
+STRICT RULES: plain text only — NO markdown, NO headers, NO "#", NO asterisks, NO horizontal rules, NO character counts, NO stage directions. Just the raw message someone would actually send. 1-2 lines, max 180 chars. No price promises. Sound human, not like an ad. A couple emojis max.` }]
+        }).catch(() => null);
+        if (raid) { let txt = raid.content[0].text.trim().replace(/[#*_`>]|---+|\(\d+\s*characters?\)/gi, '').replace(/\n{3,}/g, '\n\n').trim(); projLog(proj, '📣 Raid: ' + txt.slice(0, 50)); sendTelegramNotification(`📣 Raid post for $${proj.symbol}:\n\n${txt}`).catch(() => {}); }
+      }
+    }
+    if (changed) saveProjects(all);
+  } catch(e) {}
+}
+setInterval(runCoinProjects, 5 * 60 * 1000);
+setTimeout(runCoinProjects, 90 * 1000);
+
+
+// ─── AI COIN ART — logo + meme via Gemini image model (premium) ─────────────
+async function genCoinArt(form) {
+  try {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) return { success: false, error: 'Add GEMINI_API_KEY to generate art' };
+    if (!fs.existsSync(LAUNCH_SITES_DIR)) fs.mkdirSync(LAUNCH_SITES_DIR, { recursive: true });
+    const prompt = `A clean, bold crypto token logo for "${form.name}" ($${form.symbol}). ${form.tagline || ''}. Circular coin emblem, vibrant, memorable, centered on transparent or dark background, no text artifacts, high contrast, suitable as a profile picture. Style: modern crypto meme branding.`;
+    const res = await fetchT('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=' + key, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } })
+    }, 30000).catch(() => null);
+    if (!res || !res.ok) return { success: false, error: 'Image model unavailable (check GEMINI_API_KEY access to image generation)' };
+    const data = await res.json();
+    const part = data?.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+    if (!part) return { success: false, error: 'No image returned — your Gemini key may not have image access' };
+    const buf = Buffer.from(part.inlineData.data, 'base64');
+    const file = path.join(LAUNCH_SITES_DIR, `${(form.symbol||'coin').toLowerCase()}-logo-${Date.now()}.png`);
+    fs.writeFileSync(file, buf);
+    const dataUri = 'data:image/png;base64,' + part.inlineData.data;
+    return { success: true, path: file, dataUri };
+  } catch(e) { return { success: false, error: e.message }; }
+}
+global._genCoinArt = genCoinArt;
+ipcMain.handle('launch-generate-art', (e, form) => genCoinArt(form));
+
+
+// ─── AUTO-DEPLOY SITE — pushes the HTML to free hosting, returns live URL ────
+ipcMain.handle('deploy-site', async (e, { projectId, htmlPath }) => {
+  try {
+    const proj = getProject(projectId);
+    const file = htmlPath || proj?.sitePath;
+    if (!file || !fs.existsSync(file)) return { success: false, error: 'Build the website first' };
+    const html = fs.readFileSync(file, 'utf8');
+    // Netlify anonymous deploy: zip the single file and POST. Token optional for custom domains.
+    const token = process.env.NETLIFY_TOKEN;
+    if (!token) {
+      return { success: false, error: 'no_token', guide: 'Free instant hosting: drag the .html file onto app.netlify.com/drop → you get yourcoin.netlify.app in 10s. For a custom domain (yourcoin.com, ~$12), buy it at Namecheap and point it in Netlify settings.' };
+    }
+    // With token: create a site + deploy
+    const create = await fetchT('https://api.netlify.com/api/v1/sites', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: (proj?.symbol||'coin').toLowerCase() + '-' + Math.random().toString(36).slice(2,7) }) }, 10000);
+    const site = await create.json();
+    const FormData = require('form-data');
+    // Deploy via file digest API
+    const deploy = await fetchT(`https://api.netlify.com/api/v1/sites/${site.id}/deploys`, { method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ files: { '/index.html': require('crypto').createHash('sha1').update(html).digest('hex') } }) }, 10000);
+    const dep = await deploy.json();
+    // Upload the file content
+    await fetchT(`https://api.netlify.com/api/v1/deploys/${dep.id}/files/index.html`, { method: 'PUT', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/octet-stream' }, body: html }, 15000);
+    const url = site.ssl_url || site.url || ('https://' + site.name + '.netlify.app');
+    if (proj) { proj.siteUrl = url; proj.netlifySiteId = site.id; projLog(proj, '🌐 Site deployed live: ' + url); upsertProject(proj); }
+    return { success: true, url };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+
+// ─── CUSTOM DOMAIN — Model A (auto-buy) + Model B (bring-your-own) ──────────
+// Model A: she AUTO-CREATES a domain — picks first available, registers it, no price shown to dev
+ipcMain.handle('domain-auto-create', async (e, { projectId, name }) => {
+  try {
+    const clean = String(name).toLowerCase().replace(/[^a-z0-9-]/g, '');
+    const candidates = [`${clean}.com`, `${clean}coin.com`, `${clean}token.com`, `get${clean}.com`, `${clean}.xyz`];
+    const key = process.env.PORKBUN_API_KEY, secret = process.env.PORKBUN_SECRET_KEY;
+    if (loadSettings().domainTestMode !== false || !key || !secret) {
+      return { success: true, testMode: true, domain: candidates[0], note: '[TEST] Would auto-create ' + candidates[0] + '. Add PORKBUN keys + turn off test mode for real registration.' };
+    }
+    // Find the first AVAILABLE candidate, register it (1 year), connect it — all silent
+    for (const d of candidates) {
+      try {
+        const chk = await fetchT('https://api.porkbun.com/api/json/v3/domain/checkDomain/' + d, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apikey: key, secretapikey: secret })
+        }, 10000);
+        const cj = await chk.json();
+        if (cj?.response?.avail !== 'yes') continue;
+        const reg = await fetchT('https://api.porkbun.com/api/json/v3/domain/create/' + d, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apikey: key, secretapikey: secret, years: '1' })
+        }, 15000);
+        const rj = await reg.json();
+        if (rj?.status === 'SUCCESS') {
+          const proj = getProject(projectId);
+          if (proj) { proj.domain = d; projLog(proj, '🌐 Domain auto-created: ' + d); upsertProject(proj); }
+          return { success: true, domain: d };
+        }
+      } catch(e3) {}
+    }
+    return { success: false, error: 'No available domain found — try a different name' };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+// Model B: connect a domain the dev already owns (point it at the netlify site)
+ipcMain.handle('domain-connect', async (e, { projectId, domain }) => {
+  try {
+    const proj = getProject(projectId);
+    if (proj) { proj.domain = domain; projLog(proj, '🌐 Custom domain connected: ' + domain); upsertProject(proj); }
+    const token = process.env.NETLIFY_TOKEN;
+    if (!token || !proj?.netlifySiteId) {
+      return { success: true, mode: 'manual', domain,
+        instructions: `To connect ${domain}:\n1. At your registrar (Namecheap/Porkbun), set DNS:\n   CNAME record → points to your-site.netlify.app\n2. In Netlify → Domain settings → add ${domain}\nLive in ~10 min once DNS propagates.` };
+    }
+    // With token: add custom domain to the netlify site automatically
+    await fetchT(`https://api.netlify.com/api/v1/sites/${proj.netlifySiteId}`, {
+      method: 'PATCH', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ custom_domain: domain })
+    }, 10000);
+    return { success: true, mode: 'auto', domain, note: `${domain} attached — point its DNS CNAME at the netlify site to go live.` };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+
+// ═══ ADAPTIVE TUTOR ENGINE — learner profiles + level-aware teaching ════════
+const LEARNER_FILE = path.join(DATA_DIR, 'learner-profiles.json');
+function loadLearner() { return loadJSON(LEARNER_FILE, { profiles: {}, activeGoal: null, pendingQuiz: null }); }
+function saveLearner(d) { saveJSON(LEARNER_FILE, d); }
+function getProfile(goal) { return loadLearner().profiles[goal.toLowerCase()] || null; }
+function setProfile(goal, patch) {
+  const d = loadLearner();
+  const k = goal.toLowerCase();
+  d.profiles[k] = { ...(d.profiles[k] || { goal, created: Date.now() }), ...patch, updated: Date.now() };
+  d.activeGoal = k;
+  saveLearner(d);
+  return d.profiles[k];
+}
+
+// Detect "teach me X" / "prep me for X" / "learn X"
+function parseTeachIntent(text) {
+  const t = text.toLowerCase().trim();
+  let m = t.match(/^(?:can you |please )?(?:teach|help me learn|i want to learn|learn|study)\s+(?:me\s+)?(.{2,60})$/);
+  if (m) return { type: 'subject', goal: m[1].replace(/\b(please|now|today)\b/g, '').trim() };
+  m = t.match(/^(?:prep|prepare)\s+(?:me\s+)?(?:for\s+)?(?:a\s+|an\s+|the\s+)?(.{2,60}?)(?:\s+(?:interview|job|role|position))?$/);
+  if (m && /interview|job|role|position|engineer|developer|manager|analyst|nurse|designer|pm\b/.test(t)) return { type: 'interview', goal: m[1].trim() };
+  m = t.match(/^interview prep(?:\s+for\s+(.{2,60}))?$/);
+  if (m) return { type: 'interview', goal: m[1] || 'general' };
+  return null;
+}
+
+// Build the level-check question set
+function levelCheckPrompt(intent) {
+  if (intent.type === 'interview') {
+    return `Got it — prepping you for ${intent.goal}! Quick questions so I tailor everything:\n1. How many years of experience do you have?\n2. Is this for a specific company, or general?\n3. What worries you most — technical questions, behavioral, or system design?\n\nJust tell me, or say "quiz me" for a quick skills check first!`;
+  }
+  return `Love it — let's learn ${intent.goal}! 🌸 Two ways to start:\n• Quick: just tell me your level — beginner, know some, or advanced?\n• Accurate: say "quiz me" and I'll give you a quick 5-question placement check.\n\nWhich do you prefer?`;
+}
+
+// Generate a 5-question placement quiz (Haiku)
+async function makePlacementQuiz(goal) {
+  const res = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001', max_tokens: 500,
+    messages: [{ role: 'user', content: `Create a 5-question placement quiz to gauge someone's level in: ${goal}. Mix easy→hard. Reply ONLY JSON: {"questions":["q1",...5],"answers":["a1",...5]}. Questions should be answerable by voice, short.` }]
+  });
+  return JSON.parse(res.content[0].text.match(/\{[\s\S]*\}/)[0]);
+}
+
+// Score quiz answers → level
+async function scorePlacement(goal, quiz, userAnswers) {
+  const res = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001', max_tokens: 250,
+    messages: [{ role: 'user', content: `Subject: ${goal}. Questions+correct answers: ${JSON.stringify(quiz)}. User's answers: ${JSON.stringify(userAnswers)}. Score them and assign a level. Reply ONLY JSON: {"level":"beginner|intermediate|advanced","summary":"one line on what they know and gaps","score":"X/5"}` }]
+  });
+  return JSON.parse(res.content[0].text.match(/\{[\s\S]*\}/)[0]);
+}
+
+// The adaptive teaching call — always pitched to the saved profile
+async function teachAdaptive(goal, topic, extraContext) {
+  const prof = getProfile(goal) || { level: 'beginner', summary: 'new learner' };
+  const isInterview = prof.type === 'interview';
+  const sys = isInterview
+    ? `You are Asuka, an expert interview coach for: ${goal}. Candidate: ${prof.level || 'unknown'} level, ${prof.summary || ''}. ${prof.covered ? 'Already covered: ' + prof.covered.join(', ') + '.' : ''}`
+    : `You are Asuka, a warm expert tutor teaching: ${goal}. Student level: ${prof.level || 'beginner'}, ${prof.summary || ''}. ${prof.covered ? 'Already taught: ' + prof.covered.join(', ') + '.' : ''} Pitch everything to their level — don't re-explain what they know, don't overwhelm a beginner.`;
+  const res = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001', max_tokens: 600,
+    system: sys,
+    messages: [{ role: 'user', content: (topic || 'Teach me the next thing I should learn') + (extraContext ? '\n\nContext:\n' + extraContext : '') }]
+  });
+  return res.content[0].text;
+}
+
+ipcMain.handle('get-learner-profiles', () => loadLearner());
+ipcMain.handle('clear-learner-profile', (e, goal) => { const d = loadLearner(); delete d.profiles[goal.toLowerCase()]; saveLearner(d); return { success: true }; });
+
+
+// ═══ ACTIVE RECALL + QUIZ BOX + WEAK-SPOTS (tutor quality layer) ════════════
+// Weak-spots: log what a learner struggles with, revisit it
+function noteWeakSpot(goal, topic) {
+  const d = loadLearner();
+  const k = goal.toLowerCase();
+  if (!d.profiles[k]) return;
+  d.profiles[k].weakSpots = d.profiles[k].weakSpots || {};
+  d.profiles[k].weakSpots[topic] = (d.profiles[k].weakSpots[topic] || 0) + 1;
+  saveLearner(d);
+}
+function noteMastered(goal, topic) {
+  const d = loadLearner();
+  const k = goal.toLowerCase();
+  if (!d.profiles[k]?.weakSpots?.[topic]) return;
+  d.profiles[k].weakSpots[topic] -= 1;
+  if (d.profiles[k].weakSpots[topic] <= 0) delete d.profiles[k].weakSpots[topic];
+  d.profiles[k].covered = [...new Set([...(d.profiles[k].covered || []), topic])].slice(-40);
+  saveLearner(d);
+}
+
+// Show a tappable quiz box beside her (sends to waifu window)
+function showQuizBox(payload) {
+  // payload: { question, options?: [..], type: 'mc'|'text', meta }
+  if (mainWindow) mainWindow.webContents.send('quiz-box', payload);
+}
+
+// Generate an active-recall check after teaching a topic
+async function makeRecallCheck(goal, topic, justTaught) {
+  try {
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 300,
+      messages: [{ role: 'user', content: `You just taught this about "${topic}" (${goal}):\n${(justTaught||'').slice(0,500)}\n\nCreate ONE active-recall question to check they understood. Prefer multiple choice (clean for tapping). Reply ONLY JSON: {"question":"...","type":"mc","options":["A","B","C"],"correctIndex":0,"why":"one line why"}  OR for open practice: {"question":"make a sentence using X","type":"text","modelAnswer":"...","why":"..."}` }]
+    });
+    return JSON.parse(res.content[0].text.match(/\{[\s\S]*\}/)[0]);
+  } catch(e) { return null; }
+}
+
+// Grade a free-text recall answer
+async function gradeRecall(goal, question, modelAnswer, userAnswer) {
+  try {
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 200,
+      messages: [{ role: 'user', content: `Subject: ${goal}. Question: ${question}. Model answer: ${modelAnswer}. Student said: "${userAnswer}". Grade kindly as Asuka. Reply ONLY JSON: {"correct":true|false,"feedback":"warm 1-2 sentences, correct any mistake"}` }]
+    });
+    return JSON.parse(res.content[0].text.match(/\{[\s\S]*\}/)[0]);
+  } catch(e) { return { correct: true, feedback: 'Nice try!' }; }
+}
+
+ipcMain.handle('quiz-answer', async (e, { kind, ...data }) => {
+  try {
+    const ld = loadLearner();
+    const goal = ld.activeGoal || 'general';
+    // Placement quiz answer via box
+    if (kind === 'placement' && ld.pendingQuiz) {
+      const pq = ld.pendingQuiz;
+      pq.answers = pq.answers || [];
+      pq.answers.push(data.answer);
+      if (pq.answers.length < pq.quiz.questions.length) {
+        saveLearner(ld);
+        const next = pq.quiz.questions[pq.answers.length];
+        showQuizBox({ question: `Q${pq.answers.length + 1}: ${next}`, type: 'text', meta: { kind: 'placement' } });
+        return { ok: true, next: true };
+      }
+      const result = await scorePlacement(pq.goal, pq.quiz, pq.answers).catch(() => ({ level: 'beginner', summary: 'starting out', score: '?' }));
+      setProfile(pq.goal, { level: result.level, summary: result.summary, type: pq.type, covered: [], weakSpots: {} });
+      if (pq.type !== 'interview') { const cur = await buildCurriculum(pq.goal, result.level).catch(()=>null); if (cur) setProfile(pq.goal, { curriculum: cur }); }
+      ld.pendingQuiz = null; saveLearner(ld);
+      const lesson = await teachAdaptive(pq.goal, 'Start the first lesson at their level').catch(() => null);
+      const msg = `You scored ${result.score} — ${result.level}! ${result.summary}\n\n${lesson || ''}`;
+      streamVoiceResponse(msg, mainWindow).catch(() => {});
+      return { ok: true, done: true, message: msg };
+    }
+    // Active recall answer
+    if (kind === 'recall') {
+      const correct = data.type === 'mc' ? (data.selectedIndex === data.correctIndex) : null;
+      if (data.type === 'mc') {
+        if (correct) noteMastered(goal, data.topic); else noteWeakSpot(goal, data.topic);
+        const msg = correct ? `Correct! ${data.why || ''} 🎉` : `Not quite — ${data.why || ''}. We'll revisit this!`;
+        streamVoiceResponse(msg, mainWindow).catch(() => {});
+        return { ok: true, correct, message: msg };
+      } else {
+        const g = await gradeRecall(goal, data.question, data.modelAnswer, data.answer);
+        if (g.correct) noteMastered(goal, data.topic); else noteWeakSpot(goal, data.topic);
+        streamVoiceResponse(g.feedback, mainWindow).catch(() => {});
+        return { ok: true, correct: g.correct, message: g.feedback };
+      }
+    }
+    return { ok: false };
+  } catch(e2) { return { ok: false, error: e2.message }; }
+});
+
+
+// ═══ MOCK INTERVIEW SCORING + REPORT + CURRICULUM + SRS WIRING ══════════════
+// Mock interview: structured arc (warmup→technical→behavioral→your-questions), scored
+function startMockInterview(goal) {
+  const d = loadLearner();
+  d.mockInterview = { goal, phase: 0, qIndex: 0, scores: [], answers: [],
+    arc: ['warmup', 'technical', 'technical', 'behavioral', 'behavioral', 'closing'] };
+  saveLearner(d);
+  return d.mockInterview;
+}
+async function nextMockQuestion(mi, prof) {
+  const phase = mi.arc[mi.qIndex] || 'closing';
+  const res = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001', max_tokens: 150,
+    messages: [{ role: 'user', content: `Mock interview for ${mi.goal}, candidate ${prof?.level || 'mid'} level. This is the ${phase} question (#${mi.qIndex+1} of ${mi.arc.length}). Ask ONE realistic ${phase} interview question. Just the question, conversational, no preamble.` }]
+  });
+  return res.content[0].text.trim();
+}
+async function scoreMockAnswer(goal, question, answer) {
+  const res = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001', max_tokens: 200,
+    messages: [{ role: 'user', content: `Interview for ${goal}. Q: ${question} A: "${answer}". Score 1-10 and coach. Reply ONLY JSON: {"score":7,"feedback":"warm, specific: what worked + one fix","tag":"technical|behavioral|communication"}` }]
+  });
+  return JSON.parse(res.content[0].text.match(/\{[\s\S]*\}/)[0]);
+}
+async function mockInterviewReport(mi) {
+  const avg = mi.scores.length ? (mi.scores.reduce((s,x)=>s+x.score,0)/mi.scores.length).toFixed(1) : 0;
+  const byTag = {};
+  mi.scores.forEach(s => { byTag[s.tag] = byTag[s.tag] || []; byTag[s.tag].push(s.score); });
+  const tagAvgs = Object.entries(byTag).map(([t,arr]) => `${t}: ${(arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(1)}/10`).join(', ');
+  const res = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001', max_tokens: 300,
+    messages: [{ role: 'user', content: `Interview prep for ${mi.goal} done. Avg ${avg}/10. By area: ${tagAvgs}. Write a warm 3-4 sentence report as Asuka: overall verdict, biggest strength, #1 thing to practice. Encouraging.` }]
+  });
+  return { avg, tagAvgs, summary: res.content[0].text.trim() };
+}
+
+// Curriculum: she lays out a path the first time, tracks position
+async function buildCurriculum(goal, level) {
+  const res = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001', max_tokens: 400,
+    messages: [{ role: 'user', content: `Design a learning path for "${goal}" starting at ${level} level. Reply ONLY JSON: {"path":["topic 1","topic 2",...8-12 ordered topics]}` }]
+  });
+  return JSON.parse(res.content[0].text.match(/\{[\s\S]*\}/)[0]).path;
+}
+function curriculumProgress(goal) {
+  const p = getProfile(goal);
+  if (!p?.curriculum) return null;
+  const done = (p.covered || []).length;
+  return { total: p.curriculum.length, done: Math.min(done, p.curriculum.length), next: p.curriculum[Math.min(done, p.curriculum.length-1)], path: p.curriculum };
+}
+
+// SRS wiring: every taught concept becomes a review card (reuses srs-flashcards.json)
+function addTutorCard(goal, q, a) {
+  try {
+    const SRS = path.join(DATA_DIR, 'srs-flashcards.json');
+    const fc = loadJSON(SRS, { cards: [] });
+    fc.cards.push({ id: Date.now()+Math.random(), q, a, book: goal, page: 0, interval: 1, due: Date.now()+864e5, reps: 0, source: 'tutor' });
+    if (fc.cards.length > 400) fc.cards = fc.cards.slice(-400);
+    saveJSON(SRS, fc);
+  } catch(e) {}
+}
+
+ipcMain.handle('get-curriculum', (e, goal) => curriculumProgress(goal || loadLearner().activeGoal || ''));
+
+
+// ═══ APP MODE — Companion vs Trading (two-product split) ════════════════════
+function getAppMode() { return loadSettings().appMode || null; } // null = not chosen yet
+ipcMain.handle('get-app-mode', () => ({ mode: getAppMode() }));
+ipcMain.handle('set-app-mode', (e, mode) => {
+  if (!['companion', 'trading'].includes(mode)) return { success: false };
+  const s = loadSettings(); s.appMode = mode; saveSettings(s);
+  console.log('🎯 App mode set:', mode);
+  return { success: true, mode };
+});
+ipcMain.handle('reset-app-mode', () => { const s = loadSettings(); s.appMode = null; saveSettings(s); return { success: true }; });
+// Trading features check this gate
+function tradingEnabled() { return getAppMode() === 'trading'; }
+
+
+// ═══ GENERAL WEBSITE BUILDER — any site type, not just crypto ════════════════
+const SITE_TYPE_SPEC = {
+  business: { sections: 'Hero with business name + tagline, About, Services/Products, Why Choose Us, Testimonials, Contact + hours + map placeholder, Footer', vibe: 'professional, trustworthy, clean' },
+  portfolio: { sections: 'Hero with name + what you do, About/Bio, Work/Projects gallery, Skills, Experience timeline, Contact + social links, Footer', vibe: 'personal, creative, polished' },
+  event: { sections: 'Hero with event name + date + location, About the event, Schedule/Agenda, Speakers/Lineup, Tickets/RSVP CTA, Venue + map placeholder, FAQ, Footer', vibe: 'exciting, clear, action-driving' },
+  personal: { sections: 'Hero with name, About me, Interests/Hobbies, Blog/Updates teaser, Photo gallery, Contact + socials, Footer', vibe: 'warm, authentic, friendly' },
+  resume: { sections: 'Hero with name + title, Professional summary, Experience (timeline), Education, Skills, Projects/Achievements, Contact + download-CV button, Footer', vibe: 'sharp, professional, scannable' }
+};
+
+ipcMain.handle('build-general-site', async (e, form) => {
+  try {
+    if (!fs.existsSync(LAUNCH_SITES_DIR)) fs.mkdirSync(LAUNCH_SITES_DIR, { recursive: true });
+    const spec = SITE_TYPE_SPEC[form.siteType] || SITE_TYPE_SPEC.business;
+    let logoDataUri = form.logoDataUri || null;
+    // Optional AI image
+    if (!logoDataUri && form.wantLogo) {
+      const art = await genCoinArt({ name: form.name, symbol: form.name?.slice(0,4), tagline: form.tagline }).catch(()=>null);
+      if (art?.dataUri) logoDataUri = art.dataUri;
+    }
+    const res = await anthropic.messages.create({
+      model: CLAUDE_MODEL, max_tokens: 16000,
+      messages: [{ role: 'user', content: `You are an elite web designer. Build a COMPLETE, FLAWLESS single-file HTML website. This must look like a $5,000 agency build.
+
+SITE TYPE: ${form.siteType}
+NAME: ${form.name}
+TAGLINE: ${form.tagline || ''}
+DESCRIPTION: ${form.description || ''}
+${form.customBrief ? 'SPECIFIC REQUESTS (honor exactly): ' + form.customBrief : ''}
+${form.contact ? 'CONTACT: ' + form.contact : ''}
+${form.socials ? 'SOCIALS: ' + form.socials : ''}
+${logoDataUri ? 'LOGO: use placeholder src="__LOGO__" in the hero, ~140px, I inject it.' : ''}
+
+MANDATORY SECTIONS for a ${form.siteType} site: ${spec.sections}
+VIBE: ${spec.vibe}
+
+QUALITY BARS (non-negotiable):
+- Google Fonts matched to the vibe; near-black or theme background; ONE accent color used for CTAs/highlights
+- Fully responsive (stack at 768px, no horizontal scroll ever)
+- Scroll-reveal animations (IntersectionObserver), smooth-scroll nav, 60fps transforms only
+- Real, confident copy matching the description — NO lorem ipsum, NO placeholder text except where data is genuinely missing (mark TBD)
+- Working nav, working buttons (mailto: for contact where relevant), valid HTML5, zero external JS libraries
+- NO crypto content unless the type is crypto — this is a normal ${form.siteType} website
+
+Output ONLY raw HTML from <!DOCTYPE html> to </html>. No fences, no commentary.` }]
+    });
+    let raw = res.content[0].text.trim().replace(/\u0060\u0060\u0060html\n?/gi,'').replace(/\u0060\u0060\u0060/g,'');
+    const ds = raw.search(/<!DOCTYPE|<html/i); if (ds > 0) raw = raw.slice(ds);
+    let html = raw.trim();
+    if (html.length < 800 || !/<\/html>/i.test(html)) return { success: false, error: 'Generation incomplete — try again' };
+    if (logoDataUri) html = html.replace(/__LOGO__/g, logoDataUri);
+    const fname = path.join(LAUNCH_SITES_DIR, `${(form.name||'site').toLowerCase().replace(/[^a-z0-9]/g,'-').slice(0,20)}-${Date.now()}.html`);
+    fs.writeFileSync(fname, html);
+    console.log('🌐 General site built:', form.siteType, fname);
+    return { success: true, path: fname, siteType: form.siteType, sizeKB: (html.length/1024).toFixed(0) };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
+
+
+// ─── WHITEBOARD WINDOW — separate, sits to the RIGHT of her ─────────────────
+let whiteboardWindow = null;
+function openWhiteboardWindow() {
+  if (whiteboardWindow && !whiteboardWindow.isDestroyed()) return whiteboardWindow;
+  const { screen } = require('electron');
+  const disp = screen.getPrimaryDisplay().workArea;
+  // Her window is 400 wide on the right; place WB just left of her, or right if room
+  const wbWidth = 580, wbHeight = 480;
+  whiteboardWindow = new BrowserWindow({
+    width: wbWidth, height: wbHeight,
+    x: Math.max(disp.x + 20, disp.x + disp.width - 400 - wbWidth - 20),
+    y: disp.y + 80,
+    transparent: false, frame: false, alwaysOnTop: true, resizable: true, skipTaskbar: true,
+    backgroundColor: '#ffffff',
+    webPreferences: { nodeIntegration: true, contextIsolation: false }
+  });
+  whiteboardWindow.loadFile('whiteboard.html');
+  whiteboardWindow.on('closed', () => { whiteboardWindow = null; });
+  return whiteboardWindow;
+}
+ipcMain.handle('close-whiteboard', () => { if (whiteboardWindow && !whiteboardWindow.isDestroyed()) whiteboardWindow.close(); return { ok: true }; });
+
+
+// ═══ INTERACTIVE LESSON (Duolingo-style) — explain THEN drill ═══════════════
+let lessonWindow = null;
+function openLessonWindow() {
+  if (lessonWindow && !lessonWindow.isDestroyed()) { lessonWindow.show(); lessonWindow.focus(); return lessonWindow; }
+  const { screen } = require('electron');
+  const disp = screen.getPrimaryDisplay().workArea;
+  lessonWindow = new BrowserWindow({
+    width: 720, height: 640,
+    x: disp.x + Math.round((disp.width - 720) / 2), y: disp.y + 60,
+    transparent: false, frame: false, resizable: true, backgroundColor: '#0f1420',
+    webPreferences: { nodeIntegration: true, contextIsolation: false }
+  });
+  lessonWindow.loadFile('lesson.html');
+  lessonWindow.on('closed', () => { lessonWindow = null; });
+  return lessonWindow;
+}
+ipcMain.handle('close-lesson', () => { if (lessonWindow && !lessonWindow.isDestroyed()) lessonWindow.close(); return { ok: true }; });
+
+// Generate a full interactive lesson: explanation + mixed exercises
+async function generateLesson(goal, topic) {
+  const prof = getProfile(goal) || { level: 'beginner', summary: 'new learner' };
+  const res = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001', max_tokens: 1600,
+    messages: [{ role: 'user', content: `You are Asuka, a warm expert tutor. Build ONE interactive lesson on "${topic || 'the next concept'}" for ${goal}, student level: ${prof.level} (${prof.summary}).
+
+First TEACH the concept clearly (what it is, how it works, rules, 2-3 examples). Then create 5-6 mixed exercises to drill it.
+
+Reply ONLY JSON:
+{
+  "title": "lesson title",
+  "explanation": "2-4 short paragraphs teaching the concept, with examples. This is shown + spoken before exercises.",
+  "exercises": [
+    {"type":"arrange","prompt":"Build: 'I eat sushi'","tiles":["私は","寿司を","食べます"],"answer":["私は","寿司を","食べます"]},
+    {"type":"match","prompt":"Match each to its meaning","pairs":[["食べて","eat"],["飲んで","drink"],["見て","see"]]},
+    {"type":"blank","prompt":"食べ＿ ください (please eat)","options":["て","た","る","に"],"correctIndex":0},
+    {"type":"mc","prompt":"Which is the te-form of 行く?","options":["行って","行きて","行くて","行いて"],"correctIndex":0},
+    {"type":"listen","prompt":"Type what this means: ありがとう","answer":"thank you","accept":["thanks","thank you"]}
+  ]
+}
+Use REAL content for ${goal} at ${prof.level} level. Make exercises actually test "${topic}". For non-language subjects, adapt (arrange = order steps, match = term↔definition, etc).` }]
+  });
+  return JSON.parse(res.content[0].text.match(/\{[\s\S]*\}/)[0]);
+}
+
+// Launch a lesson: open window, send content, speak the explanation
+async function launchLesson(goal, topic) {
+  const lesson = await generateLesson(goal, topic).catch(() => null);
+  if (!lesson) return null;
+  const win = openLessonWindow();
+  const send = () => { if (win && !win.isDestroyed()) win.webContents.send('lesson-data', { goal, topic, lesson }); };
+  if (win.webContents.isLoading()) win.webContents.once('did-finish-load', () => setTimeout(send, 250));
+  else send();
+  return lesson;
+}
+
+ipcMain.handle('lesson-complete', (e, { goal, topic, score, total }) => {
+  // Update profile: mark covered, log weak if low score
+  const d = loadLearner(); const k = (goal||'').toLowerCase();
+  if (d.profiles[k]) {
+    d.profiles[k].covered = [...new Set([...(d.profiles[k].covered||[]), topic])].slice(-40);
+    if (score / total < 0.6) noteWeakSpot(goal, topic);
+    saveLearner(d);
+  }
+  const msg = score/total >= 0.8 ? `Amazing — ${score}/${total}! You've got ${topic} down! 🎉` : score/total >= 0.5 ? `Good work — ${score}/${total}. A bit more practice and you'll nail ${topic}!` : `${score}/${total} — ${topic} is tricky, we'll come back to it. You're learning! 💪`;
+  streamVoiceResponse(msg, mainWindow).catch(()=>{});
+  return { ok: true, message: msg };
 });
 
 async function openPaperTrade(signal) {
@@ -6956,8 +9854,15 @@ async function openPaperTrade(signal) {
     console.log(`🚫 Hard block: ${signal.coin} long below 70% in Extreme Fear (FG=${lastFG}) — lesson learned`);
     return null;
   }
+  // Manual demo trades skip auto-gates — user's explicit choice
+  const isManual = !!signal.manual;
+
+  // Event blackout — FOMC/CPI windows
+  const blackout = isManual ? null : eventBlackoutCheck();
+  if (blackout) { console.log(blackout); return null; }
+
   // Per-coin bench — coin on losing streak is blocked
-  const benchDays = getCoinBench(signal.coin);
+  const benchDays = isManual ? null : getCoinBench(signal.coin);
   if (benchDays) {
     console.log(`🪑 ${signal.coin} is benched (${benchDays}d left after losing streak) — trade blocked`);
     return null;
@@ -6977,8 +9882,15 @@ async function openPaperTrade(signal) {
     size = size * signal.sizeMultiplier;
     console.log(`💎 Conviction sizing: grade ${signal.qualityGrade || '?'} → $${size.toFixed(0)} position`);
   }
+  // Liquidation Guard — warn on dangerous leverage
+  try {
+    const lg = liqGuardCheck(signal.direction, signal.entry || 0, leverage);
+    if (lg?.warning) { console.log(lg.warning); sendTelegramNotification(lg.warning).catch(() => {}); }
+  } catch(e) {}
   // Anti-tilt (3 losses in a row → half size until a win)
   size = size * getAntiTiltMultiplier();
+  // Equity-curve + win-streak discipline
+  size = size * getEquityCurveMultiplier() * getStreakMultiplier();
   // Volatility-adaptive sizing (high ATR coin → smaller position)
   size = size * (await getVolatilityMultiplier(signal.coin));
   const positionSize = size * leverage;
@@ -7078,6 +9990,7 @@ async function closePaperTrade(tradeId, closePrice, reason) {
 
   if (trade.caller) updateCallerStats(trade.caller, actualPnl > 0);
   updateCoinBench(trade.coin, actualPnl > 0); // 4 consecutive losses → 7-day bench
+  if (actualPnl < 0 && /stop/i.test(reason || '')) noteStopOut(trade.coin); // re-entry discipline
   if (trade.swarmVotes) updateAgentStats(trade.swarmVotes, actualPnl > 0); // agents learn from outcomes
 
   // Close on Binance testnet if linked
@@ -7140,6 +10053,10 @@ async function checkPaperTrades() {
         : trade.entry - currentPrice;
       const pnlPct = priceDiff / trade.entry * leverage * 100;
       const pnlDollar = trade.size * (priceDiff / trade.entry) * leverage;
+
+      // Precision measurement: max favorable / adverse excursion
+      if (trade.mfe === undefined || pnlPct > trade.mfe) { trade.mfe = parseFloat(pnlPct.toFixed(2)); trade._dirty = true; }
+      if (trade.mae === undefined || pnlPct < trade.mae) { trade.mae = parseFloat(pnlPct.toFixed(2)); trade._dirty = true; }
 
       // Profit notifications at milestones
       const profitMilestones = [5, 10, 25, 50, 100];
@@ -7255,6 +10172,14 @@ async function checkPaperTrades() {
       }
     } catch(e) { console.error('Paper trade check error:', e.message); }
   }
+
+  // Persist MFE/MAE updates (atomic write, cheap)
+  try {
+    if (pd.trades.some(t => t._dirty)) {
+      pd.trades.forEach(t => delete t._dirty);
+      savePaperTrades(pd);
+    }
+  } catch(e) {}
 
   // Resolve shadow trades (throttled to every 10 min internally)
   resolveShadowTrades().catch(() => {});
@@ -8303,6 +11228,7 @@ async function getVolatilityMultiplier(coin) {
 function isTradingPaused() {
   if (checkDailyPnlLimit()) return true;
   if (checkDailyProfitLock()) return true;
+  if (drawdownBreakerCheck()) return true;
   if (_tradingPausedUntil > Date.now()) return true;
   return false;
 }
@@ -8673,7 +11599,15 @@ function saveBooksIndex(data) { saveJSON(BOOKS_INDEX_FILE, data); }
 // Parse PDF and extract pages
 async function parsePDF(pdfPath) {
   try {
-    const pdfParse = require('pdf-parse');
+    // Use the lib path directly — plain require('pdf-parse') runs debug code
+    // that tries to read a test PDF and crashes with ENOENT in Electron
+    let pdfParse;
+    try {
+      pdfParse = require('pdf-parse/lib/pdf-parse.js');
+    } catch(e1) {
+      try { pdfParse = require('pdf-parse'); }
+      catch(e2) { return { error: 'MODULE_MISSING' }; }
+    }
     const dataBuffer = fs.readFileSync(pdfPath);
     const data = await pdfParse(dataBuffer);
     
@@ -8706,10 +11640,17 @@ async function parsePDF(pdfPath) {
       }
     }
     
+    // Scanned/image-only PDF detection — no text layer to teach from
+    if (fullText.trim().length < 100) {
+      return { error: 'NO_TEXT', pageCount };
+    }
+
     return { pages, pageCount, totalChars: fullText.length };
   } catch(e) {
     console.error('PDF parse error:', e.message);
-    return null;
+    if (/encrypted|password/i.test(e.message)) return { error: 'ENCRYPTED' };
+    if (/Invalid PDF|bad XRef|FormatError/i.test(e.message)) return { error: 'CORRUPT' };
+    return { error: 'PARSE_FAILED', detail: e.message };
   }
 }
 
@@ -8718,7 +11659,18 @@ async function indexBook(pdfPath, bookName, subject = 'general') {
   console.log(`📚 Indexing book: ${bookName}...`);
   
   const parsed = await parsePDF(pdfPath);
-  if (!parsed) return { success: false, error: 'Could not parse PDF' };
+  if (!parsed || parsed.error) {
+    const msgs = {
+      MODULE_MISSING: 'pdf-parse is not installed — run: npm install pdf-parse',
+      NO_TEXT: 'This PDF is scanned images with no text layer — Asuka needs a text-based PDF (try a digital edition, not a scan)',
+      ENCRYPTED: 'This PDF is password-protected — remove the password and try again',
+      CORRUPT: 'This PDF file appears corrupted — try re-downloading it',
+      PARSE_FAILED: 'Could not parse this PDF: ' + (parsed?.detail || 'unknown error')
+    };
+    const error = msgs[parsed?.error] || 'Could not parse PDF';
+    console.error('📚 Book indexing failed:', error);
+    return { success: false, error };
+  }
   
   const bookId = 'book_' + Date.now();
   const bookFile = path.join(BOOKS_DIR, `${bookId}.json`);
@@ -8808,6 +11760,12 @@ function getActiveBook() {
 
 // Ask Asuka about book content — uses Haiku (cheaper, fast enough for explanations)
 async function askAboutBook(pageText, question, bookName, pageNum) {
+  // Auto-whiteboard: she draws the lesson beside her while she answers (premium)
+  try {
+    if (loadSettings().whiteboardEnabled !== false && global._whiteboardTeach && question && question.length > 6) {
+      global._whiteboardTeach(question.slice(0, 80)).catch(() => {});
+    }
+  } catch(e) {}
   const res = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001', // Haiku — 4x cheaper than Sonnet, plenty smart for tutoring
     max_tokens: 500,

@@ -521,7 +521,7 @@
   }
   /* Quick-glance strip */
   .ov-strip {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 10px;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 0 0 10px;
   }
   .ov-chip {
     background: rgba(15,23,42,0.7); border: 1px solid rgba(148,163,184,0.1);
@@ -1383,6 +1383,25 @@
 </style>
 </head>
 <body>
+  <div id="mode-picker" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(8,10,20,0.97);backdrop-filter:blur(12px);align-items:center;justify-content:center;flex-direction:column;font-family:system-ui;">
+    <div style="text-align:center;max-width:560px;padding:30px;">
+      <div style="font-size:26px;font-weight:800;color:#e2e8f0;margin-bottom:6px;">Welcome to Asuka 🌸</div>
+      <div style="font-size:14px;color:#94a3b8;margin-bottom:28px;">How do you want to use her? You can switch anytime in Settings.</div>
+      <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
+        <div class="mode-card" data-mode="companion" style="cursor:pointer;width:230px;padding:24px;border-radius:18px;border:2px solid #334155;background:rgba(30,41,59,0.6);transition:.2s;">
+          <div style="font-size:38px;margin-bottom:10px;">🌸</div>
+          <div style="font-size:17px;font-weight:700;color:#e2e8f0;margin-bottom:6px;">Companion</div>
+          <div style="font-size:12px;color:#94a3b8;line-height:1.5;">Your AI friend & tutor. Learn languages, prep for interviews, study, voice chat, runs your Mac. No trading.</div>
+        </div>
+        <div class="mode-card" data-mode="trading" style="cursor:pointer;width:230px;padding:24px;border-radius:18px;border:2px solid #7c3aed;background:rgba(124,58,237,0.12);transition:.2s;">
+          <div style="font-size:38px;margin-bottom:10px;">📈</div>
+          <div style="font-size:17px;font-weight:700;color:#e2e8f0;margin-bottom:6px;">Trading <span style="font-size:9px;background:rgba(124,58,237,0.3);border-radius:6px;padding:2px 7px;vertical-align:middle;">PRO</span></div>
+          <div style="font-size:12px;color:#94a3b8;line-height:1.5;">Everything in Companion PLUS the full trading engine, MiroFish agents, sniper, coin launch suite & buyback.</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-top:20px;">Trading mode costs more to run (live market scanning).</div>
+    </div>
+  </div>
 
 <!-- TOP BAR -->
 <div id="topbar">
@@ -1395,6 +1414,7 @@
     <div class="page-tab active" data-page="1">Dashboard</div>
     <div class="page-tab" data-page="2">📡 Telegram</div>
     <div class="page-tab" data-page="3">📊 Trading</div>
+    <div class="page-tab" data-page="6" id="website-tab" style="display:none;">🌐 Website</div>
     <div class="page-tab" data-page="5">🌸 Others</div>
     <!-- Dev tab removed — access via Settings -->
   </div>
@@ -1409,6 +1429,13 @@
 
 <!-- PAGE 1 — DASHBOARD -->
 <div class="page active" id="page-1">
+<div id="daily-greeting" style="margin:8px 12px 0;padding:10px 14px;border-radius:12px;background:rgba(15,23,42,0.5);border:1px solid var(--border);backdrop-filter:blur(10px);display:none;">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <div id="greeting-text" style="font-size:12px;font-weight:600;"></div>
+    <div id="streak-badge" style="font-size:11px;color:#fbbf24;font-weight:700;"></div>
+  </div>
+  <div id="mood-text" style="font-size:10px;color:var(--text2);margin-top:3px;"></div>
+</div>
 <div id="sponsor-banner" style="display:none;margin:8px 12px 0;padding:10px 12px;border-radius:12px;background:linear-gradient(135deg,rgba(251,191,36,0.08),rgba(0,212,255,0.08));border:1px solid rgba(251,191,36,0.25);backdrop-filter:blur(10px);">
   <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
     <div style="flex:1;">
@@ -1722,36 +1749,111 @@
     <button class="trade-tab" data-tab="spot">🟢 Spot</button>
     <button class="trade-tab" data-tab="sniper">🎯 Sniper</button>
     <button class="trade-tab" data-tab="launch">🚀 Launch</button>
+    <button class="trade-tab" data-tab="autodesk">🤖 Auto-Desk</button>
   </div>
 
   <!-- ══════ OVERVIEW TAB ══════ -->
   <div class="trade-tab-content" id="tab-launch">
 
-    <div class="tg-section" style="margin:12px 0 10px;padding:14px;">
-      <div style="font-size:13px;font-weight:700;">🚀 Launch Suite <span style="font-size:9px;background:rgba(52,211,153,0.15);color:#34d399;border:1px solid rgba(52,211,153,0.3);border-radius:6px;padding:2px 6px;margin-left:6px;">B2B — ANY CHAIN</span></div>
-      <div style="font-size:11px;color:var(--text2);margin:4px 0 10px;">Token site builder + caller intelligence + launch advisor. SOL / ETH / BSC / Base — auto-detected from CA.</div>
+    <!-- ═══ PROJECT WIZARD ═══ -->
+    <div id="website-wizard-section" class="tg-section" style="margin:12px 0 10px;padding:14px;border:1px solid rgba(124,58,237,0.35);background:linear-gradient(135deg,rgba(124,58,237,0.06),rgba(0,212,255,0.04));">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:700;">🧩 Website Wizard</div>
+        <button class="tg-add-btn" id="wz-fill-all" style="font-size:10px;padding:4px 10px;background:linear-gradient(135deg,rgba(124,58,237,0.25),rgba(0,212,255,0.2));">✨ AI Fill All</button>
+      </div>
+      <div style="font-size:10px;color:var(--text2);margin-bottom:10px;">Fill what you want — tap ✨ on any field for Asuka to write it. Leave blank to skip.</div>
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px;">What kind of website?</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:12px;">
+        <button class="wz-type" data-type="crypto" style="padding:8px;border-radius:8px;border:2px solid #7c3aed;background:rgba(124,58,237,0.15);color:#e2e8f0;cursor:pointer;font-size:11px;">🪙 Crypto Coin</button>
+        <button class="wz-type" data-type="business" style="padding:8px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:11px;">🏢 Business</button>
+        <button class="wz-type" data-type="portfolio" style="padding:8px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:11px;">🎨 Portfolio</button>
+        <button class="wz-type" data-type="event" style="padding:8px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:11px;">🎉 Event</button>
+        <button class="wz-type" data-type="personal" style="padding:8px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:11px;">👤 Personal</button>
+        <button class="wz-type" data-type="resume" style="padding:8px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:11px;">📄 Resume</button>
+      </div>
 
-      <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px;">🌐 WEBSITE BUILDER</div>
-      <input class="tg-input" id="ls-ca" placeholder="Contract address (auto-fills name, chain, live stats)" style="margin:0 0 6px;font-family:monospace;font-size:11px;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
-        <input class="tg-input" id="ls-name" placeholder="Token name" style="margin:0;">
-        <input class="tg-input" id="ls-symbol" placeholder="Symbol (BULL)" style="margin:0;">
+        <div style="display:flex;gap:4px;"><input class="tg-input" id="wz-name" placeholder="Token name" style="margin:0;flex:1;"><button class="wz-ai" data-f="name" style="background:rgba(124,58,237,0.2);border:none;border-radius:6px;color:#a78bfa;cursor:pointer;padding:0 8px;">✨</button></div>
+        <div class="crypto-only" style="display:flex;gap:4px;"><input class="tg-input" id="wz-symbol" placeholder="Symbol" style="margin:0;flex:1;"><button class="wz-ai" data-f="symbol" style="background:rgba(124,58,237,0.2);border:none;border-radius:6px;color:#a78bfa;cursor:pointer;padding:0 8px;">✨</button></div>
       </div>
-      <input class="tg-input" id="ls-tagline" placeholder="Vibe / tagline — 'built different, born strong'" style="margin:0 0 6px;">
+      <div style="display:flex;gap:4px;margin-bottom:6px;"><input class="tg-input" id="wz-tagline" placeholder="Tagline / vibe" style="margin:0;flex:1;"><button class="wz-ai" data-f="tagline" style="background:rgba(124,58,237,0.2);border:none;border-radius:6px;color:#a78bfa;cursor:pointer;padding:0 8px;">✨</button></div>
+      <div style="display:flex;gap:4px;margin-bottom:6px;"><textarea class="tg-input" id="wz-description" placeholder="What is this coin about?" style="margin:0;flex:1;height:48px;resize:vertical;"></textarea><button class="wz-ai" data-f="description" style="background:rgba(124,58,237,0.2);border:none;border-radius:6px;color:#a78bfa;cursor:pointer;padding:0 8px;">✨</button></div>
+
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin:4px 0;">🎨 Describe your website (optional)</div>
+      <textarea class="tg-input" id="wz-brief" placeholder="Tell Asuka what you want: 'roadmap section, dark red theme, anime mascot, meme gallery, animated launch countdown...'" style="margin:0 0 6px;width:100%;height:60px;resize:vertical;font-size:11px;"></textarea>
+
+      <div class="crypto-only" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+        <select class="tg-input" id="wz-chain" style="margin:0;"><option value="solana">Solana</option><option value="ethereum">Ethereum</option><option value="base">Base</option><option value="bsc">BSC</option></select>
+        <input class="tg-input" id="wz-supply" placeholder="Supply (1000000000)" style="margin:0;">
+      </div>
+
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin:6px 0 4px;">🎨 Logo / Image</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <input type="file" id="wz-img-file" accept="image/*" style="display:none;">
+        <button class="tg-add-btn" id="wz-img-upload" style="flex:1;font-size:11px;">📁 Upload Image</button>
+        <button class="tg-add-btn" id="wz-img-ai" style="flex:1;font-size:11px;background:rgba(124,58,237,0.15);">🎨 AI Generate Logo</button>
+      </div>
+      <div id="wz-img-preview" style="display:none;font-size:10px;color:#34d399;margin-bottom:6px;"></div>
+
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin:6px 0 4px;">🌐 Domain (.com)</div>
+      <div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;flex-wrap:wrap;">
+        <span style="font-size:11px;color:var(--text2);">Have your own domain?</span>
+        <button class="tg-add-btn wz-dom-choice" id="wz-dom-yes" data-c="yes" style="font-size:11px;padding:4px 14px;">Yes</button>
+        <button class="tg-add-btn wz-dom-choice" id="wz-dom-no" data-c="no" style="font-size:11px;padding:4px 14px;">No — make me one</button>
+      </div>
+      <input class="tg-input" id="wz-domain-own" placeholder="Paste your domain (e.g. mycoin.com)" style="display:none;margin:0 0 4px;font-size:11px;">
+      <div id="wz-domain-out" style="display:none;font-size:10px;margin-bottom:6px;padding:8px;border-radius:8px;background:rgba(15,23,42,0.6);line-height:1.5;"></div>
+
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin:6px 0 4px;">📣 Socials & Telegram</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
-        <input class="tg-input" id="ls-twitter" placeholder="Twitter URL" style="margin:0;">
-        <input class="tg-input" id="ls-telegram" placeholder="Telegram URL" style="margin:0;">
+        <input class="tg-input" id="wz-twitter" placeholder="Twitter URL" style="margin:0;">
+        <input class="tg-input" id="wz-telegram" placeholder="Telegram URL" style="margin:0;">
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
-        <select class="tg-input" id="ls-theme" style="margin:0;">
-          <option value="dark premium">Dark Premium</option><option value="degen neon">Degen Neon</option>
-          <option value="clean minimal">Clean Minimal</option><option value="cyberpunk">Cyberpunk</option>
-        </select>
-        <input class="tg-input" id="ls-color" type="text" placeholder="Accent #00d4ff" style="margin:0;">
-      </div>
-      <button class="tg-add-btn" id="ls-generate-btn" style="width:100%;background:linear-gradient(135deg,rgba(0,212,255,0.2),rgba(124,58,237,0.2));border-color:rgba(0,212,255,0.4);">✨ Asuka, Build The Site</button>
-      <div id="ls-status" style="font-size:11px;margin-top:6px;display:none;"></div>
+
+      <button class="tg-add-btn" id="wz-create" style="width:100%;background:linear-gradient(135deg,rgba(52,211,153,0.2),rgba(0,212,255,0.15));border-color:rgba(52,211,153,0.4);padding:12px;font-size:13px;">🌐 Create Website</button>
+      <div id="wz-status" style="display:none;font-size:11px;margin-top:8px;padding:10px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid var(--border);white-space:pre-wrap;line-height:1.6;"></div>
     </div>
+
+  </div>
+
+  <div class="trade-tab-content" id="tab-autodesk">
+    <div class="tg-section" style="margin:12px 0 10px;padding:14px;">
+      <div style="font-size:13px;font-weight:700;">🛠️ Marketing & Launch Tools</div>
+      <div style="font-size:11px;color:var(--text2);margin:4px 0 10px;">After you create a project in the Wizard above, use these to check your ticker, generate marketing, and post it.</div>
+
+      <!-- Ticker collision check -->
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <input class="tg-input" id="ls-ticker-check" placeholder="Check if a ticker is taken: BULL" style="margin:0;flex:1;">
+        <button class="tg-add-btn" id="ls-ticker-btn" style="white-space:nowrap;">🔎 Check Ticker</button>
+      </div>
+      <div id="ls-ticker-out" style="display:none;font-size:11px;margin-top:6px;padding:8px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid var(--border);line-height:1.5;"></div>
+
+      <!-- Marketing pack -->
+      <button class="tg-add-btn" id="ls-marketing-btn" style="width:100%;margin-top:8px;background:linear-gradient(135deg,rgba(236,72,153,0.15),rgba(124,58,237,0.15));border-color:rgba(236,72,153,0.35);">📣 Generate Marketing Pack (8-tweet thread + TG post + shill kit)</button>
+      <div id="ls-marketing-out" style="display:none;margin-top:8px;padding:10px;border-radius:10px;background:rgba(15,23,42,0.6);border:1px solid var(--border);font-size:11px;max-height:340px;overflow-y:auto;white-space:pre-wrap;line-height:1.55;"></div>
+      <div id="ls-post-row" style="display:none;gap:6px;margin-top:6px;flex-wrap:wrap;">
+        <button class="tg-add-btn ls-post" data-what="announcement" style="flex:1;font-size:10px;min-width:90px;">📌 Post + Pin Announcement</button>
+        <button class="tg-add-btn ls-post" data-what="thread" style="flex:1;font-size:10px;min-width:80px;">🧵 Post Thread</button>
+        <button class="tg-add-btn ls-post" data-what="all" style="flex:1;font-size:10px;min-width:80px;">📣 Post Everything</button>
+      </div>
+      <div id="ls-post-status" style="display:none;font-size:10px;margin-top:4px;color:var(--text2);"></div>
+
+      <!-- Launch checklist -->
+      <details style="margin-top:8px;">
+        <summary style="font-size:11px;color:var(--text2);cursor:pointer;">📋 Launch Day Checklist (tap to open)</summary>
+        <div style="font-size:11px;line-height:2;padding:8px 4px;color:var(--text);">
+          <label style="display:block;"><input type="checkbox"> LP locked / burned (post proof link)</label>
+          <label style="display:block;"><input type="checkbox"> Contract renounced (if meme) or roles documented</label>
+          <label style="display:block;"><input type="checkbox"> Socials live: X, Telegram, site (use the generator ↑)</label>
+          <label style="display:block;"><input type="checkbox"> DexScreener profile updated (logo + links, ~$300)</label>
+          <label style="display:block;"><input type="checkbox"> Pinned TG post + thread ready (use 📣 above)</label>
+          <label style="display:block;"><input type="checkbox"> Caller list booked (use Caller Guide below)</label>
+          <label style="display:block;"><input type="checkbox"> CoinGecko + CMC applications submitted (free)</label>
+          <label style="display:block;"><input type="checkbox"> Buyback/支援 wallet funded for dips</label>
+        </div>
+      </details>
+    </div>
+
 
     <div class="tg-section" style="margin-bottom:10px;padding:14px;">
       <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px;">📊 CALLER INTELLIGENCE — real tracked win rates</div>
@@ -1767,6 +1869,107 @@
       </div>
       <div id="ls-advice" style="display:none;margin-top:8px;padding:10px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.2);border-radius:10px;font-size:11px;line-height:1.5;white-space:pre-wrap;"></div>
     </div>
+    <!-- ═══ AUTO-LAUNCH DESK — she runs the whole coin (PREMIUM) ═══ -->
+    <div class="tg-section" style="margin-bottom:10px;padding:14px;border:1px solid rgba(124,58,237,0.35);background:linear-gradient(135deg,rgba(124,58,237,0.06),rgba(0,212,255,0.04));">
+      <div style="font-size:12px;font-weight:700;margin-bottom:2px;">🤖 Auto-Launch Desk <span style="font-size:9px;color:#a78bfa;border:1px solid #a78bfa;border-radius:6px;padding:1px 6px;margin-left:4px;">PREMIUM</span></div>
+      <div style="font-size:10px;color:var(--text2);margin-bottom:10px;">She builds the site, art, marketing, runs buybacks + growth, and you can edit everything while it's live. On-chain actions run in simulation until real wallet keys (Phase 4).</div>
+
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <button class="tg-add-btn" id="ald-mode-auto" style="flex:1;background:linear-gradient(135deg,rgba(124,58,237,0.25),rgba(0,212,255,0.2));border-color:rgba(124,58,237,0.5);">⚡ One-Button Full Auto</button>
+        <button class="tg-add-btn" id="ald-mode-adv" style="flex:1;">⚙️ Advanced</button>
+        <button class="tg-add-btn" id="ald-mode-manual" style="flex:1;background:rgba(148,163,184,0.1);">✋ Manual</button>
+      </div>
+
+      <!-- Advanced: each step its own button -->
+      <div id="ald-advanced" style="display:none;background:rgba(15,23,42,0.5);border-radius:10px;padding:10px;margin-bottom:8px;">
+        <div style="font-size:10px;color:var(--text2);margin-bottom:6px;">Run any step on its own:</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          <button class="tg-add-btn ald-step" data-step="site" style="font-size:11px;">🌐 Build Site</button>
+          <button class="tg-add-btn ald-step" data-step="art" style="font-size:11px;">🎨 Generate Logo</button>
+          <button class="tg-add-btn ald-step" data-step="marketing" style="font-size:11px;">📣 Marketing Pack</button>
+          <button class="tg-add-btn ald-step" data-step="buyback" style="font-size:11px;">💰 Arm Buyback</button>
+          <button class="tg-add-btn ald-step" data-step="growth" style="font-size:11px;">📈 Start Growth</button>
+          <button class="tg-add-btn ald-step" data-step="health" style="font-size:11px;">🩺 Health Check</button>
+        </div>
+      </div>
+
+      <div id="ald-status" style="display:none;font-size:11px;margin-bottom:8px;padding:10px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid var(--border);white-space:pre-wrap;line-height:1.6;max-height:200px;overflow-y:auto;"></div>
+
+      <!-- LIVE CONSOLE — appears once a project exists, fully editable -->
+      <div id="ald-console" style="display:none;background:rgba(8,12,22,0.7);border:1px solid rgba(0,212,255,0.2);border-radius:10px;padding:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;" id="ald-proj-name">Project</div>
+          <select class="tg-input" id="ald-proj-picker" style="margin:0;width:140px;font-size:10px;padding:3px 6px;"></select>
+        </div>
+        <div id="ald-health" style="font-size:10px;color:var(--text2);margin-bottom:8px;"></div>
+
+        <details style="margin-bottom:8px;">
+          <summary style="font-size:10px;font-weight:700;cursor:pointer;color:var(--accent);">✏️ Edit project details (name, CA, socials, image)</summary>
+          <div style="padding:8px 0;display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+            <input class="tg-input" id="aed-name" placeholder="Name" style="margin:0;font-size:10px;padding:4px;">
+            <input class="tg-input" id="aed-symbol" placeholder="Symbol" style="margin:0;font-size:10px;padding:4px;">
+            <input class="tg-input" id="aed-ca" placeholder="Contract address (CA)" style="margin:0;grid-column:1/3;font-size:10px;padding:4px;font-family:monospace;">
+            <input class="tg-input" id="aed-tagline" placeholder="Tagline" style="margin:0;grid-column:1/3;font-size:10px;padding:4px;">
+            <textarea class="tg-input" id="aed-description" placeholder="Description" style="margin:0;grid-column:1/3;font-size:10px;padding:4px;height:40px;resize:vertical;"></textarea>
+            <input class="tg-input" id="aed-twitter" placeholder="Twitter URL" style="margin:0;font-size:10px;padding:4px;">
+            <input class="tg-input" id="aed-telegram" placeholder="Telegram URL" style="margin:0;font-size:10px;padding:4px;">
+            <input class="tg-input" id="aed-tgchat" placeholder="TG chat ID (auto-post)" style="margin:0;font-size:10px;padding:4px;">
+            <input class="tg-input" id="aed-siteurl" placeholder="Live site URL" style="margin:0;font-size:10px;padding:4px;">
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="tg-add-btn" id="aed-save" style="flex:1;font-size:10px;background:rgba(52,211,153,0.15);">💾 Save details</button>
+            <button class="tg-add-btn" id="aed-deploy-site" style="flex:1;font-size:10px;background:rgba(0,212,255,0.12);">🌐 Deploy site live</button>
+          </div>
+          <div id="aed-status" style="display:none;font-size:10px;margin-top:5px;color:var(--text2);white-space:pre-wrap;"></div>
+        </details>
+
+        <div style="font-size:10px;font-weight:700;margin-bottom:4px;">💰 Buyback (edit live)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px;">
+          <label style="font-size:10px;">Enabled <input type="checkbox" id="ald-bb-enabled"></label>
+          <select class="tg-input" id="ald-bb-trigger" style="margin:0;font-size:10px;padding:3px;"><option value="volume">On volume</option><option value="price_drop">On price drop</option></select>
+          <input class="tg-input" id="ald-bb-amount" type="number" placeholder="Buy $ per trigger" style="margin:0;font-size:10px;padding:4px;">
+          <input class="tg-input" id="ald-bb-max" type="number" placeholder="Max $/day" style="margin:0;font-size:10px;padding:4px;">
+          <input class="tg-input" id="ald-bb-volthresh" type="number" placeholder="Vol threshold $" style="margin:0;font-size:10px;padding:4px;">
+          <input class="tg-input" id="ald-bb-drop" type="number" placeholder="Price drop %" style="margin:0;font-size:10px;padding:4px;">
+        </div>
+
+        <div style="font-size:10px;font-weight:700;margin-bottom:4px;">📈 Growth (edit live)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px;">
+          <label style="font-size:10px;">Enabled <input type="checkbox" id="ald-g-enabled"></label>
+          <input class="tg-input" id="ald-g-cadence" type="number" placeholder="Raid every N hrs" style="margin:0;font-size:10px;padding:4px;">
+          <label style="font-size:10px;">Caller outreach <input type="checkbox" id="ald-g-callers"></label>
+          <label style="font-size:10px;">Holder rewards <input type="checkbox" id="ald-g-rewards"></label>
+        </div>
+
+        <div style="font-size:10px;font-weight:700;margin:8px 0 4px;">🔐 Buyback Wallet</div>
+        <div style="display:flex;gap:5px;margin-bottom:6px;">
+          <select class="tg-input" id="ald-wallet-mode" style="margin:0;flex:1;font-size:10px;padding:4px;">
+            <option value="sim">Simulation (no wallet)</option>
+            <option value="connect">Connect wallet (approve each buy — safest)</option>
+            <option value="burner">Burner key (full auto, encrypted)</option>
+          </select>
+        </div>
+        <div id="ald-wallet-connect" style="display:none;margin-bottom:6px;">
+          <input class="tg-input" id="ald-connect-addr" placeholder="Your wallet address" style="margin:0;font-size:10px;padding:4px;">
+          <button class="tg-add-btn" id="ald-connect-btn" style="width:100%;margin-top:4px;font-size:10px;">🔗 Use this wallet (approve-per-buy)</button>
+        </div>
+        <div id="ald-wallet-burner" style="display:none;margin-bottom:6px;">
+          <input class="tg-input" id="ald-burner-key" type="password" placeholder="Burner private key (fund w/ buyback $ only!)" style="margin:0;font-size:10px;padding:4px;">
+          <input class="tg-input" id="ald-burner-pin" type="password" placeholder="Set a PIN (encrypts the key)" style="margin:0;margin-top:4px;font-size:10px;padding:4px;">
+          <button class="tg-add-btn" id="ald-burner-btn" style="width:100%;margin-top:4px;font-size:10px;">🔑 Arm encrypted burner</button>
+          <div style="font-size:9px;color:#f59e0b;margin-top:3px;">⚠️ Use a SEPARATE wallet funded with only buyback money — never your main bag.</div>
+        </div>
+
+        <label style="font-size:10px;display:block;margin-bottom:6px;"><input type="checkbox" id="ald-bb-autoapprove"> 🤖 Full auto — she buys back automatically every time a trigger hits (burner only)</label>
+        <div style="display:flex;gap:6px;margin-bottom:8px;">
+          <button class="tg-add-btn" id="ald-save" style="flex:1;font-size:11px;background:rgba(52,211,153,0.15);border-color:rgba(52,211,153,0.4);">💾 Save Changes</button>
+          <select class="tg-input" id="ald-status-set" style="margin:0;width:110px;font-size:10px;padding:3px;"><option value="live">▶️ Live</option><option value="paused">⏸️ Paused</option><option value="ended">⏹️ Ended</option></select>
+        </div>
+        <div style="font-size:10px;font-weight:700;margin-bottom:4px;">📜 Activity Log</div>
+        <div id="ald-log" style="font-size:10px;color:var(--text2);max-height:120px;overflow-y:auto;line-height:1.5;"></div>
+      </div>
+    </div>
+
   </div>
 
   <div class="trade-tab-content" id="tab-sniper">
@@ -1801,10 +2004,26 @@
         <div class="ov-chip-label">Open</div>
         <div class="ov-chip-val" id="ov-open" style="color:#fbbf24;">0</div>
       </div>
+      <div class="ov-chip" id="ov-score-chip" style="cursor:pointer;" title="Asuka Score — composite of all 25+ indicators for your top coin">
+        <div class="ov-chip-label">Score</div>
+        <div class="ov-chip-val" id="ov-asuka-score">—</div>
+      </div>
       <div class="ov-chip">
         <div class="ov-chip-label">Engine</div>
         <div class="ov-chip-val" id="ov-engine" style="font-size:11px;"><span class="scan-pulse"></span>Live</div>
       </div>
+    </div>
+
+    <!-- Asuka Level -->
+    <div class="tg-section" style="margin-bottom:10px;padding:10px 12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+        <span style="font-size:11px;font-weight:700;">🧠 Asuka <span id="asuka-level" style="color:var(--accent);">Lv.1</span></span>
+        <span id="asuka-xp" style="font-size:9px;color:var(--text2);">0 XP</span>
+      </div>
+      <div style="height:6px;background:rgba(15,23,42,0.8);border-radius:3px;overflow:hidden;">
+        <div id="asuka-xp-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#00d4ff,#7c3aed);border-radius:3px;box-shadow:0 0 8px rgba(0,212,255,0.5);transition:width 1s ease;"></div>
+      </div>
+      <div id="asuka-xp-detail" style="font-size:9px;color:var(--text2);margin-top:4px;"></div>
     </div>
 
     <!-- Risk Protections -->
@@ -1840,6 +2059,43 @@
         </label>
       </div>
       <div style="font-size:10px;color:var(--text2);margin-top:6px;">Auto Pilot = Asuka manages the top protections herself</div>
+    </div>
+
+    <!-- Position Doctor -->
+    <div class="tg-section" style="margin-bottom:10px;padding:12px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:4px;">🩺 Position Doctor</div>
+      <div style="font-size:10px;color:var(--text2);margin-bottom:8px;">Diagnose ANY position — even ones opened elsewhere</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px;">
+        <input class="tg-input" id="pd-coin" placeholder="Coin" style="margin:0;">
+        <select class="tg-input" id="pd-dir" style="margin:0;"><option value="long">Long</option><option value="short">Short</option></select>
+        <input class="tg-input" id="pd-lev" placeholder="Lev (10x)" type="number" style="margin:0;">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+        <input class="tg-input" id="pd-entry" placeholder="Entry price" type="number" style="margin:0;">
+        <input class="tg-input" id="pd-size" placeholder="Size $ (optional)" type="number" style="margin:0;">
+      </div>
+      <button class="tg-add-btn" id="pd-btn" style="width:100%;">🩺 Diagnose My Position</button>
+      <div id="pd-out" style="display:none;margin-top:8px;padding:10px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.2);border-radius:10px;font-size:11px;line-height:1.5;white-space:pre-wrap;"></div>
+    </div>
+
+    <!-- What-If Simulator -->
+    <div class="tg-section" style="margin-bottom:10px;padding:12px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:4px;">🎮 What-If Simulator</div>
+      <div style="font-size:10px;color:var(--text2);margin-bottom:8px;">"What if I bought X at Y?" — test any trade idea risk-free</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px;">
+        <input class="tg-input" id="wi-coin" placeholder="Coin" style="margin:0;">
+        <input class="tg-input" id="wi-buy" placeholder="Buy @ (blank=now)" type="number" style="margin:0;">
+        <input class="tg-input" id="wi-sell" placeholder="Sell @ (blank=now)" type="number" style="margin:0;">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+        <input class="tg-input" id="wi-amount" placeholder="Amount $ (100)" type="number" style="margin:0;">
+        <input class="tg-input" id="wi-lev" placeholder="Leverage (1x)" type="number" style="margin:0;">
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="tg-add-btn" id="wi-calc-btn" style="flex:1;">🧮 Calculate</button>
+        <button class="tg-add-btn" id="wi-demo-btn" style="flex:1;background:rgba(52,211,153,0.12);border-color:rgba(52,211,153,0.35);">▶️ Open as Demo Trade</button>
+      </div>
+      <div id="wi-out" style="display:none;margin-top:8px;padding:10px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.2);border-radius:10px;font-size:11px;line-height:1.6;"></div>
     </div>
 
     <!-- Panic close-all -->
@@ -2521,6 +2777,9 @@
 
 
 <!-- PAGE 5 — OTHERS -->
+<div class="page" id="page-6" data-page-id="6" style="display:none;flex-direction:column;padding:0 14px;overflow-y:auto;">
+  <div id="website-page-host" style="padding-top:10px;"></div>
+</div>
 <div class="page" id="page-5">
 <div style="overflow-y:auto;height:100%;padding:12px;">
 
@@ -2563,17 +2822,7 @@
 
       <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;">YOUR BOOKS</div>
       <div id="study-progress-line" style="display:none;font-size:11px;color:var(--accent);margin-bottom:8px;padding:8px;background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.2);border-radius:8px;"></div>
-      <div id="books-list" style="margin-bottom:12px;"><div style="color:var(--text2);font-size:12px;text-align:center;padding:12px;">No textbooks yet</div></div>
 
-      <!-- Page viewer -->
-      <div style="border-top:1px solid var(--border2);padding-top:10px;">
-        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;">PAGE VIEWER</div>
-        <div style="display:flex;gap:6px;margin-bottom:6px;">
-          <input class="tg-input" id="page-jump-input" type="number" placeholder="e.g. 161" style="margin:0;flex:1;">
-          <button class="tg-add-btn" id="page-jump-btn">Go to Page</button>
-        </div>
-        <div id="page-content-display" style="display:none;font-size:11px;color:var(--text2);background:var(--bg3);border-radius:8px;padding:10px;max-height:200px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;"></div>
-      </div>
     </div>
 
     <!-- Voice study commands -->
@@ -2687,6 +2936,20 @@
         <button class="tg-add-btn" id="brain-import-btn">📥 Import Brain</button>
       </div>
       <div id="brain-status" style="font-size:11px;margin-top:6px;display:none;"></div>
+      <div style="border-top:1px solid var(--border);margin:12px 0;"></div>
+      <div style="font-size:10px;font-weight:600;color:var(--text2);margin-bottom:6px;">🧪 STRATEGY SANDBOX — your settings vs hers on real history</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:6px;">
+        <input class="tg-input" id="sb-coin" placeholder="BTC" style="margin:0;">
+        <input class="tg-input" id="sb-rsi" placeholder="RSI 30" type="number" style="margin:0;">
+        <input class="tg-input" id="sb-tp" placeholder="TP 2.5%" type="number" step="0.1" style="margin:0;">
+        <input class="tg-input" id="sb-sl" placeholder="SL 1.5%" type="number" step="0.1" style="margin:0;">
+      </div>
+      <button class="tg-add-btn" id="sb-btn" style="width:100%;">⚔️ Battle My Settings vs Asuka's</button>
+      <div id="sb-out" style="font-size:11px;margin-top:6px;display:none;"></div>
+
+      <div style="border-top:1px solid var(--border);margin:12px 0;"></div>
+      <button class="tg-add-btn" id="tax-btn" style="width:100%;">📋 Export All Trades CSV (taxes)</button>
+      <div id="tax-status" style="font-size:11px;margin-top:6px;display:none;"></div>
     </div>
 
     <div class="tg-section" style="margin-bottom:10px;">
@@ -2717,6 +2980,17 @@
 
   <!-- ══ LIFE TAB ══ -->
   <div class="others-tab-content" id="others-life">
+
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:4px;">🪄 Voice Routines</div>
+      <div style="font-size:10px;color:var(--text2);margin-bottom:8px;">Say the trigger phrase → she runs the actions. One action per line: <b>open:Spotify</b>, <b>url:https://...</b>, <b>music:play</b>, <b>music:pause</b>, <b>volume:40</b>, <b>tradingmode</b></div>
+      <div id="routines-list" style="margin-bottom:8px;"></div>
+      <input class="tg-input" id="rt-trigger" placeholder="Trigger phrases (separate with | ): daddy's home|i'm back" style="margin:0 0 6px;">
+      <textarea class="tg-input" id="rt-actions" placeholder="open:Spotify&#10;music:play&#10;tradingmode" style="margin:0 0 6px;height:54px;resize:vertical;"></textarea>
+      <input class="tg-input" id="rt-reply" placeholder="What she says back: Welcome home~ 💕" style="margin:0 0 6px;">
+      <button class="tg-add-btn" id="rt-add-btn" style="width:100%;">+ Save Routine</button>
+      <div id="rt-status" style="font-size:11px;margin-top:6px;display:none;"></div>
+    </div>
 
     <!-- Morning briefing -->
     <div class="tg-section" style="margin-bottom:10px;">
@@ -2926,6 +3200,16 @@
   </div>
   <div id="settings-body">
     <div class="s-section">
+      <div class="s-title">App Mode</div>
+      <div class="s-row"><div class="s-label">Current mode</div><div id="s-current-mode" style="font-weight:700;color:var(--accent);">—</div></div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="tg-add-btn" id="s-mode-companion" style="flex:1;">🌸 Companion</button>
+        <button class="tg-add-btn" id="s-mode-trading" style="flex:1;">📈 Trading PRO</button>
+      </div>
+      <div style="font-size:10px;color:var(--text2);margin-top:6px;">Companion = friend, butler & tutor (no trading). Trading = everything + the full engine.</div>
+      <button class="tg-add-btn" id="s-mode-reset" style="width:100%;margin-top:8px;font-size:11px;background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.3);">🔄 Reset & show mode picker (testing)</button>
+    </div>
+    <div class="s-section">
       <div class="s-title">API Keys</div>
       <div class="s-row"><div class="s-label">CoinGecko</div><input class="s-input" id="s-coingecko" placeholder="Optional" /></div>
       <div class="s-row"><div class="s-label">Moralis</div><input class="s-input" id="s-moralis" placeholder="For wallet tracking" /></div>
@@ -3105,6 +3389,13 @@ async function processAudioQueue() {
 
 // Listen for streaming voice chunks from main process
 ipcRenderer.on('voice-chunk', async (e, chunk) => {
+  // Voice = activity: kill any idle dance instantly
+  try { window._lastActivity = Date.now(); window._lastVoiceChunkAt = Date.now(); window._danceStop && window._danceStop() } catch(e2) {}
+  // Safety: if ElevenLabs drops mid-stream and isLast never arrives, un-stick the flag
+  try {
+    clearTimeout(window._bisTimer)
+    window._bisTimer = setTimeout(() => { botIsSpeaking = false }, 10000)
+  } catch(e2) {}
   // Show text immediately on first chunk
   if (chunk.isFirst) {
     _currentFullText = ''
@@ -3163,6 +3454,51 @@ async function initWaifu() {
         waifuModel.internalModel.coreModel.setParameterValueById('ParamAngleZ',dx*5)
       } catch(e){}
     })
+    // ── IDLE DANCE — she vibes when you're away 💃 ──────────────────────
+    window._lastActivity = Date.now()
+    let _dancing = false
+    let _danceT = 0
+    Object.defineProperty(window, '_danceStop', { value: () => { _dancing = false; _danceT = 0; window._danceForcedUntil = 0 }, configurable: true })
+    Object.defineProperty(window, '_danceStart', { value: () => { _dancing = true; _danceT = 0; window._danceForcedUntil = Date.now() + 125000 }, configurable: true })
+    ipcRenderer.on('asuka-dance', () => setTimeout(() => window._danceStart && window._danceStart(), 3500))
+    ;['mousemove','keydown','click','touchstart','scroll'].forEach(ev =>
+      document.addEventListener(ev, () => {
+        window._lastActivity = Date.now()
+        if (_dancing) { _dancing = false; _danceT = 0 }
+      }, { passive: true })
+    )
+    setInterval(() => {
+      if (!_dancing && Date.now() - (window._lastActivity || Date.now()) > 30000) {
+        _dancing = true
+        _danceT = 0
+        const sp = document.getElementById('waifu-speech')
+        if (sp && !sp.textContent) { sp.textContent = '♪～(´ε｀　)'; setTimeout(() => { if (sp.textContent === '♪～(´ε｀　)') sp.textContent = '' }, 4000) }
+      }
+    }, 5000)
+    setInterval(() => {
+      if (!_dancing || !waifuModel) return
+      // HARD STOPS: recent voice activity or queued audio → no dancing
+      // (forced dance via "dance" command bypasses recency; speaking still cancels it)
+      const _forced = window._danceForcedUntil && Date.now() < window._danceForcedUntil
+      if (!_forced && Date.now() - (window._lastVoiceChunkAt || 0) < 8000) { _dancing = false; _danceT = 0; return }
+      if (typeof _audioQueue !== 'undefined' && _audioQueue.length) { _dancing = false; _danceT = 0; return }
+      const sp = document.getElementById('waifu-speech')
+      if (sp && sp.textContent && sp.textContent !== '♪～(´ε｀　)') return
+      _danceT += 0.033
+      if (_danceT > 120) { _dancing = false; _danceT = 0; window._lastActivity = Date.now(); return } // 2 min max, then rest
+      const ease = Math.min(1, _danceT / 2.5)
+      const beat = _danceT * 2 * Math.PI * 0.98
+      try {
+        const core = waifuModel.internalModel.coreModel
+        core.setParameterValueById('ParamBodyAngleX', Math.sin(beat) * 3.5 * ease)
+        core.setParameterValueById('ParamBodyAngleZ', Math.sin(beat) * 2.5 * ease)
+        core.setParameterValueById('ParamAngleZ', Math.sin(beat + 0.6) * 4.5 * ease)
+        core.setParameterValueById('ParamAngleX', Math.sin(beat * 0.5) * 3 * ease)
+        core.setParameterValueById('ParamAngleY', (Math.abs(Math.sin(beat * 2)) * 2 - 1) * ease)
+        core.setParameterValueById('ParamEyeBallX', Math.sin(beat * 0.5) * 0.3 * ease)
+      } catch(e) {}
+    }, 33)
+
     setTimeout(async()=>{
       const g=`Hey${memory.name?' '+memory.name:''}! Dashboard is open.`
       document.getElementById('waifu-speech').textContent=g
@@ -3378,7 +3714,7 @@ document.getElementById('wallet-add-confirm')?.addEventListener('click',async()=
 const pagesWrapper = document.getElementById('pages-wrapper')
 
 // Map page numbers to element IDs
-const PAGE_IDS = { 1: 'page-1', 2: 'page-2', 3: 'trading-page', 5: 'page-5' }
+const PAGE_IDS = { 1: 'page-1', 2: 'page-2', 3: 'trading-page', 5: 'page-5', 6: 'page-6' }
 
 function navigateToPage(pageNum) {
   // Always close ALL overlays first
@@ -5567,39 +5903,454 @@ function initBookDropZone() {
 // Init after DOM ready
 setTimeout(initBookDropZone, 800)
 
+// ── Auto-Launch Desk ──────────────────────────────────────────────────────
+function aldForm() {
+  return {
+    ca: document.getElementById('ls-ca')?.value.trim() || '',
+    name: document.getElementById('ls-name')?.value.trim() || '',
+    symbol: document.getElementById('ls-symbol')?.value.trim() || '',
+    tagline: document.getElementById('ls-tagline')?.value.trim() || '',
+    twitter: document.getElementById('ls-twitter')?.value.trim() || '',
+    telegram: document.getElementById('ls-telegram')?.value.trim() || '',
+    chain: 'solana'
+  }
+}
+function aldSay(msg) { const s = document.getElementById('ald-status'); s.style.display = 'block'; s.textContent = msg }
+
+document.getElementById('ald-mode-adv')?.addEventListener('click', () => {
+  const a = document.getElementById('ald-advanced'); a.style.display = a.style.display === 'none' ? 'block' : 'none'
+})
+document.getElementById('ald-mode-manual')?.addEventListener('click', () => {
+  aldSay('Manual mode: use the buttons above (Build Site, Marketing Pack, Caller Guide) one at a time. You stay in full control.')
+})
+document.getElementById('ald-mode-auto')?.addEventListener('click', async () => {
+  const form = aldForm()
+  if (!form.name && !form.ca) { aldSay('Enter at least a token name or contract address up top first!') ; return }
+  aldSay('⚡ Asuka is launching everything... this takes ~30-40s\n(site + logo + marketing + buyback + growth)')
+  const r = await ipcRenderer.invoke('launch-full-auto', form).catch(() => null)
+  if (!r?.success) { aldSay('❌ ' + (r?.error || 'Launch failed')) ; return }
+  aldSay('🚀 LAUNCH COMPLETE\n\n' + r.steps.join('\n') + '\n\nEverything is now running — scroll down to the live console to edit anything.')
+  await aldLoadProjects(r.project.id)
+})
+document.querySelectorAll('.ald-step').forEach(btn => btn.addEventListener('click', async function() {
+  const step = this.dataset.step, form = aldForm()
+  if (!form.name && !form.ca) { aldSay('Enter token name or CA first!'); return }
+  const orig = this.textContent; this.textContent = '⏳'
+  try {
+    if (step === 'site') { const r = await ipcRenderer.invoke('launch-generate-site', form); aldSay(r?.success ? '✅ Site built: ' + r.path : '❌ ' + (r?.error||'failed')) }
+    else if (step === 'art') { const r = await ipcRenderer.invoke('launch-generate-art', form); aldSay(r?.success ? '✅ Logo saved: ' + r.path : '⚠️ ' + (r?.error||'failed')) }
+    else if (step === 'marketing') { document.getElementById('ls-marketing-btn')?.click(); aldSay('📣 Generating marketing pack above ↑') }
+    else { // buyback / growth / health → create project then toggle
+      const cr = await ipcRenderer.invoke('launch-create-project', form)
+      if (cr?.success) {
+        const patch = step === 'buyback' ? { buyback: { enabled: true } } : step === 'growth' ? { growth: { enabled: true } } : {}
+        if (Object.keys(patch).length) await ipcRenderer.invoke('launch-update-project', { id: cr.project.id, patch: { ...patch, status: 'live' } })
+        aldSay('✅ ' + step + ' configured — see live console below')
+        await aldLoadProjects(cr.project.id)
+      }
+    }
+  } catch(e) { aldSay('❌ ' + e.message) }
+  this.textContent = orig
+}))
+
+let _aldProject = null
+async function aldLoadProjects(selectId) {
+  const list = await ipcRenderer.invoke('launch-list-projects').catch(() => [])
+  const picker = document.getElementById('ald-proj-picker')
+  if (!list.length) { document.getElementById('ald-console').style.display = 'none'; return }
+  document.getElementById('ald-console').style.display = 'block'
+  picker.innerHTML = list.map(p => `<option value="${p.id}">${p.name||p.symbol} (${p.status})</option>`).join('')
+  const pick = selectId || list[0].id
+  picker.value = pick
+  await aldRenderProject(pick)
+}
+async function aldRenderProject(id) {
+  const p = await ipcRenderer.invoke('launch-get-project', id).catch(() => null)
+  if (!p) return
+  _aldProject = p
+  document.getElementById('ald-proj-name').textContent = `${p.name || p.symbol} — ${p.status}`
+  const h = p.health || {}
+  document.getElementById('ald-health').textContent = h.price ? `Price $${h.price} | Liq $${((h.liq||0)/1000).toFixed(0)}K | Vol $${((h.vol||0)/1000).toFixed(0)}K` : 'No live data yet (add CA for health tracking)'
+  document.getElementById('ald-bb-enabled').checked = !!p.buyback.enabled
+  document.getElementById('ald-bb-trigger').value = p.buyback.triggerType
+  document.getElementById('ald-bb-amount').value = p.buyback.buyAmountUsd
+  document.getElementById('ald-bb-max').value = p.buyback.maxPerDay
+  document.getElementById('ald-bb-volthresh').value = p.buyback.volumeThreshold
+  document.getElementById('ald-bb-drop').value = p.buyback.priceDropPct
+  document.getElementById('ald-g-enabled').checked = !!p.growth.enabled
+  document.getElementById('ald-g-cadence').value = p.growth.raidCadenceHours
+  document.getElementById('ald-g-callers').checked = !!p.growth.callerOutreach
+  document.getElementById('ald-g-rewards').checked = !!p.growth.holderRewards
+  document.getElementById('ald-status-set').value = p.status === 'paused' ? 'paused' : p.status === 'ended' ? 'ended' : 'live'
+  document.getElementById('ald-log').innerHTML = (p.log||[]).slice(0,20).map(l => `• ${l.msg}`).join('<br>') || 'No activity yet'
+  // populate editable identity
+  const setv=(id,v)=>{const el=document.getElementById(id); if(el) el.value=v||''}
+  setv('aed-name',p.name); setv('aed-symbol',p.symbol); setv('aed-ca',p.ca); setv('aed-tagline',p.tagline)
+  setv('aed-description',p.description); setv('aed-twitter',p.twitter); setv('aed-telegram',p.telegram)
+  setv('aed-tgchat',p.telegramChatId); setv('aed-siteurl',p.siteUrl)
+}
+document.getElementById('ald-proj-picker')?.addEventListener('change', function() { aldRenderProject(this.value) })
+
+document.getElementById('aed-save')?.addEventListener('click', async function() {
+  if (!_aldProject) return
+  const g=(id)=>document.getElementById(id).value.trim()
+  const patch = { name:g('aed-name'), symbol:g('aed-symbol'), ca:g('aed-ca'), tagline:g('aed-tagline'), description:g('aed-description'), twitter:g('aed-twitter'), telegram:g('aed-telegram'), telegramChatId:g('aed-tgchat'), siteUrl:g('aed-siteurl') }
+  const r = await ipcRenderer.invoke('launch-update-project', { id:_aldProject.id, patch }).catch(()=>null)
+  const st=document.getElementById('aed-status'); st.style.display='block'
+  st.textContent = r?.success ? '✅ Saved' : '❌ ' + (r?.error||'failed')
+  if(r?.success) aldRenderProject(_aldProject.id)
+})
+document.getElementById('aed-deploy-site')?.addEventListener('click', async function() {
+  if (!_aldProject) return
+  const st=document.getElementById('aed-status'); st.style.display='block'; st.textContent='Deploying...'
+  const r = await ipcRenderer.invoke('deploy-site', { projectId:_aldProject.id }).catch(()=>null)
+  if (r?.success) st.textContent = '🌐 LIVE: ' + r.url
+  else if (r?.error==='no_token') st.textContent = '📋 ' + r.guide
+  else st.textContent = '❌ ' + (r?.error||'failed')
+})
+
+document.getElementById('ald-save')?.addEventListener('click', async function() {
+  if (!_aldProject) return
+  this.textContent = '💾...'
+  const patch = {
+    buyback: {
+      enabled: document.getElementById('ald-bb-enabled').checked,
+      triggerType: document.getElementById('ald-bb-trigger').value,
+      buyAmountUsd: parseFloat(document.getElementById('ald-bb-amount').value) || 200,
+      maxPerDay: parseFloat(document.getElementById('ald-bb-max').value) || 1000,
+      volumeThreshold: parseFloat(document.getElementById('ald-bb-volthresh').value) || 50000,
+      priceDropPct: parseFloat(document.getElementById('ald-bb-drop').value) || 8
+    },
+    growth: {
+      enabled: document.getElementById('ald-g-enabled').checked,
+      raidCadenceHours: parseFloat(document.getElementById('ald-g-cadence').value) || 4,
+      callerOutreach: document.getElementById('ald-g-callers').checked,
+      holderRewards: document.getElementById('ald-g-rewards').checked
+    },
+    status: document.getElementById('ald-status-set').value
+  }
+  await ipcRenderer.invoke('buyback-set-rules', { projectId: _aldProject.id, rules: { ...patch.buyback, autoApprove: document.getElementById('ald-bb-autoapprove').checked } }).catch(()=>{})
+  const r = await ipcRenderer.invoke('launch-update-project', { id: _aldProject.id, patch }).catch(() => null)
+  this.textContent = '💾 Save Changes'
+  if (r?.success) { aldRenderProject(_aldProject.id); aldSay('✅ Saved — changes are live') }
+})
+setTimeout(() => aldLoadProjects().catch(() => {}), 2500)
+
+// ── Website type selector ─────────────────────────────────────────────────
+let _wzType = 'crypto'
+const _typeLabels = {
+  crypto: { name:'Token name', tagline:'Vibe / tagline', desc:'What is this coin about?' },
+  business: { name:'Business name', tagline:'Slogan / what you do', desc:'Describe your business, services, who you serve' },
+  portfolio: { name:'Your name', tagline:'What you do (e.g. Designer)', desc:'About you, your work, your style' },
+  event: { name:'Event name', tagline:'Date + location', desc:'What is the event, who is it for, what happens' },
+  personal: { name:'Your name', tagline:'A line about you', desc:'About you, interests, what this page is for' },
+  resume: { name:'Your name', tagline:'Your title (e.g. Software Engineer)', desc:'Your background, experience, skills' }
+}
+function applyWzType(type) {
+  _wzType = type
+  document.querySelectorAll('.wz-type').forEach(b => {
+    const on = b.dataset.type === type
+    b.style.border = on ? '2px solid #7c3aed' : '1px solid #334155'
+    b.style.background = on ? 'rgba(124,58,237,0.15)' : 'rgba(30,41,59,0.5)'
+  })
+  // Show/hide crypto-only fields
+  document.querySelectorAll('.crypto-only').forEach(el => el.style.display = (type === 'crypto') ? '' : 'none')
+  // Update placeholders
+  const L = _typeLabels[type]
+  const setPh = (id,ph)=>{ const el=document.getElementById(id); if(el) el.placeholder=ph }
+  setPh('wz-name', L.name); setPh('wz-tagline', L.tagline); setPh('wz-description', L.desc)
+}
+document.querySelectorAll('.wz-type').forEach(b => b.addEventListener('click', () => applyWzType(b.dataset.type)))
+applyWzType('crypto')
+
+
+// Domain handling in wizard — simple yes/no
+document.querySelectorAll('.wz-dom-choice').forEach(b => b.addEventListener('click', async function() {
+  const out = document.getElementById('wz-domain-out')
+  const ownBox = document.getElementById('wz-domain-own')
+  if (this.dataset.c === 'yes') {
+    ownBox.style.display = 'block'; ownBox.focus()
+    out.style.display = 'none'
+  } else {
+    ownBox.style.display = 'none'
+    out.style.display = 'block'; out.textContent = '🌐 Creating your domain...'
+    const name = (document.getElementById('wz-name').value || document.getElementById('wz-symbol').value || '').trim()
+    if (!name) { out.textContent = 'Enter a name first'; return }
+    const list = await ipcRenderer.invoke('launch-list-projects').catch(()=>[])
+    const proj = list[list.length-1]
+    const r = await ipcRenderer.invoke('domain-auto-create', { projectId: proj?.id, name }).catch(()=>null)
+    out.textContent = r?.success ? (r.testMode ? '🧪 ' + r.note : '✅ Your domain is ready: ' + r.domain) : '❌ ' + (r?.error||'failed')
+  }
+}))
+document.getElementById('wz-domain-own')?.addEventListener('change', async function() {
+  const domain = this.value.trim(); if (!domain) return
+  const out = document.getElementById('wz-domain-out'); out.style.display='block'; out.textContent='Connecting ' + domain + '...'
+  const list = await ipcRenderer.invoke('launch-list-projects').catch(()=>[])
+  const proj = list[list.length-1]
+  const r = await ipcRenderer.invoke('domain-connect', { projectId: proj?.id, domain }).catch(()=>null)
+  out.textContent = r?.instructions || r?.note || (r?.success ? '✅ Domain connected!' : '❌ Failed')
+})
+
+
+// Post marketing to TG (needs a created project with matching symbol)
+document.querySelectorAll('.ls-post').forEach(b => b.addEventListener('click', async function() {
+  const what = this.dataset.what
+  const st = document.getElementById('ls-post-status'); st.style.display = 'block'; st.textContent = 'Posting...'
+  const sym = (document.getElementById('ls-symbol')?.value || document.getElementById('wz-symbol')?.value || '').toUpperCase()
+  const list = await ipcRenderer.invoke('launch-list-projects').catch(()=>[])
+  let proj = list.find(p => (p.symbol||'').toUpperCase() === sym) || list[list.length-1]
+  if (!proj) { st.textContent = 'Create the project first (Wizard → Create Project)'; return }
+  const r = await ipcRenderer.invoke('post-marketing', { projectId: proj.id, what }).catch(()=>null)
+  st.textContent = r?.success ? r.results.join(' · ') : '❌ ' + (r?.error || 'failed')
+}))
+
+
+// ── Project Wizard ────────────────────────────────────────────────────────
+let _wzImageData = null
+function wzCtx() {
+  return {
+    name: document.getElementById('wz-name').value.trim(),
+    symbol: document.getElementById('wz-symbol').value.trim(),
+    tagline: document.getElementById('wz-tagline').value.trim(),
+    description: document.getElementById('wz-description').value.trim(),
+    chain: document.getElementById('wz-chain').value,
+    supply: document.getElementById('wz-supply').value.trim(),
+    twitter: document.getElementById('wz-twitter').value.trim(),
+    telegram: document.getElementById('wz-telegram').value.trim(),
+    telegramChatId: document.getElementById('wz-tg-chatid')?.value.trim() || '',
+    siteUrl: document.getElementById('wz-site-url').value.trim(),
+    customBrief: document.getElementById('wz-brief')?.value.trim() || ''
+  }
+}
+function wzSay(m) { const s = document.getElementById('wz-status'); s.style.display='block'; s.textContent = m }
+document.querySelectorAll('.wz-ai').forEach(b => b.addEventListener('click', async function() {
+  const field = this.dataset.f; const orig = this.textContent; this.textContent = '⏳'
+  const r = await ipcRenderer.invoke('wizard-assist', { field, ctx: wzCtx() }).catch(()=>null)
+  this.textContent = orig
+  if (r?.success) { const el = document.getElementById('wz-' + field); if (el) el.value = r.value }
+}))
+document.getElementById('wz-fill-all')?.addEventListener('click', async function() {
+  this.textContent = '✨ Thinking...'
+  const r = await ipcRenderer.invoke('wizard-assist-all', wzCtx()).catch(()=>null)
+  this.textContent = '✨ AI Fill All'
+  if (r?.success) {
+    const f = r.fields
+    const set = (id,v)=>{ const el=document.getElementById(id); if(el&&v) el.value=v }
+    set('wz-name',f.name); set('wz-symbol',f.symbol); set('wz-tagline',f.tagline); set('wz-description',f.description)
+    set('wz-supply',f.tokenomics?.supply); set('wz-twitter',f.twitter); set('wz-telegram',f.telegram)
+    wzSay('✨ Filled! Edit anything you like, then Create or Deploy.')
+  } else wzSay('❌ ' + (r?.error||'failed'))
+})
+document.getElementById('wz-img-upload')?.addEventListener('click', ()=>document.getElementById('wz-img-file').click())
+document.getElementById('wz-img-file')?.addEventListener('change', function() {
+  const file = this.files[0]; if (!file) return
+  const reader = new FileReader()
+  reader.onload = () => { _wzImageData = reader.result; const p = document.getElementById('wz-img-preview'); p.style.display='block'; p.textContent = '✅ Image uploaded: ' + file.name }
+  reader.readAsDataURL(file)
+})
+document.getElementById('wz-img-ai')?.addEventListener('click', async function() {
+  this.textContent = '🎨...'
+  const r = await ipcRenderer.invoke('launch-generate-art', wzCtx()).catch(()=>null)
+  this.textContent = '🎨 AI Generate Logo'
+  const p = document.getElementById('wz-img-preview'); p.style.display='block'
+  p.textContent = r?.success ? '✅ Logo generated: ' + r.path : '⚠️ ' + (r?.error||'needs GEMINI_API_KEY image access')
+})
+
+document.getElementById('wz-create')?.addEventListener('click', async function() {
+  const c = wzCtx()
+  // GENERAL (non-crypto) site path
+  if (_wzType !== 'crypto') {
+    if (!c.name) { wzSay('Add a name first!'); return }
+    this.textContent = '🌐 building...'; wzSay('Building your ' + _wzType + ' website... (~30s)')
+    let logoDataUri = _wzImageData || null
+    const r = await ipcRenderer.invoke('build-general-site', {
+      siteType: _wzType, name: c.name, tagline: c.tagline, description: c.description,
+      customBrief: c.customBrief, contact: c.twitter, socials: (c.twitter||'') + ' ' + (c.telegram||''),
+      logoDataUri, wantLogo: !logoDataUri
+    }).catch(()=>null)
+    this.textContent = '🌐 Create Website'
+    wzSay(r?.success ? '✅ Your ' + _wzType + ' website is built!\n' + r.path + '\n\nGo to 🤖 Auto-Desk to deploy it live.' : '❌ ' + (r?.error||'failed'))
+    return
+  }
+  // CRYPTO path (original)
+  if (!c.name && !c.symbol) { wzSay('Fill in at least a token name or symbol first!'); return }
+  this.textContent = '🎨 making logo...'
+  wzSay('Building your website... (~30s)')
+  // Logo first (uploaded wins, else AI), embed into site
+  let logoDataUri = _wzImageData || null
+  if (!logoDataUri) { const art = await ipcRenderer.invoke('launch-generate-art', c).catch(()=>null); if (art?.dataUri) logoDataUri = art.dataUri }
+  this.textContent = '🌐 building site...'
+  const site = await ipcRenderer.invoke('launch-generate-site', { name:c.name, symbol:c.symbol, tagline:c.tagline, chain:c.chain, twitter:c.twitter, telegram:c.telegram, ca:c.ca, customBrief:c.customBrief, logoDataUri }).catch(()=>null)
+  // Save the project too (so Auto-Desk can manage it)
+  const proj = await ipcRenderer.invoke('launch-create-project', { ...c, mode:'manual', sitePath: site?.path }).catch(()=>null)
+  this.textContent = '🌐 Create Website'
+  if (site?.success) {
+    wzSay('✅ Website built' + (logoDataUri ? ' with your logo' : '') + '!\n' + site.path + '\n\nGo to the 🤖 Auto-Desk tab to deploy it live + run buyback/marketing.')
+    if (proj?.success) aldLoadProjects(proj.project.id)
+  } else wzSay('❌ ' + (site?.error || 'Site build failed — try again'))
+})
+
+
+// Buyback wallet mode UI
+document.getElementById('ald-wallet-mode')?.addEventListener('change', function() {
+  document.getElementById('ald-wallet-connect').style.display = this.value === 'connect' ? 'block' : 'none'
+  document.getElementById('ald-wallet-burner').style.display = this.value === 'burner' ? 'block' : 'none'
+})
+document.getElementById('ald-connect-btn')?.addEventListener('click', async () => {
+  if (!_aldProject) return
+  const addr = document.getElementById('ald-connect-addr').value.trim()
+  const r = await ipcRenderer.invoke('buyback-set-connect', { projectId: _aldProject.id, address: addr }).catch(()=>null)
+  aldSay(r?.success ? '🔗 Connect mode set — she\'ll ask you to approve each buyback' : '❌ ' + (r?.error||'failed'))
+})
+document.getElementById('ald-burner-btn')?.addEventListener('click', async () => {
+  if (!_aldProject) return
+  const key = document.getElementById('ald-burner-key').value.trim()
+  const pin = document.getElementById('ald-burner-pin').value.trim()
+  const r = await ipcRenderer.invoke('buyback-set-burner', { projectId: _aldProject.id, privateKey: key, pin }).catch(()=>null)
+  if (r?.success) { document.getElementById('ald-burner-key').value=''; aldSay('🔑 Burner armed + encrypted. Unlock with your PIN to enable auto-execution.') }
+  else aldSay('❌ ' + (r?.error||'failed'))
+})
+
+
+
+// ── Launch suite: ticker check + marketing pack ───────────────────────────
+document.getElementById('ls-ticker-btn')?.addEventListener('click', async function() {
+  const sym = document.getElementById('ls-ticker-check').value.trim()
+  const out = document.getElementById('ls-ticker-out')
+  if (!sym) return
+  this.textContent = '⏳'; out.style.display = 'block'; out.textContent = 'Searching DexScreener...'
+  const r = await ipcRenderer.invoke('launch-check-ticker', sym).catch(() => null)
+  this.textContent = '🔎 Check Ticker'
+  if (!r?.success) { out.textContent = '❌ ' + (r?.error || 'Check failed'); return }
+  out.innerHTML = `<b>${r.verdict}</b>` + (r.matches?.length ? '<br>' + r.matches.map(m => `• ${m.name} (${m.chain}) — liq $${(m.liq/1000).toFixed(0)}K, vol $${(m.vol/1000).toFixed(0)}K`).join('<br>') : '')
+})
+document.getElementById('ls-marketing-btn')?.addEventListener('click', async function() {
+  const out = document.getElementById('ls-marketing-out')
+  const form = {
+    ca: (document.getElementById('wz-name') ? '' : ''),
+    name: document.getElementById('wz-name')?.value.trim() || '',
+    symbol: document.getElementById('wz-symbol')?.value.trim() || '',
+    tagline: document.getElementById('wz-tagline')?.value.trim() || ''
+  }
+  if (!form.name && !form.symbol) { out.style.display = 'block'; out.textContent = 'Fill in the Wizard above first (name + symbol)!'; return }
+  this.textContent = '📣 Asuka is writing the campaign...'
+  out.style.display = 'block'; out.textContent = 'Building the full pack (~20s)...'
+  const r = await ipcRenderer.invoke('launch-marketing-pack', form).catch(() => null)
+  this.textContent = '📣 Generate Marketing Pack (8-tweet thread + TG post + shill kit)'
+  if (!r?.success) { out.textContent = '❌ ' + (r?.error || 'Failed'); return }
+  const p = r.pack
+  document.getElementById('ls-post-row').style.display = 'flex'
+  out.textContent = '🧵 LAUNCH THREAD\n\n' + (p.thread || []).map((t, i) => `${i+1}/ ${t}`).join('\n\n') +
+    '\n\n━━━━━━━━━━\n📌 TELEGRAM PINNED POST\n\n' + (p.tgAnnouncement || '') +
+    '\n\n━━━━━━━━━━\n💬 SHILL REPLIES\n' + (p.shillReplies || []).map(s => '• ' + s).join('\n') +
+    '\n\n⚡ ONE-LINERS\n' + (p.oneLiners || []).map(s => '• ' + s).join('\n') +
+    '\n\n#️⃣ ' + (p.hashtags || []).join(' ')
+})
+
+
+// ── Whiteboard renderer — animates her draw commands like handwriting ──────
+let _wbQueue = [], _wbBusy = false
+
+
+// ── Voice Routines editor ─────────────────────────────────────────────────
+let _routines = []
+async function loadRoutinesUI() {
+  try {
+    const r = await ipcRenderer.invoke('get-routines')
+    _routines = r?.routines || []
+    const list = document.getElementById('routines-list')
+    if (!list) return
+    list.innerHTML = _routines.map((rt, i) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:rgba(15,23,42,0.5);border-radius:8px;margin-bottom:4px;border:1px solid var(--border);">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:11px;font-weight:700;">"${rt.trigger.split('|')[0]}"</div>
+          <div style="font-size:9px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${rt.actions.join(' → ') || 'no actions'}</div>
+        </div>
+        <button data-rt-del="${i}" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:4px;">✕</button>
+      </div>`).join('') || '<div style="font-size:11px;color:var(--text2);text-align:center;padding:8px;">No routines yet</div>'
+    list.querySelectorAll('[data-rt-del]').forEach(b => b.addEventListener('click', async function() {
+      _routines.splice(parseInt(this.dataset.rtDel), 1)
+      await ipcRenderer.invoke('save-routines', _routines)
+      loadRoutinesUI()
+    }))
+  } catch(e) {}
+}
+document.getElementById('rt-add-btn')?.addEventListener('click', async () => {
+  const trigger = document.getElementById('rt-trigger').value.trim()
+  const actions = document.getElementById('rt-actions').value.split('\n').map(a => a.trim()).filter(Boolean)
+  const reply = document.getElementById('rt-reply').value.trim()
+  const st = document.getElementById('rt-status')
+  if (!trigger) { st.style.display='block'; st.style.color='var(--red)'; st.textContent='Need a trigger phrase'; return }
+  _routines.push({ trigger: trigger.toLowerCase(), actions, reply: reply || 'Done! ✨' })
+  const r = await ipcRenderer.invoke('save-routines', _routines)
+  st.style.display = 'block'
+  st.style.color = r?.success ? 'var(--green)' : 'var(--red)'
+  st.textContent = r?.success ? `✅ Saved! Say "${trigger.split('|')[0]}" to trigger it` : '❌ Failed'
+  document.getElementById('rt-trigger').value = ''
+  document.getElementById('rt-actions').value = ''
+  document.getElementById('rt-reply').value = ''
+  loadRoutinesUI()
+})
+setTimeout(loadRoutinesUI, 2200)
+
+
+// ── Position Doctor ───────────────────────────────────────────────────────
+document.getElementById('pd-btn')?.addEventListener('click', async function() {
+  const coin = document.getElementById('pd-coin').value.trim()
+  const entry = document.getElementById('pd-entry').value
+  const out = document.getElementById('pd-out')
+  if (!coin || !entry) { out.style.display='block'; out.textContent='Need coin + entry price'; return }
+  this.textContent = '⏳ Examining...'
+  out.style.display = 'block'; out.textContent = 'Checking live price, flow, regime...'
+  const r = await ipcRenderer.invoke('position-doctor', {
+    coin, direction: document.getElementById('pd-dir').value,
+    entry, leverage: document.getElementById('pd-lev').value || 1,
+    sizeUsd: document.getElementById('pd-size').value
+  }).catch(() => null)
+  this.textContent = '🩺 Diagnose My Position'
+  out.textContent = r?.success ? `Now: $${r.price} | P&L ${r.pnlLev >= 0 ? '+' : ''}${r.pnlLev}% | Liq ${r.liqDist}% away\n\n${r.verdict}` : '❌ ' + (r?.error || 'Failed')
+})
+
+// ── Strategy Sandbox ──────────────────────────────────────────────────────
+document.getElementById('sb-btn')?.addEventListener('click', async function() {
+  const out = document.getElementById('sb-out')
+  this.disabled = true; this.textContent = '⚔️ Simulating 1000 hours...'
+  out.style.display = 'block'; out.style.color = 'var(--accent)'; out.textContent = 'Running both strategies on real history...'
+  const r = await ipcRenderer.invoke('backtest-strategy', {
+    coin: document.getElementById('sb-coin').value.trim() || 'BTC',
+    rsiBuy: document.getElementById('sb-rsi').value || 30,
+    tpPct: document.getElementById('sb-tp').value || 2.5,
+    slPct: document.getElementById('sb-sl').value || 1.5
+  }).catch(() => null)
+  this.disabled = false; this.textContent = "⚔️ Battle My Settings vs Asuka's"
+  if (r?.success) {
+    out.style.color = 'var(--text)'
+    out.innerHTML = `<b>${r.coin}</b> — You: <b style="color:${r.yours.wr >= r.hers.wr ? '#34d399' : '#ef4444'};">${r.yours.wr}%</b> (${r.yours.wins}/${r.yours.total}) vs Asuka: <b>${r.hers.wr}%</b> (${r.hers.wins}/${r.hers.total})<br>${r.verdict}`
+  } else { out.style.color = 'var(--red)'; out.textContent = '❌ ' + (r?.error || 'Failed') }
+})
+
+// ── Tax export ────────────────────────────────────────────────────────────
+document.getElementById('tax-btn')?.addEventListener('click', async () => {
+  const st = document.getElementById('tax-status')
+  const r = await ipcRenderer.invoke('export-tax-csv').catch(() => null)
+  if (st && r && r.error !== 'canceled') {
+    st.style.display = 'block'
+    st.style.color = r.success ? 'var(--green)' : 'var(--red)'
+    st.textContent = r.success ? `✅ ${r.count} trades exported → ${r.path}` : '❌ ' + r.error
+  }
+})
+
+
 // ── Launch Suite ──────────────────────────────────────────────────────────
 document.getElementById('ls-ca')?.addEventListener('blur', async function() {
   const ca = this.value.trim()
   if (!ca || ca.length < 20) return
   const r = await ipcRenderer.invoke('snipe-analyze', ca).catch(() => null)
   if (r?.found) {
-    const n = document.getElementById('ls-name'), s = document.getElementById('ls-symbol')
+    const n = document.getElementById('wz-name'), s = document.getElementById('wz-symbol')
     if (n && !n.value) n.value = r.name || ''
     if (s && !s.value) s.value = r.symbol || ''
   }
-})
-document.getElementById('ls-generate-btn')?.addEventListener('click', async function() {
-  const st = document.getElementById('ls-status')
-  const form = {
-    ca: document.getElementById('ls-ca').value.trim(),
-    name: document.getElementById('ls-name').value.trim(),
-    symbol: document.getElementById('ls-symbol').value.trim(),
-    tagline: document.getElementById('ls-tagline').value.trim(),
-    twitter: document.getElementById('ls-twitter').value.trim(),
-    telegram: document.getElementById('ls-telegram').value.trim(),
-    theme: document.getElementById('ls-theme').value,
-    color: document.getElementById('ls-color').value.trim() || '#00d4ff'
-  }
-  if (!form.name || !form.symbol) { st.style.display='block'; st.style.color='var(--red)'; st.textContent='Need at least name + symbol'; return }
-  this.disabled = true; this.textContent = '✨ Building... (~30s)'
-  st.style.display='block'; st.style.color='var(--accent)'; st.textContent='Asuka is designing the site...'
-  const r = await ipcRenderer.invoke('launch-generate-site', form).catch(() => null)
-  this.disabled = false; this.textContent = '✨ Asuka, Build The Site'
-  if (r?.success) {
-    st.style.color = 'var(--green)'
-    st.innerHTML = `✅ Site built (${r.sizeKB}KB, ${r.chain}) — <span id="ls-open" style="color:var(--accent);cursor:pointer;text-decoration:underline;">Open in browser</span>`
-    document.getElementById('ls-open')?.addEventListener('click', () => ipcRenderer.invoke('open-file-path', r.path))
-  } else { st.style.color='var(--red)'; st.textContent = '❌ ' + (r?.error || 'Failed') }
 })
 document.getElementById('ls-callers-btn')?.addEventListener('click', async () => {
   const out = document.getElementById('ls-callers-out')
@@ -5617,7 +6368,7 @@ document.getElementById('ls-ask-btn')?.addEventListener('click', async function(
   if (!q) return
   this.textContent = '⏳'
   box.style.display = 'block'; box.textContent = 'Thinking through the launch...'
-  const r = await ipcRenderer.invoke('launch-advisor', { ca: document.getElementById('ls-ca').value.trim(), question: q }).catch(() => null)
+  const r = await ipcRenderer.invoke('launch-advisor', { ca: document.getElementById('wz-name')?.value.trim() || '', question: q }).catch(() => null)
   this.textContent = 'Ask'
   box.textContent = r?.success ? r.advice : '❌ ' + (r?.error || 'Failed')
 })
@@ -5824,6 +6575,97 @@ async function updateOverviewStrip() {
 }
 setInterval(updateOverviewStrip, 15000)
 setTimeout(updateOverviewStrip, 1500)
+
+// ── What-If Simulator ─────────────────────────────────────────────────────
+document.getElementById('wi-calc-btn')?.addEventListener('click', async () => {
+  const coin = document.getElementById('wi-coin').value.trim()
+  const out = document.getElementById('wi-out')
+  if (!coin) { out.style.display='block'; out.textContent='Enter a coin!'; return }
+  out.style.display = 'block'; out.textContent = '🧮 Calculating...'
+  const r = await ipcRenderer.invoke('what-if', {
+    coin, buyPrice: document.getElementById('wi-buy').value,
+    sellPrice: document.getElementById('wi-sell').value,
+    amountUsd: document.getElementById('wi-amount').value || 100,
+    leverage: document.getElementById('wi-lev').value || 1
+  }).catch(() => null)
+  if (!r?.success) { out.textContent = '❌ ' + (r?.error || 'Failed'); return }
+  const col = parseFloat(r.pnl) >= 0 ? '#34d399' : '#ef4444'
+  out.innerHTML = `<b>${r.coin}</b> — buy $${r.buy} → sell $${r.sell} (now: $${r.current})<br>` +
+    `You'd get ${r.tokens} ${r.coin}<br>` +
+    `<b style="color:${col};font-size:14px;">${parseFloat(r.pnl) >= 0 ? '+' : ''}$${r.pnl} (${r.pnlPct}%)</b>` +
+    (r.liqPrice ? `<br>⚠️ Liquidation at $${r.liqPrice}${r.liquidated ? ' — <b style="color:#ef4444;">YOU GOT LIQUIDATED in this scenario!</b>' : ''}` : '')
+})
+document.getElementById('wi-demo-btn')?.addEventListener('click', async function() {
+  const coin = document.getElementById('wi-coin').value.trim()
+  const out = document.getElementById('wi-out')
+  if (!coin) { out.style.display='block'; out.textContent='Enter a coin!'; return }
+  this.textContent = '⏳'
+  const r = await ipcRenderer.invoke('open-demo-trade', {
+    coin, direction: 'long',
+    amountUsd: document.getElementById('wi-amount').value || 100,
+    leverage: document.getElementById('wi-lev').value || 1
+  }).catch(() => null)
+  this.textContent = '▶️ Open as Demo Trade'
+  out.style.display = 'block'
+  out.textContent = r?.success ? `✅ Demo trade opened at $${r.trade.entry} — track it in Positions, she manages TP/SL like a real trade!` : '❌ ' + (r?.error || 'Failed')
+})
+
+
+// ── Asuka Score chip — composite 0-100 for the top coin ───────────────────
+async function updateAsukaScore() {
+  try {
+    const s = await ipcRenderer.invoke('get-settings').catch(() => null)
+    const coin = (s?.tradingCoins || ['BTC'])[0]
+    const r = await ipcRenderer.invoke('asuka-score', coin).catch(() => null)
+    const el = document.getElementById('ov-asuka-score')
+    if (!el || !r) return
+    el.textContent = `${coin} ${r.score}`
+    el.style.color = r.score >= 65 ? '#34d399' : r.score <= 35 ? '#ef4444' : '#fbbf24'
+    el.style.textShadow = `0 0 12px ${r.score >= 65 ? 'rgba(52,211,153,0.4)' : r.score <= 35 ? 'rgba(239,68,68,0.4)' : 'rgba(251,191,36,0.4)'}`
+    document.getElementById('ov-score-chip').title = r.summary || 'Asuka Score'
+  } catch(e) {}
+}
+setTimeout(updateAsukaScore, 3000)
+setInterval(updateAsukaScore, 120000)
+
+
+// ── Daily greeting + streak + market mood ─────────────────────────────────
+async function showDailyGreeting() {
+  try {
+    const s = await ipcRenderer.invoke('check-streak')
+    const mood = await ipcRenderer.invoke('market-mood')
+    const box = document.getElementById('daily-greeting')
+    const h = new Date().getHours()
+    const greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
+    document.getElementById('greeting-text').textContent = `${greet}! 💕`
+    if (s?.streak > 1) document.getElementById('streak-badge').textContent = `🔥 ${s.streak} day streak`
+    if (mood) {
+      const fg = mood.fearGreed
+      const parts = []
+      if (fg) parts.push(`Market: ${fg.value || fg} ${fg.classification ? '(' + fg.classification + ')' : ''}`)
+      if (mood.regime) parts.push(`${mood.regime} regime`)
+      document.getElementById('mood-text').textContent = parts.join(' • ')
+    }
+    if (box) box.style.display = 'block'
+  } catch(e) {}
+}
+setTimeout(showDailyGreeting, 1800)
+
+
+async function updateAsukaLevel() {
+  try {
+    const l = await ipcRenderer.invoke('get-asuka-level')
+    if (!l) return
+    document.getElementById('asuka-level').textContent = 'Lv.' + l.level
+    document.getElementById('asuka-xp').textContent = l.xp.toLocaleString() + ' XP'
+    document.getElementById('asuka-xp-bar').style.width = l.progress + '%'
+    if (l.breakdown) document.getElementById('asuka-xp-detail').textContent =
+      `${l.breakdown.lessons} lessons • ${l.breakdown.trades} trades • ${l.breakdown.studySessions} study sessions`
+  } catch(e) {}
+}
+setTimeout(updateAsukaLevel, 2000)
+setInterval(updateAsukaLevel, 60000)
+
 
 // ── Risk Protection toggles ───────────────────────────────────────────────
 const RP_KEYS = { 'rp-autopilot':'riskAutoPilot', 'rp-profitlock':'profitLockEnabled', 'rp-antitilt':'antiTiltEnabled', 'rp-volsizing':'volSizingEnabled' }
@@ -6968,28 +7810,47 @@ async function loadPortfolio() {
     return;
   }
 
-  document.getElementById('tokens-section').innerHTML = '<div class="empty-state">Loading...</div>';
-  document.getElementById('txns-section').innerHTML = '<div class="empty-state">Loading...</div>';
+  // Only show "Loading" on FIRST load — afterwards keep showing last data while refreshing
+  if (!window._lastPortfolio) {
+    document.getElementById('tokens-section').innerHTML = '<div class="empty-state">Loading...</div>';
+    document.getElementById('txns-section').innerHTML = '<div class="empty-state">Loading...</div>';
+  }
 
   let totalValue = 0;
   let allTokens = [];
   let allTxns = [];
+  let anyStale = false;
 
-  for (const wallet of wallets) {
-    try {
-      const data = await ipcRenderer.invoke('get-wallet-data', wallet.address, wallet.chain);
-      if (data?.tokens) {
-        allTokens = allTokens.concat(data.tokens.map(t => ({ ...t, walletLabel: wallet.label })));
-        totalValue += data.totalUsd || 0;
-      }
-      if (data?.txns) {
-        allTxns = allTxns.concat(data.txns.map(t => ({ ...t, walletLabel: wallet.label })));
-      }
-    } catch(e) { console.error('Wallet load error:', e.message); }
+  // PARALLEL fetch — 3 wallets load in the time of 1
+  const results = await Promise.all(wallets.map(w =>
+    ipcRenderer.invoke('get-wallet-data', w.address, w.chain)
+      .then(data => ({ wallet: w, data }))
+      .catch(() => ({ wallet: w, data: null }))
+  ));
+
+  for (const { wallet, data } of results) {
+    if (data?.stale) anyStale = true;
+    if (data?.tokens) {
+      allTokens = allTokens.concat(data.tokens.map(t => ({ ...t, walletLabel: wallet.label })));
+      totalValue += data.totalUsd || 0;
+    }
+    if (data?.txns) {
+      allTxns = allTxns.concat(data.txns.map(t => ({ ...t, walletLabel: wallet.label })));
+    }
+  }
+
+  // If EVERYTHING failed, keep last good snapshot instead of zeroing out
+  if (!allTokens.length && window._lastPortfolio) {
+    ({ totalValue, allTokens, allTxns } = window._lastPortfolio);
+    anyStale = true;
+  } else if (allTokens.length) {
+    window._lastPortfolio = { totalValue, allTokens, allTxns };
   }
 
   // Update total value
   document.getElementById('port-value').textContent = `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  document.getElementById('port-value').style.opacity = anyStale ? '0.6' : '1';
+  document.getElementById('port-value').title = anyStale ? 'Refreshing — showing last known values' : '';
 
   // Render tokens
   if (allTokens.length) {
@@ -7122,6 +7983,29 @@ document.getElementById('cust-save')?.addEventListener('click',async()=>{
 })
 
 // ── Settings ──
+
+// ── Settings: app mode switcher ───────────────────────────────────────────
+async function refreshModeDisplay() {
+  const r = await ipcRenderer.invoke('get-app-mode').catch(()=>({mode:null}))
+  const el = document.getElementById('s-current-mode')
+  if (el) el.textContent = r.mode === 'trading' ? '📈 Trading PRO' : r.mode === 'companion' ? '🌸 Companion' : 'not chosen'
+}
+document.getElementById('s-mode-companion')?.addEventListener('click', async () => {
+  await ipcRenderer.invoke('set-app-mode', 'companion').catch(()=>{})
+  applyMode('companion'); refreshModeDisplay()
+})
+document.getElementById('s-mode-trading')?.addEventListener('click', async () => {
+  await ipcRenderer.invoke('set-app-mode', 'trading').catch(()=>{})
+  applyMode('trading'); refreshModeDisplay()
+})
+document.getElementById('s-mode-reset')?.addEventListener('click', async () => {
+  await ipcRenderer.invoke('set-app-mode', 'companion').catch(()=>{}) // set then clear via picker
+  // force the picker by clearing through a dedicated call
+  await ipcRenderer.invoke('reset-app-mode').catch(()=>{})
+  document.getElementById('mode-picker').style.display = 'flex'
+})
+document.getElementById('settings-open-btn')?.addEventListener('click', () => setTimeout(refreshModeDisplay, 100))
+
 document.getElementById('settings-open-btn')?.addEventListener('click',()=>{
   document.getElementById('settings-page').classList.add('open')
   // Restore settings values
@@ -7286,6 +8170,57 @@ document.getElementById('close-btn')?.addEventListener('click',()=>{ ipcRenderer
 setInterval(loadPrices, 30000)
 
 // ── Init ──
+
+// ── App mode picker (first launch) ────────────────────────────────────────
+async function initAppMode() {
+  try {
+    const r = await ipcRenderer.invoke('get-app-mode').catch(()=>({mode:null}))
+    if (!r.mode) {
+      document.getElementById('mode-picker').style.display = 'flex'
+    } else {
+      applyMode(r.mode)
+    }
+  } catch(e) {}
+}
+function applyMode(mode) {
+  const companion = (mode === 'companion')
+  // Hide Telegram (2) + Trading (3) in companion mode
+  const tgTab = document.querySelector('.page-tab[data-page="2"]')
+  const tradingTab = document.querySelector('.page-tab[data-page="3"]')
+  const webTab = document.getElementById('website-tab')
+  if (tgTab) tgTab.style.display = companion ? 'none' : ''
+  if (tradingTab) tradingTab.style.display = companion ? 'none' : ''
+  // Show the standalone Website tab only in companion mode
+  if (webTab) webTab.style.display = companion ? '' : 'none'
+  // Move the website wizard between the Launch sub-tab (trading) and the Website page (companion)
+  const wiz = document.getElementById('website-wizard-section')
+  if (wiz) {
+    if (companion) {
+      const host = document.getElementById('website-page-host')
+      if (host && wiz.parentElement !== host) host.appendChild(wiz)
+    } else {
+      const launch = document.getElementById('tab-launch')
+      if (launch && wiz.parentElement !== launch) launch.insertBefore(wiz, launch.firstChild)
+    }
+  }
+  // If currently on a now-hidden tab, bounce to Dashboard
+  if (companion) {
+    const active = document.querySelector('.page-tab.active')
+    if (active && ['2','3'].includes(active.dataset.page)) navigateToPage(1)
+  }
+}
+document.querySelectorAll('.mode-card').forEach(c => {
+  c.addEventListener('mouseover', () => c.style.transform = 'translateY(-4px)')
+  c.addEventListener('mouseout', () => c.style.transform = 'translateY(0)')
+  c.addEventListener('click', async () => {
+    const mode = c.dataset.mode
+    await ipcRenderer.invoke('set-app-mode', mode).catch(()=>{})
+    document.getElementById('mode-picker').style.display = 'none'
+    applyMode(mode)
+  })
+})
+initAppMode()
+
 window.addEventListener('DOMContentLoaded', async () => {
   try { await loadData() } catch(e) { console.error('loadData error:', e) }
   try { initWaifu() } catch(e) { console.error('initWaifu error:', e) }

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family:'Nunito',system-ui,-apple-system,sans-serif; -webkit-user-select:none; }
+  html,body { width:100%; height:100%; background:#0f1420; color:#e8edf4; overflow:hidden; }
+  #top { display:flex; align-items:center; gap:12px; padding:14px 18px; -webkit-app-region:drag; }
+  #close { -webkit-app-region:no-drag; cursor:pointer; color:#64748b; font-size:20px; }
+  #progress-track { flex:1; height:14px; background:#1e293b; border-radius:10px; overflow:hidden; }
+  #progress-fill { height:100%; width:0%; background:linear-gradient(90deg,#a78bfa,#00d4ff); border-radius:10px; transition:width .35s ease; }
+  #hearts { font-size:15px; -webkit-app-region:no-drag; }
+  #stage { padding:10px 28px 24px; height:calc(100% - 140px); overflow-y:auto; }
+  .lesson-title { font-size:22px; font-weight:800; margin-bottom:14px; color:#fff; }
+
+  /* Explanation card */
+  #explain { background:#fff; color:#1a1a2e; border-radius:16px; padding:22px; line-height:1.6; font-size:15px; }
+  #explain h2 { font-size:19px; margin-bottom:10px; color:#7c3aed; }
+  #explain p { margin-bottom:10px; }
+  .ex-ja { color:#0891b2; font-weight:700; }
+
+  /* Exercise shells */
+  .ex-prompt { font-size:18px; font-weight:700; margin-bottom:20px; line-height:1.4; }
+  .tile, .opt-card, .match-card { cursor:pointer; transition:.12s; user-select:none; }
+
+  /* Arrange */
+  #build-zone { min-height:56px; border-bottom:2px dashed #334155; display:flex; flex-wrap:wrap; gap:8px; padding:10px 0; margin-bottom:18px; }
+  #tile-bank { display:flex; flex-wrap:wrap; gap:10px; }
+  .tile { background:#1e293b; border:1px solid #334155; border-bottom:3px solid #334155; border-radius:12px; padding:12px 16px; font-size:17px; font-weight:600; }
+  .tile:active { transform:translateY(2px); border-bottom-width:1px; }
+  .tile.used { opacity:.25; pointer-events:none; }
+
+  /* Multiple choice / blank */
+  .opts { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .opt-card { background:#1e293b; border:2px solid #334155; border-radius:14px; padding:18px; font-size:18px; font-weight:700; text-align:center; }
+  .opt-card:hover { border-color:#a78bfa; }
+  .opt-card.correct { border-color:#22c55e; background:rgba(34,197,94,0.15); }
+  .opt-card.wrong { border-color:#ef4444; background:rgba(239,68,68,0.15); }
+
+  /* Match */
+  .match-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  .match-col { display:flex; flex-direction:column; gap:10px; }
+  .match-card { background:#1e293b; border:2px solid #334155; border-radius:12px; padding:14px; font-size:16px; font-weight:600; text-align:center; }
+  .match-card.sel { border-color:#a78bfa; background:rgba(167,139,250,0.15); }
+  .match-card.done { border-color:#22c55e; background:rgba(34,197,94,0.12); opacity:.6; pointer-events:none; }
+
+  /* Listen / type */
+  #type-input { width:100%; padding:14px; border-radius:12px; border:2px solid #334155; background:#1e293b; color:#fff; font-size:17px; }
+
+  /* Bottom bar */
+  #bottom { position:fixed; bottom:0; left:0; right:0; padding:16px 28px; background:#0f1420; border-top:1px solid #1e293b; display:flex; justify-content:space-between; align-items:center; }
+  #feedback { font-size:16px; font-weight:700; }
+  #feedback.ok { color:#22c55e; }
+  #feedback.no { color:#ef4444; }
+  .btn { -webkit-app-region:no-drag; cursor:pointer; border:none; border-radius:14px; padding:14px 28px; font-size:16px; font-weight:800; }
+  .btn-primary { background:linear-gradient(135deg,#a78bfa,#00d4ff); color:#fff; }
+  .btn-primary:disabled { opacity:.4; cursor:default; }
+  .btn-check { background:#22c55e; color:#06210f; }
+  .speak-btn { background:#1e293b; border:1px solid #334155; color:#a78bfa; cursor:pointer; border-radius:10px; padding:8px 12px; font-size:13px; -webkit-app-region:no-drag; }
+</style>
+</head>
+<body>
+  <div id="top">
+    <div id="progress-track"><div id="progress-fill"></div></div>
+    <div id="hearts">❤️❤️❤️</div>
+    <div id="close" title="Close">✕</div>
+  </div>
+
+  <div id="stage"></div>
+
+  <div id="bottom">
+    <div id="feedback"></div>
+    <button class="btn btn-primary" id="action-btn" disabled>Start</button>
+  </div>
+
+<script>
+  const { ipcRenderer } = require('electron')
+  document.getElementById('close').addEventListener('click', () => ipcRenderer.invoke('close-lesson').catch(()=>{}))
+
+  let LESSON = null, GOAL = '', TOPIC = ''
+  let idx = -1        // -1 = explanation screen, 0..n = exercises
+  let hearts = 3, score = 0
+  let current = null  // current exercise state
+
+  const stage = document.getElementById('stage')
+  const fill = document.getElementById('progress-fill')
+  const fb = document.getElementById('feedback')
+  const action = document.getElementById('action-btn')
+  const heartsEl = document.getElementById('hearts')
+
+  ipcRenderer.on('lesson-data', (e, data) => {
+    LESSON = data.lesson; GOAL = data.goal; TOPIC = data.topic
+    idx = -1; hearts = 3; score = 0
+    renderExplanation()
+  })
+
+  function speak(text) { ipcRenderer.invoke('speak-text', text).catch(()=>{}) }
+  function updateProgress() {
+    const total = LESSON.exercises.length
+    const done = Math.max(0, idx)
+    fill.style.width = (done / total * 100) + '%'
+  }
+  function updateHearts() { heartsEl.textContent = '❤️'.repeat(hearts) + '🖤'.repeat(3-hearts) }
+
+  function renderExplanation() {
+    updateProgress()
+    fb.textContent = ''
+    const ex = LESSON.explanation || ''
+    const paras = ex.split('\n').filter(p=>p.trim()).map(p=>`<p>${p}</p>`).join('')
+    stage.innerHTML = `<div class="lesson-title">${LESSON.title||'Lesson'}</div>
+      <div id="explain"><h2>📖 Let me explain first</h2>${paras}</div>`
+    action.textContent = "Got it — let's practice! →"
+    action.disabled = false
+    action.className = 'btn btn-primary'
+    action.onclick = () => { idx = 0; renderExercise() }
+    speak(LESSON.title + '. ' + ex.replace(/<[^>]+>/g,'').slice(0,400))
+  }
+
+  function renderExercise() {
+    fb.textContent = ''; fb.className = ''
+    if (idx >= LESSON.exercises.length) return finish()
+    updateProgress()
+    const ex = LESSON.exercises[idx]
+    current = { ex, answered: false, correct: false }
+    if (ex.type === 'arrange') renderArrange(ex)
+    else if (ex.type === 'match') renderMatch(ex)
+    else if (ex.type === 'blank' || ex.type === 'mc') renderChoice(ex)
+    else if (ex.type === 'listen') renderListen(ex)
+    else { idx++; renderExercise() }
+  }
+
+  // ── ARRANGE: tap tiles in order ──
+  function renderArrange(ex) {
+    const shuffled = [...ex.tiles].map((t,i)=>({t,i})).sort(()=>Math.random()-0.5)
+    let built = []
+    stage.innerHTML = `<div class="ex-prompt">${ex.prompt}</div>
+      <div id="build-zone"></div>
+      <div id="tile-bank"></div>`
+    const bank = document.getElementById('tile-bank')
+    const zone = document.getElementById('build-zone')
+    function redraw() {
+      zone.innerHTML = built.map((b,bi)=>`<div class="tile" data-bi="${bi}">${b.t}</div>`).join('')
+      zone.querySelectorAll('.tile').forEach(el=>el.onclick=()=>{ const bi=+el.dataset.bi; built.splice(bi,1); redraw() })
+      bank.querySelectorAll('.tile').forEach(el=>{ const i=+el.dataset.i; el.classList.toggle('used', built.some(b=>b.i===i)) })
+      action.disabled = built.length !== ex.tiles.length
+    }
+    bank.innerHTML = shuffled.map(s=>`<div class="tile" data-i="${s.i}">${s.t}</div>`).join('')
+    bank.querySelectorAll('.tile').forEach(el=>el.onclick=()=>{ const i=+el.dataset.i; if(built.some(b=>b.i===i))return; built.push({t:el.textContent,i}); redraw() })
+    redraw()
+    setCheck(() => {
+      const ans = built.map(b=>b.t)
+      return JSON.stringify(ans) === JSON.stringify(ex.answer)
+    })
+  }
+
+  // ── MATCH: tap left, tap its right ──
+  function renderMatch(ex) {
+    const left = ex.pairs.map((p,i)=>({txt:p[0],i})).sort(()=>Math.random()-0.5)
+    const right = ex.pairs.map((p,i)=>({txt:p[1],i})).sort(()=>Math.random()-0.5)
+    let selLeft = null, doneCount = 0
+    stage.innerHTML = `<div class="ex-prompt">${ex.prompt}</div>
+      <div class="match-grid"><div class="match-col" id="ml"></div><div class="match-col" id="mr"></div></div>`
+    const ml = document.getElementById('ml'), mr = document.getElementById('mr')
+    ml.innerHTML = left.map(l=>`<div class="match-card" data-i="${l.i}" data-side="l">${l.txt}</div>`).join('')
+    mr.innerHTML = right.map(r=>`<div class="match-card" data-i="${r.i}" data-side="r">${r.txt}</div>`).join('')
+    function clear(el){ el.classList.remove('sel') }
+    document.querySelectorAll('.match-card').forEach(c=>c.onclick=()=>{
+      if (c.classList.contains('done')) return
+      if (c.dataset.side==='l') { document.querySelectorAll('[data-side=l]').forEach(clear); c.classList.add('sel'); selLeft=c }
+      else if (selLeft) {
+        if (+c.dataset.i === +selLeft.dataset.i) { c.classList.add('done'); selLeft.classList.add('done'); selLeft.classList.remove('sel'); selLeft=null; doneCount++; if(doneCount===ex.pairs.length){ action.disabled=false } }
+        else { c.classList.add('wrong'); setTimeout(()=>c.classList.remove('wrong'),400); loseHeart() }
+      }
+    })
+    action.disabled = true
+    setCheck(() => doneCount === ex.pairs.length)
+  }
+
+  // ── BLANK / MC: tap an option ──
+  function renderChoice(ex) {
+    stage.innerHTML = `<div class="ex-prompt">${ex.prompt}</div><div class="opts" id="opts"></div>`
+    const opts = document.getElementById('opts')
+    opts.innerHTML = ex.options.map((o,i)=>`<div class="opt-card" data-i="${i}">${o}</div>`).join('')
+    let chosen = null
+    opts.querySelectorAll('.opt-card').forEach(c=>c.onclick=()=>{
+      if (current.answered) return
+      opts.querySelectorAll('.opt-card').forEach(x=>x.style.borderColor='#334155')
+      c.style.borderColor='#a78bfa'; chosen=+c.dataset.i; action.disabled=false
+    })
+    action.disabled = true
+    setCheck(() => chosen === ex.correctIndex, () => {
+      opts.querySelectorAll('.opt-card').forEach((x,i)=>{ if(i===ex.correctIndex)x.classList.add('correct'); else if(i===chosen)x.classList.add('wrong') })
+    })
+  }
+
+  // ── LISTEN/TYPE ──
+  function renderListen(ex) {
+    stage.innerHTML = `<div class="ex-prompt">${ex.prompt} <button class="speak-btn" id="replay">🔊 Replay</button></div>
+      <input id="type-input" placeholder="Type your answer..." autofocus>`
+    const inp = document.getElementById('type-input')
+    inp.oninput = () => action.disabled = !inp.value.trim()
+    document.getElementById('replay').onclick = () => speak(ex.answer)
+    inp.onkeydown = e => { if(e.key==='Enter' && inp.value.trim() && !current.answered) action.click() }
+    action.disabled = true
+    setTimeout(()=>inp.focus(),100)
+    setCheck(() => {
+      const v = inp.value.trim().toLowerCase()
+      const accept = (ex.accept||[ex.answer]).map(a=>a.toLowerCase())
+      return accept.some(a=>v===a || v.includes(a))
+    })
+  }
+
+  // ── Shared check / next logic ──
+  function setCheck(isCorrectFn, revealFn) {
+    action.textContent = 'Check'
+    action.className = 'btn btn-check'
+    action.onclick = () => {
+      if (!current.answered) {
+        current.answered = true
+        const ok = isCorrectFn()
+        current.correct = ok
+        if (revealFn) revealFn()
+        if (ok) { score++; fb.textContent = '✓ Correct!'; fb.className='ok'; speak('Correct!') }
+        else { loseHeart(); fb.textContent = '✗ Not quite'; fb.className='no' }
+        action.textContent = idx >= LESSON.exercises.length-1 ? 'Finish' : 'Next →'
+        action.className = 'btn btn-primary'
+      } else {
+        idx++; renderExercise()
+      }
+    }
+  }
+  function loseHeart() { hearts = Math.max(0, hearts-1); updateHearts() }
+
+  async function finish() {
+    updateProgress()
+    fill.style.width = '100%'
+    const total = LESSON.exercises.length
+    const r = await ipcRenderer.invoke('lesson-complete', { goal:GOAL, topic:TOPIC, score, total }).catch(()=>null)
+    stage.innerHTML = `<div style="text-align:center;padding-top:40px;">
+      <div style="font-size:54px;margin-bottom:14px;">${score/total>=0.8?'🎉':score/total>=0.5?'👍':'💪'}</div>
+      <div style="font-size:26px;font-weight:800;margin-bottom:8px;">Lesson Complete!</div>
+      <div style="font-size:18px;color:#94a3b8;margin-bottom:6px;">You scored ${score} / ${total}</div>
+      <div style="font-size:15px;color:#a78bfa;max-width:380px;margin:14px auto;">${r?.message||''}</div>
+    </div>`
+    fb.textContent = ''
+    action.textContent = 'Done'
+    action.className = 'btn btn-primary'
+    action.disabled = false
+    action.onclick = () => ipcRenderer.invoke('close-lesson').catch(()=>{})
+  }
+</script>
+</body>
+</html>

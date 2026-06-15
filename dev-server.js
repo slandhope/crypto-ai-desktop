@@ -283,6 +283,26 @@ const server = http.createServer((req, res) => {
           saveJSON(SETTINGS_FILE, settings);
           result.activeCoins = activeCoins;
         }
+        if (cmd.action === 'addCoin') {
+          const type = cmd.type || 'main';
+          const coin = String(cmd.coin || '').toUpperCase().trim();
+          if (!/^[A-Z0-9]{2,10}$/.test(coin)) {
+            result.error = 'Invalid coin symbol';
+          } else {
+            master[type] = master[type] || [];
+            if (!master[type].includes(coin)) master[type].push(coin);
+            // Make sure it's not in disabled
+            master.disabled[type] = (master.disabled[type] || []).filter(c => c !== coin);
+            saveJSON(MASTER_COINS_FILE, master);
+            const settings = loadJSON(SETTINGS_FILE, {});
+            const key = type === 'main' ? 'tradingCoins' : type === 'scalp' ? 'scalpCoins' : 'dayTradeCoins';
+            settings[key] = (master[type]).filter(c => !master.disabled[type].includes(c));
+            saveJSON(SETTINGS_FILE, settings);
+            result.added = coin;
+            result.activeCoins = settings[key];
+            console.log('🪙 Dev added coin: ' + coin + ' to ' + type);
+          }
+        }
         if (cmd.action === 'autoOptimize') {
           result = autoOptimize(cmd.threshold || 20, cmd.type || 'main');
         }
@@ -621,6 +641,11 @@ input:focus{border-color:#00d4ff}
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
           <div class="card-title" style="margin:0;" id="coin-grid-title">📈 Main Trade Coins</div>
+        <div style="display:flex;gap:6px;margin:8px 0;">
+          <input id="cc-add-input" placeholder="Add coin (must exist on Binance Futures, e.g. WIF)" style="flex:1;padding:8px;border-radius:8px;border:1px solid #1e293b;background:#0f172a;color:#e2e8f0;text-transform:uppercase;">
+          <button class="btn-ghost btn-sm" id="cc-add-btn">+ Add to this list</button>
+        </div>
+        <div id="cc-add-status" style="font-size:11px;color:#94a3b8;margin-bottom:6px;"></div>
           <span style="font-size:11px;color:#475569;" id="coin-grid-cost"></span>
         </div>
         <div class="coin-grid" id="coin-grid">Loading...</div>
@@ -783,15 +808,18 @@ async function api(url, method='GET', body=null) {
 function showTab(name) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('tab-'+name).classList.add('active');
-  event.target.classList.add('active');
+  const content = document.getElementById('tab-'+name);
+  if (content) content.classList.add('active');
+  const btn = document.querySelector('.nav-tab[data-tab="'+name+'"]');
+  if (btn) btn.classList.add('active');
   if (name === 'coins') renderCoinGrid();
 }
 
 function showCoinType(type) {
   currentCoinType = type;
   document.querySelectorAll('.type-tab').forEach(t => t.classList.remove('active'));
-  event.target.classList.add('active');
+  const tb = document.querySelector('.type-tab[data-cointype="'+type+'"]');
+  if (tb) tb.classList.add('active');
   renderCoinGrid();
 }
 
@@ -957,9 +985,10 @@ async function setCoinOverride(val) {
   api('/api/control','POST',{action:'setCoinOverride',value:val}).then(() => refresh());
 }
 
-function setInterval_(min) {
+async function setInterval_(min) {
   document.querySelectorAll('#interval-btns button').forEach(b=>b.classList.remove('active-btn'));
-  event.target.classList.add('active-btn');
+  const b = document.querySelector('[data-interval="'+min+'"]');
+  if (b) b.classList.add('active-btn');
   await api('/api/control','POST',{action:'setInterval',value:min||null});
   refresh();
 }
@@ -1079,6 +1108,25 @@ window.onload = () => {
       : '❌ ' + (r?.error || 'Failed');
   });
   bcRenderLists();
+
+
+  document.getElementById('cc-add-btn')?.addEventListener('click', async () => {
+    const inp = document.getElementById('cc-add-input');
+    const st = document.getElementById('cc-add-status');
+    const coin = (inp.value || '').toUpperCase().trim();
+    if (!coin) return;
+    st.textContent = 'Adding ' + coin + '...';
+    const r = await api('/api/control', 'POST', { action: 'addCoin', type: currentCoinType, coin }).catch(() => null);
+    if (r && r.added) {
+      st.textContent = '✅ ' + coin + ' added to ' + currentCoinType + ' — scanner picks it up next run';
+      inp.value = '';
+      await refresh();
+      renderCoinGrid();
+    } else {
+      st.textContent = '❌ ' + ((r && r.error) || 'Failed — 2-10 letters/numbers only');
+    }
+  });
+  document.getElementById('cc-add-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('cc-add-btn').click(); });
 
   // Auto-login if valid token saved
   const saved = localStorage.getItem('dev_token') || window._token;

@@ -1187,45 +1187,6 @@ VOICE RESPONSE RULES — CRITICAL:
       reader.readAsDataURL(file)
     })
 
-    // ── Voice chunk QUEUE — plays streamed sentences in order (no interrupting) ──
-    let _voiceQueue = [], _voicePlaying = false
-    async function _drainVoiceQueue() {
-      if (_voicePlaying) return
-      _voicePlaying = true
-      while (_voiceQueue.length) {
-        const chunk = _voiceQueue.shift()
-        if (chunk.text) { setStatus('"' + chunk.text.slice(0,55) + '"'); addToHistory('asuka', chunk.text) }
-        try { await playAudioQueued(chunk.audio) } catch(e) {}
-      }
-      _voicePlaying = false
-      setStatus('Listening...')
-    }
-    // Like playAudio but does NOT stop the previous (we already wait for each to finish)
-    async function playAudioQueued(b64) {
-      if (!b64 || isHerMuted) return
-      try {
-        const bytes = new Uint8Array(atob(b64).split('').map(c => c.charCodeAt(0)))
-        const blob  = new Blob([bytes], { type:'audio/mpeg' })
-        const ctx   = new AudioContext()
-        const buf   = await ctx.decodeAudioData(await blob.arrayBuffer())
-        const src   = ctx.createBufferSource()
-        const an    = ctx.createAnalyser(); an.fftSize = 256
-        src.buffer = buf; src.connect(an); an.connect(ctx.destination)
-        currentSource = src; botIsSpeaking = true
-        src.start()
-        const arr = new Uint8Array(an.frequencyBinCount)
-        const tick = () => { if (!botIsSpeaking) return; an.getByteFrequencyData(arr); const v = arr.reduce((a,b)=>a+b)/arr.length; if (model) try { model.internalModel.coreModel.setParameterValueById('ParamMouthOpenY', Math.min(v/80,1)) } catch(e){}; requestAnimationFrame(tick) }
-        tick()
-        await new Promise(r => { src.onended = () => { if (model) try { model.internalModel.coreModel.setParameterValueById('ParamMouthOpenY', 0) } catch(e){}; r() } })
-      } catch(e) {}
-    }
-    ipcRenderer.on('voice-chunk', (e, chunk) => {
-      if (isHerMuted) return
-      if (chunk.isFirst) { _voiceQueue = [] } // new utterance — clear stale
-      _voiceQueue.push(chunk)
-      _drainVoiceQueue()
-    })
-
     // ── IPC Events ────────────────────────────────────────────────────────
     ipcRenderer.on('play-audio', async (e, { audio, text }) => {
       if (text) { setStatus('"' + text.slice(0,55) + '"'); addToHistory('asuka', text) }
