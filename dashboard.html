@@ -3209,8 +3209,8 @@
       <div style="font-size:10px;color:var(--text2);margin-top:6px;">Companion = friend, butler & tutor (no trading). Trading = everything + the full engine.</div>
       <button class="tg-add-btn" id="s-mode-reset" style="width:100%;margin-top:8px;font-size:11px;background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.3);">🔄 Reset & show mode picker (testing)</button>
     </div>
-    <div class="s-section">
-      <div class="s-title">API Keys</div>
+
+
       <div class="s-row"><div class="s-label">CoinGecko</div><input class="s-input" id="s-coingecko" placeholder="Optional" /></div>
       <div class="s-row"><div class="s-label">Moralis</div><input class="s-input" id="s-moralis" placeholder="For wallet tracking" /></div>
       <div class="s-row"><div class="s-label">YouTube</div><input class="s-input" id="s-youtube" placeholder="For music playback" /></div>
@@ -7998,6 +7998,7 @@ document.getElementById('s-mode-trading')?.addEventListener('click', async () =>
   await ipcRenderer.invoke('set-app-mode', 'trading').catch(()=>{})
   applyMode('trading'); refreshModeDisplay()
 })
+
 document.getElementById('s-mode-reset')?.addEventListener('click', async () => {
   await ipcRenderer.invoke('set-app-mode', 'companion').catch(()=>{}) // set then clear via picker
   // force the picker by clearing through a dedicated call

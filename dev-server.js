@@ -14,6 +14,17 @@ const DEV_STATE_FILE = path.join(DATA_DIR, 'dev-state.json');
 const COST_LOG_FILE = path.join(DATA_DIR, 'api-cost-log.json');
 const ANALYTICS_FILE = path.join(DATA_DIR, 'coin-analytics.json');
 const MASTER_COINS_FILE = path.join(DATA_DIR, 'master-coins.json');
+const TIERS_FILE = path.join(DATA_DIR, 'tiers-config.json');
+const CUSTOM_COSMETICS_FILE = path.join(DATA_DIR, 'custom-cosmetics.json');
+const DEFAULT_TIERS = [
+  { level: 1, name: 'Acquaintance', xp: 0,    emoji: '🌱', unlocks: [] },
+  { level: 2, name: 'Friend',       xp: 100,  emoji: '🌸', unlocks: ['outfit:casual'] },
+  { level: 3, name: 'Close',        xp: 300,  emoji: '💛', unlocks: ['hair:long', 'accessory:flower'] },
+  { level: 4, name: 'Trusted',      xp: 600,  emoji: '💗', unlocks: ['outfit:kimono', 'hair:twintails'] },
+  { level: 5, name: 'Cherished',    xp: 1000, emoji: '💖', unlocks: ['accessory:catears', 'outfit:gothic'] },
+  { level: 6, name: 'Devoted',      xp: 1600, emoji: '💝', unlocks: ['hair:silver', 'accessory:crown'] },
+  { level: 7, name: 'Soulbound',    xp: 2500, emoji: '👑', unlocks: ['outfit:santa', 'special:poses'] }
+];
 
 const ALL_COINS = ['BTC','ETH','SOL','BNB','XRP','DOGE','AVAX','LINK','ARB','PEPE','BONK','TRUMP','WIF','SUI','APT'];
 const COST_PER_COIN_MAIN = 1.79;  // $/day per coin in main scanner
@@ -322,6 +333,47 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    // ── Progression tiers ──
+    if (pathname === '/api/tiers' && req.method === 'GET') {
+      res.setHeader('Content-Type', 'application/json');
+      const tiers = loadJSON(TIERS_FILE, null);
+      res.writeHead(200);
+      res.end(JSON.stringify({ tiers: (Array.isArray(tiers)&&tiers.length)?tiers:DEFAULT_TIERS }));
+      return;
+    }
+    if (pathname === '/api/tiers' && req.method === 'POST') {
+      res.setHeader('Content-Type', 'application/json');
+      try {
+        const parsed = JSON.parse(body);
+        let tiers = parsed.tiers;
+        if (!Array.isArray(tiers)) { res.writeHead(200); res.end(JSON.stringify({ success:false, error:'tiers must be array' })); return; }
+        tiers.sort((a,b)=>a.xp-b.xp).forEach((t,i)=>t.level=i+1);
+        saveJSON(TIERS_FILE, tiers);
+        res.writeHead(200); res.end(JSON.stringify({ success:true, tiers }));
+      } catch(e) { res.writeHead(200); res.end(JSON.stringify({ success:false, error:e.message })); }
+      return;
+    }
+    if (pathname === '/api/tiers-reset' && req.method === 'POST') {
+      saveJSON(TIERS_FILE, DEFAULT_TIERS);
+      res.setHeader('Content-Type', 'application/json');
+      res.writeHead(200); res.end(JSON.stringify({ success:true, tiers:DEFAULT_TIERS }));
+      return;
+    }
+    if (pathname === '/api/add-cosmetic' && req.method === 'POST') {
+      res.setHeader('Content-Type', 'application/json');
+      try {
+        const { category, item } = JSON.parse(body);
+        if (!['outfit','hair','accessory'].includes(category) || !item?.id || !item?.name) { res.writeHead(200); res.end(JSON.stringify({ success:false, error:'need category + id + name' })); return; }
+        const c = loadJSON(CUSTOM_COSMETICS_FILE, { outfit:[], hair:[], accessory:[] });
+        c[category] = c[category] || [];
+        if (c[category].some(i=>i.id===item.id)) { res.writeHead(200); res.end(JSON.stringify({ success:false, error:'id exists' })); return; }
+        c[category].push({ id:item.id, name:item.name, price:item.price||0, asset:item.asset||null, limited:!!item.limited, seasonal:item.seasonal||null });
+        saveJSON(CUSTOM_COSMETICS_FILE, c);
+        res.writeHead(200); res.end(JSON.stringify({ success:true }));
+      } catch(e) { res.writeHead(200); res.end(JSON.stringify({ success:false, error:e.message })); }
+      return;
+    }
+
     res.writeHead(404); res.end('Not found');
   });
 });
@@ -585,6 +637,33 @@ input:focus{border-color:#00d4ff}
         <div class="card-title">📅 Daily RSI Signals</div>
         <div id="daily-sigs">Loading...</div>
       </div>
+
+      <!-- Progression Editor -->
+      <div class="card" style="margin-top:12px;">
+        <div class="card-title">🎀 Progression Editor (Levels & Cosmetics)</div>
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">Edit relationship tiers — name, XP, emoji, unlocks. Applies live.</div>
+        <div id="tier-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;">Loading...</div>
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
+          <button class="btn-ghost btn-sm" onclick="addTier()">➕ Add Tier</button>
+          <button class="btn-ghost btn-sm" onclick="saveTiers()" style="background:rgba(52,211,153,.15);">💾 Save</button>
+          <button class="btn-ghost btn-sm" onclick="resetTiers()" style="background:rgba(239,68,68,.1);">Reset</button>
+        </div>
+        <div id="tier-msg" style="font-size:12px;color:#94a3b8;"></div>
+
+        <div style="font-size:13px;font-weight:700;margin:14px 0 6px;color:#e8edf4;">➕ Add Cosmetic to Shop</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+          <select id="cos-cat" style="padding:7px;border-radius:7px;background:#1e293b;border:1px solid #334155;color:#fff;"><option value="outfit">Outfit</option><option value="hair">Hair</option><option value="accessory">Accessory</option></select>
+          <input id="cos-id" placeholder="id (ninja)" style="padding:7px;border-radius:7px;background:#1e293b;border:1px solid #334155;color:#fff;">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+          <input id="cos-name" placeholder="Display name" style="padding:7px;border-radius:7px;background:#1e293b;border:1px solid #334155;color:#fff;">
+          <input id="cos-price" type="number" placeholder="Price (coins)" style="padding:7px;border-radius:7px;background:#1e293b;border:1px solid #334155;color:#fff;">
+        </div>
+        <input id="cos-asset" placeholder="asset path (outfits/ninja.png)" style="width:100%;padding:7px;border-radius:7px;background:#1e293b;border:1px solid #334155;color:#fff;margin-bottom:6px;">
+        <label style="font-size:12px;display:block;margin-bottom:6px;color:#94a3b8;"><input type="checkbox" id="cos-limited"> Limited edition</label>
+        <button class="btn-ghost btn-sm" onclick="addCosmetic()">➕ Add to Shop</button>
+        <div id="cos-msg" style="font-size:12px;color:#94a3b8;margin-top:5px;"></div>
+      </div>
     </div>
 
     <!-- ══ COIN CONTROL TAB ══ -->
@@ -825,6 +904,7 @@ function showCoinType(type) {
 
 // ── Refresh ──
 async function refresh() {
+  if (typeof loadTiers === "function") loadTiers();
   stats = await api('/api/stats');
   if (!stats) return;
   document.getElementById('refresh-time').textContent = new Date().toLocaleTimeString();
@@ -1151,15 +1231,55 @@ window.onload = () => {
   }
 };
 // button listeners now in window.onload
+let _tiers = [];
+async function loadTiers() {
+  try {
+    const r = await fetch('/api/tiers', { headers: {'Authorization':'Bearer '+token} });
+    const d = await r.json();
+    _tiers = d.tiers || [];
+    renderTiers();
+  } catch(e) {}
+}
+function renderTiers() {
+  const el = document.getElementById('tier-list');
+  if (!el) return;
+  el.innerHTML = _tiers.map((t,i) => 
+    '<div style="display:flex;gap:4px;align-items:center;background:rgba(15,23,42,.5);padding:5px;border-radius:7px;">' +
+    '<input value="'+(t.emoji||'')+'" onchange="_tiers['+i+'].emoji=this.value" style="width:34px;text-align:center;background:#1e293b;border:1px solid #334155;border-radius:5px;color:#fff;padding:5px;">' +
+    '<input value="'+(t.name||'')+'" onchange="_tiers['+i+'].name=this.value" placeholder="Name" style="flex:1;background:#1e293b;border:1px solid #334155;border-radius:5px;color:#fff;padding:5px;">' +
+    '<input value="'+(t.xp||0)+'" type="number" onchange="_tiers['+i+'].xp=parseInt(this.value)||0" style="width:70px;background:#1e293b;border:1px solid #334155;border-radius:5px;color:#fff;padding:5px;">' +
+    '<input value="'+((t.unlocks||[]).join(','))+'" onchange="_tiers['+i+'].unlocks=this.value.split(\',\').map(s=>s.trim()).filter(Boolean)" placeholder="outfit:kimono,hair:long" style="flex:1.5;background:#1e293b;border:1px solid #334155;border-radius:5px;color:#fff;padding:5px;font-size:12px;">' +
+    '<span onclick="_tiers.splice('+i+',1);renderTiers()" style="cursor:pointer;color:#ef4444;padding:0 5px;">✕</span></div>'
+  ).join('');
+}
+function addTier() { _tiers.push({ level:_tiers.length+1, name:'New Tier', xp:(_tiers[_tiers.length-1]?.xp||0)+500, emoji:'⭐', unlocks:[] }); renderTiers(); }
+async function saveTiers() {
+  try {
+    const r = await fetch('/api/tiers', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({ tiers:_tiers }) });
+    const d = await r.json();
+    document.getElementById('tier-msg').textContent = d.success ? '✅ Saved — applies live in the app' : '❌ '+(d.error||'failed');
+    if (d.success) { _tiers = d.tiers; renderTiers(); }
+  } catch(e) { document.getElementById('tier-msg').textContent = '❌ '+e.message; }
+}
+async function resetTiers() {
+  const r = await fetch('/api/tiers-reset', { method:'POST', headers:{'Authorization':'Bearer '+token} });
+  const d = await r.json();
+  if (d.success) { _tiers = d.tiers; renderTiers(); document.getElementById('tier-msg').textContent = 'Reset to defaults'; }
+}
+async function addCosmetic() {
+  const item = { id:document.getElementById('cos-id').value.trim(), name:document.getElementById('cos-name').value.trim(), price:parseInt(document.getElementById('cos-price').value)||0, asset:document.getElementById('cos-asset').value.trim()||null, limited:document.getElementById('cos-limited').checked };
+  try {
+    const r = await fetch('/api/add-cosmetic', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({ category:document.getElementById('cos-cat').value, item }) });
+    const d = await r.json();
+    document.getElementById('cos-msg').textContent = d.success ? '✅ Added to shop!' : '❌ '+(d.error||'failed');
+  } catch(e) { document.getElementById('cos-msg').textContent = '❌ '+e.message; }
+}
+
 </script>
 </body>
 </html>`; }
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log('');
-  console.log('  ⚙️  CRYPTO.AI Dev Panel');
-  console.log('  → http://localhost:' + PORT);
-  console.log('  → Password: Asuka2026!');
-  console.log('');
+ 
 });
 process.on('uncaughtException', e => console.error('Dev server:', e.message));

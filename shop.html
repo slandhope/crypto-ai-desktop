@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family:system-ui,-apple-system,sans-serif; -webkit-user-select:none; }
+  html,body { width:100%; height:100%; background:#0f1420; color:#e8edf4; overflow:hidden; }
+  #top { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; -webkit-app-region:drag; border-bottom:1px solid #1e293b; }
+  #top .title { font-size:17px; font-weight:800; }
+  #coins { font-size:14px; font-weight:700; color:#fbbf24; -webkit-app-region:no-drag; }
+  #close { -webkit-app-region:no-drag; cursor:pointer; color:#64748b; font-size:20px; margin-left:12px; }
+  #tabs { display:flex; gap:8px; padding:12px 18px; }
+  .tab { cursor:pointer; padding:7px 16px; border-radius:10px; background:#1e293b; font-size:13px; font-weight:700; }
+  .tab.active { background:linear-gradient(135deg,#f0a8d0,#a78bfa); }
+  #grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; padding:8px 18px; height:calc(100% - 200px); overflow-y:auto; }
+  .item { background:#1e293b; border:2px solid #334155; border-radius:14px; padding:14px; text-align:center; }
+  .item .thumb { width:100%; height:80px; border-radius:10px; background:linear-gradient(135deg,#2d3748,#1a202c); display:flex; align-items:center; justify-content:center; font-size:32px; margin-bottom:8px; }
+  .item .name { font-size:13px; font-weight:700; margin-bottom:8px; }
+  .item button { width:100%; padding:8px; border-radius:9px; border:none; cursor:pointer; font-weight:700; font-size:12px; }
+  .buy { background:#fbbf24; color:#1a1a2e; }
+  .equip { background:#a78bfa; color:#fff; }
+  .equipped { background:#22c55e; color:#06210f; }
+  .owned-tag { background:#334155; color:#94a3b8; }
+  .limited { border-color:#f0a8d0; }
+  .badge { font-size:9px; background:#f0a8d0; color:#1a1a2e; border-radius:5px; padding:1px 6px; margin-left:4px; font-weight:800; }
+  #packs { padding:12px 18px; border-top:1px solid #1e293b; }
+  #packs .ptitle { font-size:12px; color:#94a3b8; margin-bottom:8px; }
+  #pack-row { display:flex; gap:8px; }
+  .pack { flex:1; background:#1e293b; border:1px solid #334155; border-radius:11px; padding:10px; text-align:center; cursor:pointer; }
+  .pack:hover { border-color:#fbbf24; }
+  .pack .c { font-size:14px; font-weight:800; color:#fbbf24; }
+  .pack .p { font-size:11px; color:#94a3b8; }
+  .pack .b { font-size:9px; color:#34d399; font-weight:700; }
+  #toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#a78bfa; color:#fff; padding:10px 20px; border-radius:12px; font-size:13px; font-weight:700; opacity:0; transition:.3s; pointer-events:none; }
+  #toast.show { opacity:1; }
+</style>
+</head>
+<body>
+  <div id="top">
+    <div><div class="title">🛍️ Dress-Up Shop</div><div id="shop-tier" style="font-size:11px;color:#f0a8d0;font-weight:700;margin-top:2px;"></div></div>
+    <div style="display:flex;align-items:center;"><span id="coins">0 🪙</span><span id="close">✕</span></div>
+  </div>
+  <div id="tabs">
+    <div class="tab active" data-cat="outfit">👗 Outfits</div>
+    <div class="tab" data-cat="hair">💇 Hair</div>
+    <div class="tab" data-cat="accessory">🎀 Accessories</div>
+  </div>
+  <div id="grid"></div>
+  <div id="packs">
+    <div class="ptitle">Need coins? 🪙</div>
+    <div id="pack-row"></div>
+  </div>
+  <div id="toast"></div>
+
+<script>
+  const { ipcRenderer } = require('electron')
+  document.getElementById('close').addEventListener('click', () => ipcRenderer.invoke('close-shop').catch(()=>{}))
+  let CAT = 'outfit', DATA = null
+
+  const icons = { outfit:'👗', hair:'💇', accessory:'🎀' }
+  function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 2200) }
+
+  async function load() {
+    DATA = await ipcRenderer.invoke('shop-catalog').catch(()=>null)
+    if (!DATA) return
+    document.getElementById('coins').textContent = (DATA.coins ?? 0) + ' 🪙'
+    if (DATA.tier) document.getElementById('shop-tier').textContent = DATA.tier.emoji + ' ' + DATA.tier.name
+    render()
+    loadPacks()
+  }
+  function render() {
+    const items = DATA.catalog[CAT] || []
+    const equippedId = DATA.equipped[CAT]
+    document.getElementById('grid').innerHTML = items.filter(i=>i.available!==false).map(i => {
+      const isEq = equippedId === i.id
+      let btn, lockBadge = ''
+      if (isEq) btn = `<button class="equipped" disabled>Wearing ✓</button>`
+      else if (i.owned) btn = `<button class="equip" data-eq="${i.id}">Wear</button>`
+      else if (i.levelLocked) { btn = `<button class="owned-tag" disabled>🔒 Lvl ${i.unlockLevel}</button>`; lockBadge = `<div style="font-size:9px;color:#f0a8d0;margin-bottom:4px;">Unlocks at ${i.unlockTierName}</div>` }
+      else btn = `<button class="buy" data-buy="${i.id}">${i.price} 🪙</button>`
+      return `<div class="item ${i.limited?'limited':''}" style="${i.levelLocked?'opacity:.6;':''}">
+        <div class="thumb">${icons[CAT]}</div>
+        <div class="name">${i.name}${i.limited?'<span class="badge">LIMITED</span>':''}</div>
+        ${lockBadge}${btn}
+      </div>`
+    }).join('')
+    document.querySelectorAll('[data-buy]').forEach(b => b.onclick = () => buy(b.dataset.buy))
+    document.querySelectorAll('[data-eq]').forEach(b => b.onclick = () => equip(b.dataset.eq))
+  }
+  async function buy(id) {
+    const r = await ipcRenderer.invoke('shop-buy', { category:CAT, id }).catch(()=>null)
+    if (r?.success) { toast(r.message || 'Purchased!'); DATA.coins = r.coins; await load() }
+    else if (r?.error === 'not_enough') toast(`Need ${r.need} more coins!`)
+    else if (r?.error === 'locked') toast(`🔒 Reach ${r.tierName} (Lvl ${r.needLevel}) to unlock!`)
+    else toast(r?.error || 'Could not buy')
+  }
+  async function equip(id) {
+    const r = await ipcRenderer.invoke('shop-equip', { category:CAT, id }).catch(()=>null)
+    if (r?.success) { toast('Equipped! 💕'); DATA.equipped = r.equipped; render() }
+  }
+  async function loadPacks() {
+    const packs = await ipcRenderer.invoke('coin-packs').catch(()=>[])
+    document.getElementById('pack-row').innerHTML = packs.map(p =>
+      `<div class="pack" data-pack="${p.id}"><div class="c">${p.coins} 🪙</div><div class="p">$${p.usd}</div>${p.bonus?`<div class="b">${p.bonus}</div>`:''}</div>`
+    ).join('')
+    document.querySelectorAll('[data-pack]').forEach(b => b.onclick = async () => {
+      const r = await ipcRenderer.invoke('buy-coins', { packId: b.dataset.pack }).catch(()=>null)
+      if (r?.success) { toast(`+${r.granted} coins!` + (r.testMode?' (test)':'')); DATA.coins = r.coins; document.getElementById('coins').textContent = r.coins + ' 🪙'; render() }
+    })
+  }
+  document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'))
+    t.classList.add('active'); CAT = t.dataset.cat; render()
+  })
+  load()
+</script>
+</body>
+</html>

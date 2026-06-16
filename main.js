@@ -9809,6 +9809,285 @@ ipcMain.handle('lesson-complete', (e, { goal, topic, score, total }) => {
   return { ok: true, message: msg };
 });
 
+
+// ═══ CARE SYSTEM + COSMETICS SHOP (companion depth, both modes) ═════════════
+const CARE_FILE = path.join(DATA_DIR, 'care-state.json');
+function loadCare() {
+  const d = loadJSON(CARE_FILE, null);
+  if (d) {
+    // Decay stats over time since last update
+    const hoursSince = (Date.now() - (d.lastTick || Date.now())) / 3600000;
+    if (hoursSince > 0.1) {
+      d.hunger = Math.max(0, (d.hunger ?? 80) - hoursSince * 4);     // gets hungry ~4/hr
+      d.cleanliness = Math.max(0, (d.cleanliness ?? 90) - hoursSince * 2);
+      d.happiness = Math.max(0, Math.min(100, (d.happiness ?? 80) - hoursSince * 1.5));
+      d.lastTick = Date.now();
+    }
+    return d;
+  }
+  return { hunger: 80, happiness: 85, cleanliness: 90, affection: 0, coins: 100, bondXP: 0,
+    streak: 0, lastCareDay: null, lastTick: Date.now(),
+    owned: ['default'], equipped: { outfit: 'default', hair: 'default', accessory: null } };
+}
+function saveCare(d) { d.lastTick = Date.now(); saveJSON(CARE_FILE, d); }
+
+// Daily streak — first care action of the day
+function tickStreak(d) {
+  const today = new Date().toDateString();
+  if (d.lastCareDay !== today) {
+    const yest = new Date(Date.now() - 864e5).toDateString();
+    d.streak = (d.lastCareDay === yest) ? (d.streak || 0) + 1 : 1;
+    d.lastCareDay = today;
+    d.coins = (d.coins || 0) + 10 + Math.min(d.streak, 20); // daily login reward grows with streak
+    return true; // new day
+  }
+  return false;
+}
+
+ipcMain.handle('get-care', () => loadCare());
+
+// Care actions: feed, pat, clean, play
+ipcMain.handle('care-action', (e, action) => {
+  const d = loadCare();
+  const newDay = tickStreak(d);
+  let msg = '';
+  if (action === 'feed') {
+    d.hunger = Math.min(100, d.hunger + 30);
+    d.happiness = Math.min(100, d.happiness + 8);
+    d.affection = Math.min(100, d.affection + 3);
+    msg = d.hunger > 90 ? "Mmm thank you! I'm so full now~ 🍰" : "Yummy! Thank you for feeding me 💕";
+  } else if (action === 'pat') {
+    d.happiness = Math.min(100, d.happiness + 15);
+    d.affection = Math.min(100, d.affection + 5);
+    msg = ["Ehehe~ that feels nice 💕", "Headpats! My favorite~ 🥰", "I love when you pat me!"][Math.floor(Math.random()*3)];
+  } else if (action === 'clean') {
+    d.cleanliness = Math.min(100, d.cleanliness + 40);
+    d.happiness = Math.min(100, d.happiness + 6);
+    d.affection = Math.min(100, d.affection + 2);
+    msg = "All fresh and clean now~ thank you! ✨";
+  } else if (action === 'play') {
+    d.happiness = Math.min(100, d.happiness + 20);
+    d.hunger = Math.max(0, d.hunger - 5);
+    d.affection = Math.min(100, d.affection + 6);
+    d.coins = (d.coins || 0) + 5;
+    msg = "Yay, playtime! That was fun~ 🎀";
+  }
+  // Bond XP per action (pat gives most — it's the affection action)
+  const xpGain = { feed: 8, pat: 15, clean: 6, play: 12 }[action] || 5;
+  const levelInfo = addBondXP(d, xpGain);
+  saveCare(d);
+  if (levelInfo.leveledUp) {
+    const unlockNames = levelInfo.unlocked.map(u => u.split(':')[1]).join(', ');
+    const lvMsg = `${levelInfo.tier.emoji} We're now ${levelInfo.tier.name}! ${unlockNames ? 'You unlocked: ' + unlockNames + '!' : ''} +${levelInfo.coinBonus} coins 💕`;
+    streamVoiceResponse(lvMsg, mainWindow).catch(()=>{});
+    if (mainWindow) mainWindow.webContents.send('relationship-levelup', levelInfo);
+  } else {
+    streamVoiceResponse(msg, mainWindow).catch(()=>{});
+  }
+  if (mainWindow) mainWindow.webContents.send('care-updated', d);
+  return { success: true, state: d, message: msg, newDay, levelInfo };
+});
+
+
+// ─── RELATIONSHIP TIERS + AFFECTION LEVELS (Grok-style progression) ─────────
+const TIERS_FILE = path.join(DATA_DIR, 'tiers-config.json');
+const DEFAULT_TIERS = [
+  { level: 1, name: 'Acquaintance', xp: 0,    emoji: '🌱', unlocks: [] },
+  { level: 2, name: 'Friend',       xp: 100,  emoji: '🌸', unlocks: ['outfit:casual'] },
+  { level: 3, name: 'Close',        xp: 300,  emoji: '💛', unlocks: ['hair:long', 'accessory:flower'] },
+  { level: 4, name: 'Trusted',      xp: 600,  emoji: '💗', unlocks: ['outfit:kimono', 'hair:twintails'] },
+  { level: 5, name: 'Cherished',    xp: 1000, emoji: '💖', unlocks: ['accessory:catears', 'outfit:gothic'] },
+  { level: 6, name: 'Devoted',      xp: 1600, emoji: '💝', unlocks: ['hair:silver', 'accessory:crown'] },
+  { level: 7, name: 'Soulbound',    xp: 2500, emoji: '👑', unlocks: ['outfit:santa', 'special:poses'] }
+];
+// Editable via the dev panel — reloads fresh each call so changes apply live
+function getTiers() {
+  const t = loadJSON(TIERS_FILE, null);
+  return (Array.isArray(t) && t.length) ? t : DEFAULT_TIERS;
+}
+
+function getTier(xp) {
+  const TT = getTiers(); let cur = TT[0];
+  for (const t of getTiers()) if (xp >= t.xp) cur = t;
+  return cur;
+}
+function getNextTier(xp) {
+  return getTiers().find(t => t.xp > xp) || null;
+}
+// All cosmetic ids unlocked by the current level (free to equip, no coins)
+function unlockedByLevel(xp) {
+  const tier = getTier(xp);
+  const ids = [];
+  for (const t of getTiers()) if (t.level <= tier.level) ids.push(...t.unlocks);
+  return ids;
+}
+// Add bond XP (called by care actions + chatting) — returns level-up info
+function addBondXP(d, amount) {
+  const before = getTier(d.bondXP || 0);
+  d.bondXP = (d.bondXP || 0) + amount;
+  const after = getTier(d.bondXP);
+  if (after.level > before.level) {
+    // Level up! grant the unlocks to owned (free) + bonus coins
+    const newUnlocks = after.unlocks || [];
+    for (const u of newUnlocks) { const id = u.split(':')[1]; if (id && !d.owned.includes(id)) d.owned.push(id); }
+    d.coins = (d.coins || 0) + after.level * 50;
+    return { leveledUp: true, tier: after, unlocked: newUnlocks, coinBonus: after.level * 50 };
+  }
+  return { leveledUp: false, tier: after };
+}
+
+
+// ─── DEV: edit relationship tiers + cosmetics live ─────────────────────────
+ipcMain.handle('get-tiers-config', () => ({ tiers: getTiers(), cosmetics: COSMETICS }));
+ipcMain.handle('save-tiers-config', (e, tiers) => {
+  if (!Array.isArray(tiers)) return { success: false, error: 'Tiers must be an array' };
+  // basic validation: each needs level, name, xp
+  for (const t of tiers) { if (typeof t.xp !== 'number' || !t.name) return { success: false, error: 'Each tier needs name + xp number' }; }
+  tiers.sort((a,b) => a.xp - b.xp).forEach((t,i) => t.level = i+1); // re-number by xp
+  saveJSON(TIERS_FILE, tiers);
+  return { success: true, tiers };
+});
+ipcMain.handle('reset-tiers-config', () => { saveJSON(TIERS_FILE, DEFAULT_TIERS); return { success: true, tiers: DEFAULT_TIERS }; });
+
+// Add a cosmetic item to the catalog (persists to a JSON the catalog merges in)
+const CUSTOM_COSMETICS_FILE = path.join(DATA_DIR, 'custom-cosmetics.json');
+function loadCustomCosmetics() { return loadJSON(CUSTOM_COSMETICS_FILE, { outfit: [], hair: [], accessory: [] }); }
+ipcMain.handle('add-cosmetic', (e, { category, item }) => {
+  if (!['outfit','hair','accessory'].includes(category) || !item?.id || !item?.name) return { success: false, error: 'Need category + item id + name' };
+  const c = loadCustomCosmetics();
+  c[category] = c[category] || [];
+  if (c[category].some(i => i.id === item.id) || COSMETICS[category].some(i => i.id === item.id)) return { success: false, error: 'ID already exists' };
+  c[category].push({ id: item.id, name: item.name, price: item.price || 0, asset: item.asset || null, limited: !!item.limited, seasonal: item.seasonal || null });
+  saveJSON(CUSTOM_COSMETICS_FILE, c);
+  return { success: true };
+});
+
+ipcMain.handle('get-relationship', () => {
+  const d = loadCare();
+  const xp = d.bondXP || 0;
+  const tier = getTier(xp);
+  const next = getNextTier(xp);
+  return {
+    xp, tier, next,
+    progress: next ? Math.round((xp - tier.xp) / (next.xp - tier.xp) * 100) : 100,
+    toNext: next ? next.xp - xp : 0,
+    allTiers: getTiers(),
+    unlockedIds: unlockedByLevel(xp)
+  };
+});
+
+// ─── COSMETICS SHOP ─────────────────────────────────────────────────────────
+// Catalog: art assets get added here as you commission them. price 0 = free.
+const COSMETICS = {
+  outfit: [
+    { id: 'default', name: 'Default', price: 0, asset: null },
+    { id: 'casual', name: 'Casual Hoodie', price: 200, asset: 'outfits/casual.png' },
+    { id: 'kimono', name: 'Sakura Kimono', price: 500, asset: 'outfits/kimono.png' },
+    { id: 'gothic', name: 'Gothic Lolita', price: 600, asset: 'outfits/gothic.png' },
+    { id: 'swimsuit', name: 'Summer Swimsuit', price: 450, asset: 'outfits/swim.png', seasonal: 'summer' },
+    { id: 'santa', name: 'Santa Outfit', price: 400, asset: 'outfits/santa.png', seasonal: 'winter', limited: true }
+  ],
+  hair: [
+    { id: 'default', name: 'Default', price: 0, asset: null },
+    { id: 'long', name: 'Long Flowing', price: 150, asset: 'hair/long.png' },
+    { id: 'twintails', name: 'Twin Tails', price: 200, asset: 'hair/twintails.png' },
+    { id: 'short', name: 'Short Bob', price: 150, asset: 'hair/short.png' },
+    { id: 'silver', name: 'Silver (color)', price: 250, asset: 'hair/silver.png' }
+  ],
+  accessory: [
+    { id: 'glasses', name: 'Cute Glasses', price: 100, asset: 'acc/glasses.png' },
+    { id: 'catears', name: 'Cat Ears', price: 180, asset: 'acc/catears.png' },
+    { id: 'flower', name: 'Hair Flower', price: 120, asset: 'acc/flower.png' },
+    { id: 'crown', name: 'Tiny Crown', price: 300, asset: 'acc/crown.png', limited: true }
+  ]
+};
+
+ipcMain.handle('shop-catalog', () => {
+  const d = loadCare();
+  // Merge in dev-added custom cosmetics
+  const custom = loadCustomCosmetics();
+  for (const cat of ['outfit','hair','accessory']) for (const item of (custom[cat]||[])) if (!COSMETICS[cat].some(i=>i.id===item.id)) COSMETICS[cat].push(item);
+  // Mark owned + current season
+  const month = new Date().getMonth();
+  const season = month >= 5 && month <= 7 ? 'summer' : month === 11 || month <= 1 ? 'winter' : 'all';
+  const unlockedIds = unlockedByLevel(d.bondXP || 0);
+  // Map which items are gated behind a relationship level
+  const levelGate = {};
+  for (const t of getTiers()) for (const u of (t.unlocks||[])) { const [cat,id] = u.split(':'); levelGate[id] = t; }
+  const tag = (items, cat) => items.map(i => {
+    const gate = levelGate[i.id];
+    const levelLocked = gate && (d.bondXP || 0) < gate.xp && !d.owned.includes(i.id);
+    return { ...i, owned: d.owned.includes(i.id) || i.price === 0, available: !i.seasonal || i.seasonal === season,
+      levelLocked, unlockLevel: gate ? gate.level : null, unlockTierName: gate ? gate.name : null,
+      freeUnlock: unlockedIds.includes(cat + ':' + i.id) };
+  });
+  return { coins: d.coins, equipped: d.equipped, bondXP: d.bondXP || 0, tier: getTier(d.bondXP||0),
+    catalog: { outfit: tag(COSMETICS.outfit,'outfit'), hair: tag(COSMETICS.hair,'hair'), accessory: tag(COSMETICS.accessory,'accessory') } };
+});
+
+// Buy a cosmetic with coins
+ipcMain.handle('shop-buy', (e, { category, id }) => {
+  const d = loadCare();
+  const item = (COSMETICS[category] || []).find(i => i.id === id);
+  if (!item) return { success: false, error: 'Item not found' };
+  if (d.owned.includes(id)) return { success: false, error: 'Already owned' };
+  // Check level gate
+  for (const t of getTiers()) for (const u of (t.unlocks||[])) { if (u === category+':'+id && (d.bondXP||0) < t.xp) return { success: false, error: 'locked', needLevel: t.level, tierName: t.name }; }
+  if ((d.coins || 0) < item.price) return { success: false, error: 'not_enough', need: item.price - d.coins };
+  d.coins -= item.price;
+  d.owned.push(id);
+  saveCare(d);
+  return { success: true, coins: d.coins, owned: id, message: `Got the ${item.name}! Want me to wear it? 💕` };
+});
+
+// Equip an owned cosmetic
+ipcMain.handle('shop-equip', (e, { category, id }) => {
+  const d = loadCare();
+  const item = (COSMETICS[category] || []).find(i => i.id === id);
+  if (!item) return { success: false, error: 'Not found' };
+  if (item.price > 0 && !d.owned.includes(id)) return { success: false, error: 'Not owned' };
+  d.equipped[category] = id;
+  saveCare(d);
+  if (mainWindow) mainWindow.webContents.send('cosmetic-equipped', { category, id, asset: item.asset });
+  return { success: true, equipped: d.equipped, asset: item.asset };
+});
+
+// Buy coins with real money (Stripe/crypto wired in Phase 3) — pack definitions
+const COIN_PACKS = [
+  { id: 'small', coins: 500, usd: 4.99 },
+  { id: 'medium', coins: 1200, usd: 9.99, bonus: '+20%' },
+  { id: 'large', coins: 2800, usd: 19.99, bonus: '+40%' },
+  { id: 'whale', coins: 8000, usd: 49.99, bonus: '+60%' }
+];
+ipcMain.handle('coin-packs', () => COIN_PACKS);
+ipcMain.handle('buy-coins', (e, { packId }) => {
+  // Phase 3: verify real payment first. For now (testing) grant directly.
+  const pack = COIN_PACKS.find(p => p.id === packId);
+  if (!pack) return { success: false };
+  const d = loadCare();
+  d.coins = (d.coins || 0) + pack.coins;
+  saveCare(d);
+  return { success: true, coins: d.coins, granted: pack.coins, testMode: true };
+});
+
+
+// Shop window
+let shopWindow = null;
+ipcMain.on('open-shop', () => {
+  if (shopWindow && !shopWindow.isDestroyed()) { shopWindow.show(); shopWindow.focus(); return; }
+  const { screen } = require('electron');
+  const disp = screen.getPrimaryDisplay().workArea;
+  shopWindow = new BrowserWindow({
+    width: 640, height: 580,
+    x: disp.x + Math.round((disp.width-640)/2), y: disp.y + 70,
+    frame: false, resizable: true, backgroundColor: '#0f1420',
+    webPreferences: { nodeIntegration: true, contextIsolation: false }
+  });
+  shopWindow.loadFile('shop.html');
+  shopWindow.on('closed', () => { shopWindow = null; });
+});
+ipcMain.handle('close-shop', () => { if (shopWindow && !shopWindow.isDestroyed()) shopWindow.close(); return { ok: true }; });
+
 async function openPaperTrade(signal) {
   // Check rage lock
   if (checkRageLock()) {

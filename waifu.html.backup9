@@ -21,7 +21,6 @@
     #mic-mute-btn  { bottom:430px; left:10px; background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.3); }
     #webcam-btn    { bottom:380px; left:10px; background:rgba(255,140,0,0.15);  border:1px solid rgba(255,140,0,0.3); }
     #dashboard-btn { bottom:330px; left:10px; background:rgba(150,0,255,0.15);  border:1px solid rgba(150,0,255,0.3); }
-    #care-btn { bottom:385px; left:10px; background:rgba(240,168,208,0.18); border:1px solid rgba(240,168,208,0.4); }
 
     #her-mute-btn.muted { background:rgba(248,113,113,0.2); border-color:rgba(248,113,113,0.4); }
     #mic-mute-btn.muted { background:rgba(248,113,113,0.2); border-color:rgba(248,113,113,0.4); }
@@ -127,39 +126,6 @@
   <div id="mic-mute-btn" class="btn" title="Mute your mic">🎤</div>
   <div id="webcam-btn"   class="btn" title="Toggle camera">📷</div>
   <div id="dashboard-btn" class="btn" title="Dashboard">📊</div>
-  <div id="care-btn" class="btn" title="Care & Shop">🎀</div>
-
-  <div id="levelup-pop" style="display:none;position:fixed;inset:0;z-index:10001;background:rgba(10,12,22,0.85);backdrop-filter:blur(8px);align-items:center;justify-content:center;flex-direction:column;font-family:system-ui;pointer-events:none;">
-    <div style="text-align:center;animation:lupop .5s ease;">
-      <div id="lu-emoji" style="font-size:72px;margin-bottom:10px;">💖</div>
-      <div style="font-size:14px;color:#f0a8d0;font-weight:700;letter-spacing:2px;">RELATIONSHIP LEVEL UP</div>
-      <div id="lu-tier" style="font-size:30px;font-weight:900;color:#fff;margin:6px 0;">Friend</div>
-      <div id="lu-unlock" style="font-size:14px;color:#a78bfa;"></div>
-    </div>
-  </div>
-  <style>@keyframes lupop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}</style>
-
-  <div id="care-panel" style="display:none;position:fixed;left:64px;bottom:20px;width:280px;z-index:9998;background:rgba(13,20,32,0.97);border:2px solid #f0a8d0;border-radius:18px;padding:16px;box-shadow:0 12px 48px rgba(0,0,0,0.6);font-family:system-ui;color:#e8edf4;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <div style="font-size:14px;font-weight:800;">🎀 Care</div>
-      <div style="font-size:12px;"><span id="care-coins">0</span> 🪙 · 🔥<span id="care-streak">0</span></div>
-    </div>
-    <div id="rel-box" style="background:rgba(240,168,208,0.1);border:1px solid rgba(240,168,208,0.25);border-radius:11px;padding:9px;margin-bottom:10px;">
-      <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:5px;">
-        <span id="rel-tier">🌱 Acquaintance</span><span id="rel-next" style="color:#94a3b8;font-weight:500;"></span>
-      </div>
-      <div style="height:8px;background:#1e293b;border-radius:5px;overflow:hidden;"><div id="rel-fill" style="height:100%;width:0%;background:linear-gradient(90deg,#f0a8d0,#a78bfa);border-radius:5px;transition:.4s;"></div></div>
-    </div>
-    <div id="care-stats" style="font-size:11px;display:flex;flex-direction:column;gap:6px;margin-bottom:12px;"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:8px;">
-      <button class="care-act" data-a="feed" style="padding:10px;border-radius:11px;border:1px solid #334155;background:#1e293b;color:#fff;cursor:pointer;font-size:13px;">🍰 Feed</button>
-      <button class="care-act" data-a="pat" style="padding:10px;border-radius:11px;border:1px solid #334155;background:#1e293b;color:#fff;cursor:pointer;font-size:13px;">🤚 Pat</button>
-      <button class="care-act" data-a="clean" style="padding:10px;border-radius:11px;border:1px solid #334155;background:#1e293b;color:#fff;cursor:pointer;font-size:13px;">🧼 Clean</button>
-      <button class="care-act" data-a="play" style="padding:10px;border-radius:11px;border:1px solid #334155;background:#1e293b;color:#fff;cursor:pointer;font-size:13px;">🎀 Play</button>
-    </div>
-    <button id="shop-open-btn" style="width:100%;padding:11px;border-radius:11px;border:none;background:linear-gradient(135deg,#f0a8d0,#a78bfa);color:#fff;cursor:pointer;font-weight:800;font-size:13px;">🛍️ Dress-Up Shop</button>
-    <div id="care-close" style="text-align:center;margin-top:8px;font-size:11px;color:#64748b;cursor:pointer;">close</div>
-  </div>
 
   <div id="quiz-box" style="display:none;position:fixed;right:12px;bottom:12px;width:min(42vw,420px);z-index:10000;background:rgba(13,20,32,0.97);border:2px solid #a78bfa;border-radius:16px;padding:14px;box-shadow:0 12px 48px rgba(0,0,0,0.6);font-family:system-ui;">
     <div id="quiz-q" style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:10px;line-height:1.4;"></div>
@@ -292,7 +258,7 @@
 
     // ── Drag window ────────────────────────────────────────────────────────
     let isDragging = false, dragX, dragY
-    const noDragIds = ['history-btn','chat-btn','her-mute-btn','mic-mute-btn','user-input','send-btn','webcam-btn','dashboard-btn','care-btn','confirm-yes','confirm-no','history-clear']
+    const noDragIds = ['history-btn','chat-btn','her-mute-btn','mic-mute-btn','user-input','send-btn','webcam-btn','dashboard-btn','confirm-yes','confirm-no','history-clear']
     document.addEventListener('mousedown', e => {
       if (noDragIds.includes(e.target.id) || e.target.closest('#chat-panel') || e.target.closest('#confirm-bar') || e.target.closest('#history-panel')) return
       isDragging = true; dragX = e.screenX; dragY = e.screenY; e.preventDefault()
@@ -1220,58 +1186,6 @@ VOICE RESPONSE RULES — CRITICAL:
       }
       reader.readAsDataURL(file)
     })
-
-
-    // ── Care system ───────────────────────────────────────────────────────
-    const careBtn = document.getElementById('care-btn')
-    function statBar(label, val, color) {
-      const v = Math.round(val)
-      return `<div><div style="display:flex;justify-content:space-between;"><span>${label}</span><span>${v}%</span></div><div style="height:7px;background:#1e293b;border-radius:5px;overflow:hidden;"><div style="height:100%;width:${v}%;background:${color};border-radius:5px;transition:.3s;"></div></div></div>`
-    }
-    function renderCare(d) {
-      document.getElementById('care-coins').textContent = d.coins ?? 0
-      document.getElementById('care-streak').textContent = d.streak ?? 0
-      document.getElementById('care-stats').innerHTML =
-        statBar('🍰 Hunger', d.hunger, '#fbbf24') +
-        statBar('😊 Happiness', d.happiness, '#34d399') +
-        statBar('✨ Cleanliness', d.cleanliness, '#60a5fa') +
-        statBar('💕 Affection', d.affection, '#f472b6')
-    }
-
-    async function refreshRelationship() {
-      const r = await ipcRenderer.invoke('get-relationship').catch(()=>null)
-      if (!r) return
-      document.getElementById('rel-tier').textContent = r.tier.emoji + ' ' + r.tier.name
-      document.getElementById('rel-next').textContent = r.next ? `${r.toNext} XP → ${r.next.name}` : 'MAX 👑'
-      document.getElementById('rel-fill').style.width = r.progress + '%'
-    }
-    ipcRenderer.on('relationship-levelup', (e, info) => {
-      const pop = document.getElementById('levelup-pop')
-      document.getElementById('lu-emoji').textContent = info.tier.emoji
-      document.getElementById('lu-tier').textContent = info.tier.name
-      const names = (info.unlocked||[]).map(u=>u.split(':')[1]).join(', ')
-      document.getElementById('lu-unlock').textContent = names ? '🎁 Unlocked: ' + names + ` · +${info.coinBonus} 🪙` : `+${info.coinBonus} 🪙`
-      pop.style.display = 'flex'
-      setTimeout(()=>{ pop.style.display='none' }, 3500)
-      refreshRelationship()
-    })
-
-    async function refreshCare() { const d = await ipcRenderer.invoke('get-care').catch(()=>null); if (d) renderCare(d) }
-    careBtn?.addEventListener('click', () => {
-      const p = document.getElementById('care-panel')
-      const show = p.style.display === 'none'
-      p.style.display = show ? 'block' : 'none'
-      if (show) { refreshCare(); refreshRelationship() }
-    })
-    document.getElementById('care-close')?.addEventListener('click', () => document.getElementById('care-panel').style.display='none')
-    document.querySelectorAll('.care-act').forEach(b => b.addEventListener('click', async () => {
-      const r = await ipcRenderer.invoke('care-action', b.dataset.a).catch(()=>null)
-      if (r?.success) { renderCare(r.state); refreshRelationship() }
-    }))
-    document.getElementById('shop-open-btn')?.addEventListener('click', () => ipcRenderer.send('open-shop'))
-    ipcRenderer.on('care-updated', (e, d) => renderCare(d))
-    // include care-btn in no-drag
-    setTimeout(()=>{refreshCare();refreshRelationship()}, 1500)
 
     // ── Voice chunk QUEUE — plays streamed sentences in order (no interrupting) ──
     let _voiceQueue = [], _voicePlaying = false
