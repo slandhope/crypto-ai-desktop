@@ -3,33 +3,45 @@
 <head>
 <meta charset="UTF-8">
 <title>Asuka — Dashboard</title>
+<link rel="stylesheet" href="asuka-design.css">
 <style>
   :root {
-    --bg:       #000000;
-    --bg1:      #0a0a0a;
-    --bg2:      #111111;
-    --bg3:      #1a1a1a;
-    --border:   rgba(255,255,255,0.08);
+    /* Twilight system — dashboard is the "machine" surface (cyan-leaning) */
+    --bg:       #0a0c16;
+    --bg1:      #0f1320;
+    --bg2:      #161b2e;
+    --bg3:      #1f2640;
+    --border:   rgba(255,255,255,0.07);
     --border2:  rgba(255,255,255,0.04);
-    --accent:   #00d4ff;
-    --accent2:  #0088ff;
-    --green:    #30d158;
-    --red:      #ff453a;
-    --gold:     #ffd60a;
-    --text:     #f5f5f7;
-    --text2:    #86868b;
-    --text3:    #48484a;
-    --glow:     rgba(229,229,231,0.15);
-    --radius:   12px;
-    --radius-sm:8px;
+    --accent:   #2dd4ff;
+    --accent2:  #0ea5e9;
+    --green:    #34d399;
+    --red:      #fb7185;
+    --gold:     #ffce5c;
+    --text:     #f4f5fb;
+    --text2:    #aab2c7;
+    --text3:    #6b7392;
+    --glow:     rgba(45,212,255,0.18);
+    --radius:   14px;
+    --radius-sm:9px;
+    /* Asuka accent (her gradient) available on the dashboard too */
+    --iris:     #8b7cff;
+    --violet:   #a78bfa;
+    --sakura:   #f3a8d0;
+    --asuka-grad: linear-gradient(135deg,#8b7cff 0%,#c08bf0 45%,#f3a8d0 100%);
   }
 
   * { margin:0; padding:0; box-sizing:border-box; -webkit-font-smoothing:antialiased; }
+  .stat-value, .price, .pnl, .stat-box .stat-value, [data-mono] { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .card-title, .trade-tab, .page-tab { font-family: 'Outfit', sans-serif; }
 
   body {
-    background: var(--bg);
+    background:
+      radial-gradient(1000px 500px at 85% -10%, rgba(45,212,255,0.06), transparent 60%),
+      radial-gradient(800px 450px at -5% 110%, rgba(139,124,255,0.05), transparent 55%),
+      var(--bg);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
     height: 100vh;
     overflow: hidden;
     display: flex;
@@ -52,9 +64,10 @@
   }
 
   #logo {
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
+    font-family: 'Fraunces', serif;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
     background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -1380,12 +1393,13 @@
   ::-webkit-scrollbar { width: 3px; height: 3px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+@keyframes fadeIn { to { opacity: 1; } }
 </style>
 </head>
 <body>
   <div id="mode-picker" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(8,10,20,0.97);backdrop-filter:blur(12px);align-items:center;justify-content:center;flex-direction:column;font-family:system-ui;">
     <div style="text-align:center;max-width:560px;padding:30px;">
-      <div style="font-size:26px;font-weight:800;color:#e2e8f0;margin-bottom:6px;">Welcome to Asuka 🌸</div>
+      <div style="font-size:30px;font-weight:600;font-family:'Fraunces',serif;color:var(--text);margin-bottom:6px;letter-spacing:-0.01em;">Welcome to Asuka 🌸</div>
       <div style="font-size:14px;color:#94a3b8;margin-bottom:28px;">How do you want to use her? You can switch anytime in Settings.</div>
       <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
         <div class="mode-card" data-mode="companion" style="cursor:pointer;width:230px;padding:24px;border-radius:18px;border:2px solid #334155;background:rgba(30,41,59,0.6);transition:.2s;">
@@ -1415,6 +1429,7 @@
     <div class="page-tab" data-page="2">📡 Telegram</div>
     <div class="page-tab" data-page="3">📊 Trading</div>
     <div class="page-tab" data-page="6" id="website-tab" style="display:none;">🌐 Website</div>
+    <div class="page-tab" data-page="7">📣 Calls</div>
     <div class="page-tab" data-page="5">🌸 Others</div>
     <!-- Dev tab removed — access via Settings -->
   </div>
@@ -1772,6 +1787,16 @@
         <button class="wz-type" data-type="resume" style="padding:8px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:11px;">📄 Resume</button>
       </div>
 
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:5px;">Design vibe ✨</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:10px;">
+        <button class="wz-vibe" data-vibe="animated" style="padding:7px;border-radius:8px;border:2px solid #7c3aed;background:rgba(124,58,237,0.15);color:#e2e8f0;cursor:pointer;font-size:10px;">✨ Animated</button>
+        <button class="wz-vibe" data-vibe="minimal" style="padding:7px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:10px;">◽ Minimal</button>
+        <button class="wz-vibe" data-vibe="bold" style="padding:7px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:10px;">⚡ Bold</button>
+        <button class="wz-vibe" data-vibe="luxury" style="padding:7px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:10px;">👑 Luxury</button>
+        <button class="wz-vibe" data-vibe="playful" style="padding:7px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:10px;">🎈 Playful</button>
+        <button class="wz-vibe" data-vibe="web3" style="padding:7px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:10px;">🔮 Web3</button>
+      </div>
+
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
         <div style="display:flex;gap:4px;"><input class="tg-input" id="wz-name" placeholder="Token name" style="margin:0;flex:1;"><button class="wz-ai" data-f="name" style="background:rgba(124,58,237,0.2);border:none;border-radius:6px;color:#a78bfa;cursor:pointer;padding:0 8px;">✨</button></div>
         <div class="crypto-only" style="display:flex;gap:4px;"><input class="tg-input" id="wz-symbol" placeholder="Symbol" style="margin:0;flex:1;"><button class="wz-ai" data-f="symbol" style="background:rgba(124,58,237,0.2);border:none;border-radius:6px;color:#a78bfa;cursor:pointer;padding:0 8px;">✨</button></div>
@@ -1895,13 +1920,23 @@
 
       <div id="ald-status" style="display:none;font-size:11px;margin-bottom:8px;padding:10px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid var(--border);white-space:pre-wrap;line-height:1.6;max-height:200px;overflow-y:auto;"></div>
 
-      <!-- LIVE CONSOLE — appears once a project exists, fully editable -->
-      <div id="ald-console" style="display:none;background:rgba(8,12,22,0.7);border:1px solid rgba(0,212,255,0.2);border-radius:10px;padding:10px;">
+      <!-- COIN OVERVIEW GRID — all launched coins at a glance -->
+      <div id="ald-overview" style="display:none;margin-bottom:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div style="font-size:11px;font-weight:700;" id="ald-proj-name">Project</div>
-          <select class="tg-input" id="ald-proj-picker" style="margin:0;width:140px;font-size:10px;padding:3px 6px;"></select>
+          <div style="font-family:'Fraunces',serif;font-size:15px;font-weight:600;">Your Coins</div>
+          <div id="ald-count" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);"></div>
         </div>
-        <div id="ald-health" style="font-size:10px;color:var(--text2);margin-bottom:8px;"></div>
+        <div id="ald-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
+      </div>
+
+      <!-- LIVE CONSOLE — appears once a project exists, fully editable -->
+      <div id="ald-console" style="display:none;background:linear-gradient(180deg,var(--bg2),var(--bg1));border:1px solid var(--border);border-radius:14px;padding:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <button id="ald-back" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-size:11px;padding:4px 10px;">← All coins</button>
+          <div style="font-family:'Fraunces',serif;font-size:13px;font-weight:600;" id="ald-proj-name">Project</div>
+        </div>
+        <select id="ald-proj-picker" style="display:none;"></select>
+        <div id="ald-health" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);margin-bottom:8px;"></div>
 
         <details style="margin-bottom:8px;">
           <summary style="font-size:10px;font-weight:700;cursor:pointer;color:var(--accent);">✏️ Edit project details (name, CA, socials, image)</summary>
@@ -1923,15 +1958,25 @@
           <div id="aed-status" style="display:none;font-size:10px;margin-top:5px;color:var(--text2);white-space:pre-wrap;"></div>
         </details>
 
-        <div style="font-size:10px;font-weight:700;margin-bottom:4px;">💰 Buyback (edit live)</div>
+        <div style="font-size:11px;font-weight:700;margin-bottom:6px;font-family:'Outfit',sans-serif;">💰 Buyback <span style="font-size:9px;color:var(--text2);font-weight:400;">(edit live)</span></div>
+        <label style="font-size:10px;display:block;margin-bottom:5px;">Enabled <input type="checkbox" id="ald-bb-enabled"></label>
+
+        <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:4px;">Execution mode</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;">
+          <label style="flex:1;font-size:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px;cursor:pointer;"><input type="radio" name="ald-bb-mode" value="approve" id="ald-bb-mode-approve" checked> 🔔 Signal me<br><span style="color:var(--text2);font-size:9px;">She alerts, you execute (safe)</span></label>
+          <label style="flex:1;font-size:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px;cursor:pointer;"><input type="radio" name="ald-bb-mode" value="auto" id="ald-bb-mode-auto"> ⚡ Automatic<br><span style="color:var(--text2);font-size:9px;">She buys via burner wallet</span></label>
+        </div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px;">
-          <label style="font-size:10px;">Enabled <input type="checkbox" id="ald-bb-enabled"></label>
-          <select class="tg-input" id="ald-bb-trigger" style="margin:0;font-size:10px;padding:3px;"><option value="volume">On volume</option><option value="price_drop">On price drop</option></select>
+          <select class="tg-input" id="ald-bb-trigger" style="margin:0;font-size:10px;padding:4px;"><option value="volume">On volume spike</option><option value="price_drop">On price drop</option><option value="schedule">On schedule</option></select>
           <input class="tg-input" id="ald-bb-amount" type="number" placeholder="Buy $ per trigger" style="margin:0;font-size:10px;padding:4px;">
           <input class="tg-input" id="ald-bb-max" type="number" placeholder="Max $/day" style="margin:0;font-size:10px;padding:4px;">
+          <input class="tg-input" id="ald-bb-cooldown" type="number" placeholder="Cooldown (min)" style="margin:0;font-size:10px;padding:4px;">
           <input class="tg-input" id="ald-bb-volthresh" type="number" placeholder="Vol threshold $" style="margin:0;font-size:10px;padding:4px;">
           <input class="tg-input" id="ald-bb-drop" type="number" placeholder="Price drop %" style="margin:0;font-size:10px;padding:4px;">
+          <input class="tg-input" id="ald-bb-schedhrs" type="number" placeholder="Every N hours" style="margin:0;font-size:10px;padding:4px;">
         </div>
+        <div id="ald-bb-auto-note" style="display:none;font-size:9px;color:var(--gold);margin-bottom:6px;">⚡ Automatic needs a burner wallet armed + PIN unlocked. Otherwise she falls back to signalling you.</div>
 
         <div style="font-size:10px;font-weight:700;margin-bottom:4px;">📈 Growth (edit live)</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px;">
@@ -2780,6 +2825,22 @@
 <div class="page" id="page-6" data-page-id="6" style="display:none;flex-direction:column;padding:0 14px;overflow-y:auto;">
   <div id="website-page-host" style="padding-top:10px;"></div>
 </div>
+<div class="page" id="page-7" style="display:none;flex-direction:column;padding:14px;overflow-y:auto;">
+  <div style="max-width:680px;margin:0 auto;width:100%;">
+    <div style="font-family:'Fraunces',serif;font-size:24px;font-weight:500;margin-bottom:4px;">Advisor Calls</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">Follow a human advisor. Get notified, or let Asuka trade their calls for you.</div>
+    <div style="font-size:11px;color:var(--text3);background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-bottom:18px;">⚠️ These are the advisor's calls, not Asuka's AI. Trading them is your choice and your risk. Not financial advice.</div>
+
+    <!-- Advisors you follow -->
+    <div id="advisor-list" style="margin-bottom:22px;"></div>
+
+    <!-- The call feed -->
+    <div style="font-size:12px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px;">RECENT CALLS</div>
+    <div id="calls-feed">Loading...</div>
+
+  </div>
+</div>
+
 <div class="page" id="page-5">
 <div style="overflow-y:auto;height:100%;padding:12px;">
 
@@ -2788,7 +2849,57 @@
     <button class="trade-tab active" data-others-tab="study">📚 Study</button>
     <button class="trade-tab" data-others-tab="tools">🛠️ Tools</button>
     <button class="trade-tab" data-others-tab="memory">🧠 Memory</button>
+    <button class="trade-tab" data-others-tab="intel">✨ Intelligence</button>
     <button class="trade-tab" data-others-tab="life">🌸 Life</button>
+  </div>
+
+  <!-- ══ INTELLIGENCE TAB ══ -->
+  <div class="others-tab-content" id="others-intel">
+
+    <!-- Asuka's Brain (learning stats) -->
+    <div class="as-card" style="padding:14px;margin-bottom:12px;">
+      <div style="font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin-bottom:4px;">Asuka's Brain 🧠</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">She learns from every trade. The more she runs, the sharper she gets.</div>
+      <div id="brain-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">Loading...</div>
+    </div>
+
+    <!-- Live Agent Swarm -->
+    <div class="as-card" style="padding:14px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div style="font-family:'Fraunces',serif;font-size:16px;font-weight:600;">Agent Swarm 🐟</div>
+        <span id="swarm-status" class="as-pill as-pill-data" style="font-size:10px;">idle</span>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">20 specialist agents debate every trade in parallel. Watch them vote live.</div>
+      <div id="swarm-summary" style="font-family:'JetBrains Mono',monospace;font-size:12px;margin-bottom:10px;color:var(--text2);">Waiting for the next scan...</div>
+      <div id="swarm-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;"></div>
+      <div id="swarm-args" style="margin-top:10px;font-size:11px;"></div>
+    </div>
+
+    <!-- What She Knows About You -->
+    <div class="as-card" style="padding:14px;">
+      <div style="font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin-bottom:4px;">What Asuka Knows About You 💭</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">Your relationship deepens as she learns more about you.</div>
+      <div id="knows-content">Loading...</div>
+    </div>
+    <!-- Your Rules (she enforces these) -->
+    <div class="as-card" style="padding:14px;margin-bottom:12px;">
+      <div style="font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin-bottom:4px;">Your Rules 📋</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Tell her "my rule is..." in chat, or add one here. She checks every trade against these and skips ones that break them.</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <input id="rule-input" class="as-input" placeholder="e.g. Never trade memecoins over $50k" style="flex:1;">
+        <button id="rule-add" class="as-btn as-btn-her">Add</button>
+      </div>
+      <div id="rules-list"></div>
+    </div>
+
+    <!-- Trade Replay / Audit -->
+    <div class="as-card" style="padding:14px;margin-bottom:12px;">
+      <div style="font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin-bottom:4px;">Trade Replay 🔍</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Every decision, fully auditable. See exactly why she took or skipped each trade.</div>
+      <div id="replay-list">Loading...</div>
+      <div id="replay-detail" style="display:none;margin-top:10px;"></div>
+    </div>
+
   </div>
 
   <!-- ══ STUDY TAB ══ -->
@@ -3714,7 +3825,7 @@ document.getElementById('wallet-add-confirm')?.addEventListener('click',async()=
 const pagesWrapper = document.getElementById('pages-wrapper')
 
 // Map page numbers to element IDs
-const PAGE_IDS = { 1: 'page-1', 2: 'page-2', 3: 'trading-page', 5: 'page-5', 6: 'page-6' }
+const PAGE_IDS = { 1: 'page-1', 2: 'page-2', 3: 'trading-page', 5: 'page-5', 6: 'page-6', 7: 'page-7' }
 
 function navigateToPage(pageNum) {
   // Always close ALL overlays first
@@ -3728,6 +3839,7 @@ function navigateToPage(pageNum) {
   // Show correct page using ID map
   document.querySelectorAll('.page').forEach(p => p.style.display = 'none')
   const pageId = PAGE_IDS[pageNum] || ('page-' + pageNum)
+  if (pageNum === 7) { try { loadAdvisorTab() } catch(e){} }
   const pageEl = document.getElementById(pageId)
   if (pageEl) pageEl.style.display = 'flex'
 
@@ -5524,6 +5636,7 @@ document.querySelectorAll('[data-others-tab]').forEach(tab => {
     // Load content for tab
     if (this.dataset.othersTab === 'study') loadBooks()
     if (this.dataset.othersTab === 'memory') loadMemories()
+    if (this.dataset.othersTab === 'intel') loadIntel()
   })
 })
 
@@ -5531,6 +5644,264 @@ document.querySelectorAll('[data-others-tab]').forEach(tab => {
 document.querySelectorAll('.others-tab-content').forEach((el, i) => {
   if (i > 0) el.classList.remove('active')
 })
+
+
+// ── ✨ Intelligence tab (brain stats + live swarm + what she knows) ─────────
+async function loadIntel() { loadBrainStats(); loadWhatSheKnows(); loadRules(); loadReplays() }
+
+// ── Your Rules ──
+async function loadRules() {
+  const rules = await ipcRenderer.invoke('get-user-rules').catch(()=>[])
+  const el = document.getElementById('rules-list')
+  if (!el) return
+  if (!rules.length) { el.innerHTML = '<div style="color:var(--text2);font-size:11px;">No rules yet. She\'ll follow any you add.</div>'; return }
+  el.innerHTML = rules.map((r,i) => `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border-radius:8px;padding:8px 10px;margin-bottom:5px;">
+    <span style="font-size:12px;">${i+1}. ${r}</span>
+    <span data-delrule="${i}" style="cursor:pointer;color:var(--red);font-size:13px;">✕</span></div>`).join('')
+  el.querySelectorAll('[data-delrule]').forEach(x => x.onclick = async () => { await ipcRenderer.invoke('delete-user-rule', +x.dataset.delrule).catch(()=>{}); loadRules() })
+}
+document.getElementById('rule-add')?.addEventListener('click', async () => {
+  const inp = document.getElementById('rule-input'); const v = inp.value.trim(); if (!v) return
+  await ipcRenderer.invoke('add-user-rule', v).catch(()=>{}); inp.value=''; loadRules()
+})
+document.getElementById('rule-input')?.addEventListener('keydown', e => { if (e.key==='Enter') document.getElementById('rule-add').click() })
+
+// ── Trade Replay ──
+async function loadReplays() {
+  const replays = await ipcRenderer.invoke('get-trade-replays').catch(()=>[])
+  const el = document.getElementById('replay-list')
+  if (!el) return
+  if (!replays.length) { el.innerHTML = '<div style="color:var(--text2);font-size:11px;">No trades recorded yet. Run the scanners and decisions will log here.</div>'; return }
+  el.innerHTML = replays.slice(0,15).map(r => {
+    const dirColor = r.direction==='long'?'var(--green)':'var(--red)'
+    const oc = r.outcome==='would_win'||r.outcome==='win'?'✅':r.outcome==='would_lose'||r.outcome==='loss'?'❌':''
+    return `<div data-replay="${r.id}" style="background:var(--bg3);border-radius:8px;padding:9px;margin-bottom:5px;cursor:pointer;">
+      <div style="display:flex;justify-content:space-between;">
+        <span style="font-weight:700;font-size:12px;color:${dirColor};">${(r.direction||'').toUpperCase()} ${r.coin} ${oc}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);">${r.swarmAgreePct}% · ${r.confidence}%</span>
+      </div>
+      <div style="font-size:10px;color:var(--text2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.claudeReason||''}</div>
+    </div>`
+  }).join('')
+  el.querySelectorAll('[data-replay]').forEach(x => x.onclick = () => showReplay(x.dataset.replay, replays))
+}
+function showReplay(id, replays) {
+  const r = replays.find(x => x.id === id); if (!r) return
+  const d = document.getElementById('replay-detail')
+  const when = new Date(r.timestamp).toLocaleString()
+  const agreeVotes = (r.agentVotes||[]).filter(v=>v.agree).length
+  d.style.display = 'block'
+  d.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;">
+    <div style="font-family:'Fraunces',serif;font-size:14px;margin-bottom:8px;">${(r.direction||'').toUpperCase()} ${r.coin} <span style="font-size:10px;color:var(--text2);">${when}</span></div>
+    <div style="font-size:11px;line-height:1.6;">
+      <div><b>Claude's read:</b> ${r.claudeReason||'—'}</div>
+      <div><b>Market bias:</b> ${r.marketBias||'—'} · <b>Quality:</b> ${r.qualityGrade||'—'} · <b>Mode:</b> ${r.mode||'—'}</div>
+      <div style="margin-top:6px;"><b>Agent swarm:</b> ${agreeVotes}/${r.agentsTotal} agreed (${r.swarmAgreePct}%), ${r.agentsChanged} changed mind</div>
+      ${r.bullArg?`<div style="color:var(--green);">🐂 ${r.bullArg}</div>`:''}
+      ${r.bearArg?`<div style="color:var(--red);">🐻 ${r.bearArg}</div>`:''}
+      <div style="margin-top:6px;"><b>Entry:</b> ${r.entry} · <b>Target:</b> ${r.target} · <b>Stop:</b> ${r.stopLoss}</div>
+      ${r.finalReason?`<div style="margin-top:6px;"><b>Final call:</b> ${r.finalReason}</div>`:''}
+      ${r.outcome?`<div style="margin-top:6px;"><b>Outcome:</b> ${r.outcome} ${r.pnl?`(${r.pnl})`:''}</div>`:'<div style="margin-top:6px;color:var(--text2);">Outcome pending...</div>'}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-top:8px;">
+      ${(r.agentVotes||[]).map(v=>`<div style="text-align:center;font-size:8px;color:var(--text2);background:var(--bg3);border-radius:5px;padding:3px;">${v.role}<br><span style="color:${v.agree?'var(--green)':'var(--red)'};">${v.agree?'✓':'✗'}</span></div>`).join('')}
+    </div>
+  </div>`
+  d.scrollIntoView({ behavior:'smooth', block:'nearest' })
+}
+
+async function loadBrainStats() {
+  const b = await ipcRenderer.invoke('get-brain-stats').catch(()=>null)
+  const el = document.getElementById('brain-stats')
+  if (!b || b.error) { el.innerHTML = '<div style="color:var(--text2);font-size:11px;grid-column:1/3;">No data yet — run the scanners a while.</div>'; return }
+  const card = (label, val, sub, color) => `<div style="background:var(--bg3);border-radius:10px;padding:10px;">
+    <div style="font-size:10px;color:var(--text2);">${label}</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:${color||'var(--text)'};">${val}</div>
+    ${sub?`<div style="font-size:9px;color:var(--text2);">${sub}</div>`:''}</div>`
+  const trendStr = b.trend == null ? '' : b.trend > 0 ? `▲ +${b.trend}% improving` : b.trend < 0 ? `▼ ${b.trend}%` : '→ steady'
+  const trendColor = b.trend > 0 ? 'var(--green)' : b.trend < 0 ? 'var(--red)' : 'var(--text2)'
+  el.innerHTML =
+    card('Shadow win-rate', b.winRate != null ? b.winRate+'%' : '—', `${b.resolvedTrades} resolved`, 'var(--accent)') +
+    card('Trend', trendStr || '—', b.recentWR!=null?`recent ${b.recentWR}%`:'', trendColor) +
+    card('Veteran agents', `${b.vetAgents}/${b.totalAgents}`, '5+ votes each', 'var(--violet)') +
+    card('Lessons learned', b.lessonsLearned, b.topAgent?`top: ${b.topAgent.role} ${b.topAgent.accuracy}%`:'', 'var(--sakura)')
+}
+async function loadWhatSheKnows() {
+  const k = await ipcRenderer.invoke('get-what-she-knows').catch(()=>null)
+  const el = document.getElementById('knows-content')
+  if (!k || k.error) { el.innerHTML = '<div style="color:var(--text2);font-size:11px;">Talk to her more and she\'ll learn about you.</div>'; return }
+  let html = ''
+  if (k.bondTier) html += `<div style="margin-bottom:10px;"><span class="as-pill as-pill-her">${k.bondTier}</span></div>`
+  if (k.trading?.length) {
+    html += '<div style="font-size:11px;font-weight:700;margin-bottom:6px;">📈 Trading</div>'
+    html += k.trading.map(t => `<div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-bottom:1px solid var(--border2);"><span style="color:var(--text2);">${t.k}</span><span>${t.v}</span></div>`).join('')
+  }
+  if (k.learning?.length) {
+    html += '<div style="font-size:11px;font-weight:700;margin:10px 0 6px;">📚 Learning</div>'
+    html += k.learning.map(l => `<div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-bottom:1px solid var(--border2);"><span style="color:var(--text2);">${l.goal} (${l.level})</span><span>${l.covered} topics${l.weakSpots?` · ${l.weakSpots} weak`:''}</span></div>`).join('')
+  }
+  if (!html) html = '<div style="color:var(--text2);font-size:11px;">Still getting to know you — keep chatting, trading, and learning together.</div>'
+  el.innerHTML = html
+}
+// Live swarm — agents stream in as they vote
+ipcRenderer.on('swarm-live', (e, data) => {
+  const status = document.getElementById('swarm-status')
+  const summary = document.getElementById('swarm-summary')
+  const grid = document.getElementById('swarm-grid')
+  const args = document.getElementById('swarm-args')
+  if (!grid) return
+  if (status) { status.textContent = 'live'; status.style.background = 'rgba(52,211,153,0.15)'; status.style.color = 'var(--green)' }
+  if (summary) summary.innerHTML = `${(data.direction||'').toUpperCase()} ${data.coin} — <b style="color:${data.agreePct>=60?'var(--green)':data.agreePct>=50?'var(--gold)':'var(--red)'}">${data.agreePct}% agree</b> · ${data.changed} changed mind`
+  // Render each agent as a chip, animating in
+  grid.innerHTML = (data.agents||[]).map((a, i) => {
+    const c = a.agree ? 'var(--green)' : 'var(--red)'
+    const acc = a.accuracy != null ? a.accuracy+'%' : ''
+    return `<div style="background:var(--bg3);border:1px solid ${a.agree?'rgba(52,211,153,0.3)':'rgba(251,113,133,0.3)'};border-radius:8px;padding:6px;text-align:center;opacity:0;animation:fadeIn .3s ease forwards;animation-delay:${i*40}ms;">
+      <div style="font-size:9px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${a.role}</div>
+      <div style="font-size:13px;color:${c};">${a.agree?'✓':'✗'}</div>
+      ${acc?`<div style="font-size:8px;color:var(--text3);font-family:'JetBrains Mono',monospace;">${acc}</div>`:''}
+    </div>`
+  }).join('')
+  if (args) args.innerHTML = (data.bullArg||data.bearArg) ? `${data.bullArg?`<div style="color:var(--green);">🐂 ${data.bullArg}</div>`:''}${data.bearArg?`<div style="color:var(--red);margin-top:4px;">🐻 ${data.bearArg}</div>`:''}` : ''
+  setTimeout(() => { if (status) { status.textContent='idle'; status.style.background='rgba(45,212,255,0.12)'; status.style.color='var(--data)' } }, 8000)
+})
+
+
+// ── 📣 Advisor Calls tab ───────────────────────────────────────────────
+function timeAgo(ts) {
+  const s = Math.floor((Date.now()-ts)/1000)
+  if (s<60) return 'just now'
+  if (s<3600) return Math.floor(s/60)+'m ago'
+  if (s<86400) return Math.floor(s/3600)+'h ago'
+  return new Date(ts).toLocaleDateString()
+}
+function loadAdvisorTab() {
+  // run both independently so one failing/hanging never blocks the other
+  renderAdvisors().catch(e => console.error('renderAdvisors', e))
+  renderCalls().catch(e => console.error('renderCalls', e))
+}
+async function renderAdvisors() {
+  const el = document.getElementById('advisor-list'); if (!el) return
+  const advisors = await Promise.race([
+    ipcRenderer.invoke('get-advisor-stats').catch(()=>[]),
+    new Promise(r => setTimeout(() => r([]), 4000))
+  ])
+  if (!advisors.length) { el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:10px;">No advisors set up yet. Add them in the dev panel.</div>'; return }
+  el.innerHTML = advisors.map((a, idx) => {
+    const wr = a.winRate
+    const rank = idx === 0 && advisors.length > 1 ? '<span style="font-size:10px;background:var(--gold);color:#000;padding:2px 7px;border-radius:99px;font-weight:700;margin-left:6px;">🏆 #1</span>' : ''
+    const pnlColor = a.realizedPnl > 0 ? 'var(--green)' : a.realizedPnl < 0 ? 'var(--red)' : 'var(--text3)'
+    const pnlStr = a.realizedPnl ? `${a.realizedPnl>0?'+':''}$${a.realizedPnl}` : '—'
+    const modeBtn = (m, icon, label) => `<button class="adv-mode" data-adv="${a.id}" data-mode="${m}" style="flex:1;padding:8px;border-radius:9px;font-size:11px;cursor:pointer;border:1px solid ${a.followMode===m?'var(--accent)':'var(--border)'};background:${a.followMode===m?'var(--accent)':'var(--bg3)'};color:${a.followMode===m?'#fff':'var(--text2)'};">${icon} ${label}</button>`
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+        <div style="width:46px;height:46px;border-radius:50%;background:${a.avatar?`url('${a.avatar}') center/cover`:'var(--asuka-grad)'};flex-shrink:0;"></div>
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:15px;">${a.name}${rank}</div>
+          <div style="font-size:12px;color:var(--text3);">${a.handle||''}${a.totalCalls?` · ${a.totalCalls} call${a.totalCalls!==1?'s':''}`:' · no calls yet'}</div>
+        </div>
+      </div>
+      ${a.bio?`<div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5;">${a.bio}</div>`:''}
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <div style="flex:1;background:var(--bg3);border-radius:10px;padding:9px;text-align:center;"><div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;color:${wr>=50?'var(--green)':wr!=null?'var(--red)':'var(--text2)'};">${wr!=null?wr+'%':'—'}</div><div style="font-size:9px;color:var(--text3);">win rate</div></div>
+        <div style="flex:1;background:var(--bg3);border-radius:10px;padding:9px;text-align:center;"><div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;">${a.openCalls}</div><div style="font-size:9px;color:var(--text3);">open</div></div>
+        <div style="flex:1;background:var(--bg3);border-radius:10px;padding:9px;text-align:center;"><div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;color:${pnlColor};">${pnlStr}</div><div style="font-size:9px;color:var(--text3);">your P&L</div></div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        ${modeBtn('notify','🔔','Notify')}
+        ${modeBtn('auto','⚡','Auto-trade')}
+        ${modeBtn('off','🔇','Off')}
+      </div>
+      <div id="adv-risk-${a.id}" style="display:${a.followMode==='auto'?'block':'none'};">
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <div style="flex:1;"><div style="font-size:10px;color:var(--text3);margin-bottom:3px;">$ per call</div><input type="number" class="tg-input adv-risk" data-adv="${a.id}" data-field="risk" value="${a.riskUsd||50}" style="width:100%;font-size:12px;padding:8px;"></div>
+          <div style="flex:1;"><div style="font-size:10px;color:var(--text3);margin-bottom:3px;">Max $/day</div><input type="number" class="tg-input adv-risk" data-adv="${a.id}" data-field="cap" value="${a.maxPerDay||200}" style="width:100%;font-size:12px;padding:8px;"></div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:4px;">When they edit/close a trade mid-way:</div>
+        <div style="display:flex;gap:6px;">
+          <button class="adv-auton" data-adv="${a.id}" data-auton="full" style="flex:1;padding:7px;border-radius:8px;font-size:10px;cursor:pointer;border:1px solid ${(a.autonomyMode||'confirm')==='full'?'var(--accent)':'var(--border)'};background:${(a.autonomyMode||'confirm')==='full'?'var(--accent)':'var(--bg3)'};color:${(a.autonomyMode||'confirm')==='full'?'#fff':'var(--text2)'};">⚡ Full auto</button>
+          <button class="adv-auton" data-adv="${a.id}" data-auton="confirm" style="flex:1;padding:7px;border-radius:8px;font-size:10px;cursor:pointer;border:1px solid ${(a.autonomyMode||'confirm')==='confirm'?'var(--accent)':'var(--border)'};background:${(a.autonomyMode||'confirm')==='confirm'?'var(--accent)':'var(--bg3)'};color:${(a.autonomyMode||'confirm')==='confirm'?'#fff':'var(--text2)'};">✋ Ask me first</button>
+        </div>
+      </div>
+    </div>`
+  }).join('')
+  // wire mode buttons
+  el.querySelectorAll('.adv-mode').forEach(b => b.onclick = async () => {
+    await ipcRenderer.invoke('set-advisor-mode', { advisorId: b.dataset.adv, mode: b.dataset.mode }).catch(()=>{})
+    renderAdvisors()
+  })
+  // wire risk inputs
+  el.querySelectorAll('.adv-risk').forEach(inp => inp.onchange = async () => {
+    const adv = inp.dataset.adv
+    const risk = el.querySelector(`.adv-risk[data-adv="${adv}"][data-field="risk"]`)?.value
+    const cap = el.querySelector(`.adv-risk[data-adv="${adv}"][data-field="cap"]`)?.value
+    await ipcRenderer.invoke('set-advisor-risk', { advisorId: adv, riskUsd: parseFloat(risk)||50, maxPerDay: parseFloat(cap)||200 }).catch(()=>{})
+  })
+  el.querySelectorAll('.adv-auton').forEach(b => b.onclick = async () => {
+    await ipcRenderer.invoke('set-advisor-autonomy', { advisorId: b.dataset.adv, autonomyMode: b.dataset.auton }).catch(()=>{})
+    renderAdvisors()
+  })
+}
+async function renderCalls() {
+  const el = document.getElementById('calls-feed'); if (!el) return
+  const calls = await Promise.race([
+    ipcRenderer.invoke('get-advisor-calls').catch(()=>[]),
+    new Promise(r => setTimeout(() => r([]), 4000))
+  ])
+  if (!calls.length) { el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:20px;text-align:center;">No calls yet. When your advisor posts, they show here.</div>'; return }
+  el.innerHTML = calls.slice(0,30).map(c => {
+    const dirColor = c.direction==='long'?'var(--green)':'var(--red)'
+    const when = new Date(c.timestamp).toLocaleString()
+    // Update items (close/edit) render compact + distinct
+    if (c.isUpdate) {
+      const label = c.updateType==='close'?'🔴 CLOSE':c.updateType==='update_sl'?'✏️ Move SL':c.updateType==='update_tp'?'✏️ Move TP':c.updateType==='add'?'➕ Add to':'✏️ Update'
+      return `<div style="background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:12px;padding:12px 14px;margin-bottom:9px;">
+        <div style="font-size:13px;font-weight:600;">${label} ${c.coin} ${c.sl?`<span style="color:var(--red);font-family:'JetBrains Mono',monospace;font-size:11px;">SL ${c.sl}</span>`:''} ${c.tp?`<span style="color:var(--green);font-family:'JetBrains Mono',monospace;font-size:11px;">TP ${c.tp}</span>`:''}</div>
+        ${c.reasoning?`<div style="font-size:12px;color:var(--text2);margin-top:5px;">${c.reasoning}</div>`:''}
+        <div style="font-size:10px;color:var(--text3);margin-top:6px;">${c.advisorName} · ${when}</div>
+      </div>`
+    }
+    const oc = c.outcome==='win'?'<span style="color:var(--green);">✅ Hit TP</span>':c.outcome==='loss'?'<span style="color:var(--red);">❌ Hit SL</span>':'<span style="color:var(--text3);">● Open</span>'
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:15px;margin-bottom:11px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-weight:600;"><span style="color:${dirColor};">${(c.direction||'').toUpperCase()}</span> ${c.coin}</div>
+        <div style="font-size:11px;">${oc}</div>
+      </div>
+      ${c.image?`<img src="${c.image}" style="width:100%;border-radius:10px;margin-bottom:8px;max-height:240px;object-fit:cover;">`:''}
+      <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:10px;">${c.reasoning||''}</div>
+      <div style="display:flex;gap:8px;">
+        ${c.entry?`<div style="flex:1;background:var(--bg3);border-radius:8px;padding:7px;text-align:center;"><div style="font-size:9px;color:var(--text3);">ENTRY</div><div style="font-family:'JetBrains Mono',monospace;font-size:13px;">${c.entry}</div></div>`:''}
+        ${c.tp?`<div style="flex:1;background:var(--bg3);border-radius:8px;padding:7px;text-align:center;"><div style="font-size:9px;color:var(--text3);">TARGET</div><div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--green);">${c.tp}</div></div>`:''}
+        ${c.sl?`<div style="flex:1;background:var(--bg3);border-radius:8px;padding:7px;text-align:center;"><div style="font-size:9px;color:var(--text3);">STOP</div><div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--red);">${c.sl}</div></div>`:''}
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:10px;">${c.advisorName} · ${timeAgo(c.timestamp)}</div>
+    </div>`
+  }).join('')
+}
+
+
+// Advisor mid-trade action needs user confirmation (autonomyMode = 'confirm')
+ipcRenderer.on('advisor-confirm', (e, d) => {
+  const verb = d.action==='close'?'close':d.action==='update_sl'?'move stop on':d.action==='update_tp'?'move target on':'update'
+  const detail = d.sl?`new SL ${d.sl}`:d.tp?`new TP ${d.tp}`:''
+  let bar = document.getElementById('advisor-confirm-bar')
+  if (!bar) { bar = document.createElement('div'); bar.id='advisor-confirm-bar'
+    bar.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:10003;background:var(--bg2);border:1px solid var(--gold);border-radius:14px;padding:14px 18px;box-shadow:0 10px 40px rgba(0,0,0,.5);max-width:420px;'
+    document.body.appendChild(bar) }
+  bar.innerHTML = `<div style="font-size:13px;margin-bottom:10px;"><b>${d.advisorName}</b> wants to <b>${verb} ${d.coin}</b>${detail?` (${detail})`:''}.</div>
+    <div style="display:flex;gap:8px;">
+      <button id="adv-confirm-yes" style="flex:1;padding:9px;border-radius:9px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;">Apply</button>
+      <button id="adv-confirm-no" style="flex:1;padding:9px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;">Dismiss</button>
+    </div>`
+  document.getElementById('adv-confirm-yes').onclick = async () => {
+    await ipcRenderer.invoke('advisor-confirm-action', { tradeId:d.tradeId, action:d.action, sl:d.sl, tp:d.tp }).catch(()=>{})
+    bar.remove()
+  }
+  document.getElementById('adv-confirm-no').onclick = () => bar.remove()
+})
+
+// live update when a new call arrives
+ipcRenderer.on('advisor-call', () => { if (document.getElementById('page-7')?.style.display !== 'none') renderCalls() })
 
 // ── Study Timer ──────────────────────────────────────────────────────────
 let timerInterval = null
@@ -5954,15 +6325,69 @@ document.querySelectorAll('.ald-step').forEach(btn => btn.addEventListener('clic
 }))
 
 let _aldProject = null
+let _aldList = []
 async function aldLoadProjects(selectId) {
   const list = await ipcRenderer.invoke('launch-list-projects').catch(() => [])
+  _aldList = list
   const picker = document.getElementById('ald-proj-picker')
-  if (!list.length) { document.getElementById('ald-console').style.display = 'none'; return }
+  const overview = document.getElementById('ald-overview')
+  const console_ = document.getElementById('ald-console')
+  if (!list.length) {
+    if (overview) overview.style.display = 'none'
+    if (console_) console_.style.display = 'none'
+    return
+  }
+  if (picker) picker.innerHTML = list.map(p => `<option value="${p.id}">${p.name||p.symbol} (${p.status})</option>`).join('')
+  if (selectId) { showConsole(selectId) }
+  else { showOverview() }
+}
+function statusColor(s) { return s==='live'?'var(--green)':s==='paused'?'var(--gold)':'var(--text3)' }
+function showOverview() {
+  document.getElementById('ald-console').style.display = 'none'
+  const ov = document.getElementById('ald-overview')
+  ov.style.display = 'block'
+  document.getElementById('ald-count').textContent = `${_aldList.length} coin${_aldList.length!==1?'s':''}`
+  document.getElementById('ald-grid').innerHTML = _aldList.map(p => {
+    const h = p.health || {}
+    const price = h.price ? '$' + h.price : '—'
+    const liq = h.liq ? '$' + (h.liq/1000).toFixed(0) + 'K' : '—'
+    return `<div class="ald-card" data-id="${p.id}" style="background:linear-gradient(180deg,var(--bg2),var(--bg1));border:1px solid var(--border);border-radius:12px;padding:11px;cursor:pointer;position:relative;transition:.15s;">
+      <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:6px;">
+        <div>
+          <div style="font-weight:700;font-size:13px;">$${(p.symbol||'?').toUpperCase()}</div>
+          <div style="font-size:10px;color:var(--text2);">${p.name||''} · ${p.chain||'—'}</div>
+        </div>
+        <span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(255,255,255,0.06);color:${statusColor(p.status)};">${(p.status||'').toUpperCase()}</span>
+      </div>
+      <div style="display:flex;gap:10px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text2);margin-bottom:8px;">
+        <span>${price}</span><span>Liq ${liq}</span>
+      </div>
+      <div style="display:flex;gap:4px;font-size:9px;">
+        ${p.buybackEnabled?'<span style="color:var(--green);">● buyback</span>':''}
+        ${p.growthEnabled?'<span style="color:var(--violet);">● growth</span>':''}
+      </div>
+      <button class="ald-del" data-id="${p.id}" data-sym="${p.symbol}" style="position:absolute;top:8px;right:8px;display:none;background:rgba(251,113,133,0.15);border:none;border-radius:6px;color:var(--red);cursor:pointer;font-size:11px;padding:2px 6px;">🗑</button>
+    </div>`
+  }).join('')
+  // wire cards
+  document.querySelectorAll('.ald-card').forEach(c => {
+    c.addEventListener('mouseenter', () => { c.style.borderColor = 'var(--violet)'; c.querySelector('.ald-del').style.display='block' })
+    c.addEventListener('mouseleave', () => { c.style.borderColor = 'var(--border)'; c.querySelector('.ald-del').style.display='none' })
+    c.addEventListener('click', e => { if (!e.target.classList.contains('ald-del')) showConsole(c.dataset.id) })
+  })
+  document.querySelectorAll('.ald-del').forEach(b => b.addEventListener('click', async e => {
+    e.stopPropagation()
+    if (!confirm(`Delete $${b.dataset.sym}? This removes the project permanently.`)) return
+    await ipcRenderer.invoke('launch-delete-project', b.dataset.id).catch(()=>{})
+    await aldLoadProjects()
+  }))
+}
+async function showConsole(id) {
+  document.getElementById('ald-overview').style.display = 'none'
   document.getElementById('ald-console').style.display = 'block'
-  picker.innerHTML = list.map(p => `<option value="${p.id}">${p.name||p.symbol} (${p.status})</option>`).join('')
-  const pick = selectId || list[0].id
-  picker.value = pick
-  await aldRenderProject(pick)
+  const picker = document.getElementById('ald-proj-picker')
+  if (picker) picker.value = id
+  await aldRenderProject(id)
 }
 async function aldRenderProject(id) {
   const p = await ipcRenderer.invoke('launch-get-project', id).catch(() => null)
@@ -5972,11 +6397,17 @@ async function aldRenderProject(id) {
   const h = p.health || {}
   document.getElementById('ald-health').textContent = h.price ? `Price $${h.price} | Liq $${((h.liq||0)/1000).toFixed(0)}K | Vol $${((h.vol||0)/1000).toFixed(0)}K` : 'No live data yet (add CA for health tracking)'
   document.getElementById('ald-bb-enabled').checked = !!p.buyback.enabled
+  const _mode = p.buyback.executionMode || 'approve'
+  document.getElementById('ald-bb-mode-approve').checked = _mode === 'approve'
+  document.getElementById('ald-bb-mode-auto').checked = _mode === 'auto'
+  document.getElementById('ald-bb-auto-note').style.display = _mode === 'auto' ? 'block' : 'none'
   document.getElementById('ald-bb-trigger').value = p.buyback.triggerType
   document.getElementById('ald-bb-amount').value = p.buyback.buyAmountUsd
   document.getElementById('ald-bb-max').value = p.buyback.maxPerDay
+  document.getElementById('ald-bb-cooldown').value = p.buyback.cooldownMin || 30
   document.getElementById('ald-bb-volthresh').value = p.buyback.volumeThreshold
   document.getElementById('ald-bb-drop').value = p.buyback.priceDropPct
+  document.getElementById('ald-bb-schedhrs').value = p.buyback.scheduleHours || 24
   document.getElementById('ald-g-enabled').checked = !!p.growth.enabled
   document.getElementById('ald-g-cadence').value = p.growth.raidCadenceHours
   document.getElementById('ald-g-callers').checked = !!p.growth.callerOutreach
@@ -5990,15 +6421,26 @@ async function aldRenderProject(id) {
   setv('aed-tgchat',p.telegramChatId); setv('aed-siteurl',p.siteUrl)
 }
 document.getElementById('ald-proj-picker')?.addEventListener('change', function() { aldRenderProject(this.value) })
+document.getElementById('ald-back')?.addEventListener('click', () => showOverview())
+document.getElementById('ald-bb-mode-auto')?.addEventListener('change', () => { document.getElementById('ald-bb-auto-note').style.display='block' })
+document.getElementById('ald-bb-mode-approve')?.addEventListener('change', () => { document.getElementById('ald-bb-auto-note').style.display='none' })
 
 document.getElementById('aed-save')?.addEventListener('click', async function() {
   if (!_aldProject) return
   const g=(id)=>document.getElementById(id).value.trim()
   const patch = { name:g('aed-name'), symbol:g('aed-symbol'), ca:g('aed-ca'), tagline:g('aed-tagline'), description:g('aed-description'), twitter:g('aed-twitter'), telegram:g('aed-telegram'), telegramChatId:g('aed-tgchat'), siteUrl:g('aed-siteurl') }
+  this.textContent = '💾 Saving...'
   const r = await ipcRenderer.invoke('launch-update-project', { id:_aldProject.id, patch }).catch(()=>null)
+  this.textContent = '💾 Save details'
   const st=document.getElementById('aed-status'); st.style.display='block'
-  st.textContent = r?.success ? '✅ Saved' : '❌ ' + (r?.error||'failed')
-  if(r?.success) aldRenderProject(_aldProject.id)
+  if (r?.success) {
+    st.textContent = '✅ Saved'
+    _aldProject = r.project || _aldProject
+    await aldRenderProject(_aldProject.id)   // refresh console
+    const list = await ipcRenderer.invoke('launch-list-projects').catch(()=>[]); _aldList = list  // refresh overview data
+  } else {
+    st.textContent = '❌ ' + (r?.error||'failed — check the fields')
+  }
 })
 document.getElementById('aed-deploy-site')?.addEventListener('click', async function() {
   if (!_aldProject) return
@@ -6015,11 +6457,14 @@ document.getElementById('ald-save')?.addEventListener('click', async function() 
   const patch = {
     buyback: {
       enabled: document.getElementById('ald-bb-enabled').checked,
+      executionMode: document.getElementById('ald-bb-mode-auto').checked ? 'auto' : 'approve',
       triggerType: document.getElementById('ald-bb-trigger').value,
       buyAmountUsd: parseFloat(document.getElementById('ald-bb-amount').value) || 200,
       maxPerDay: parseFloat(document.getElementById('ald-bb-max').value) || 1000,
+      cooldownMin: parseFloat(document.getElementById('ald-bb-cooldown').value) || 30,
       volumeThreshold: parseFloat(document.getElementById('ald-bb-volthresh').value) || 50000,
-      priceDropPct: parseFloat(document.getElementById('ald-bb-drop').value) || 8
+      priceDropPct: parseFloat(document.getElementById('ald-bb-drop').value) || 8,
+      scheduleHours: parseFloat(document.getElementById('ald-bb-schedhrs').value) || 24
     },
     growth: {
       enabled: document.getElementById('ald-g-enabled').checked,
@@ -6038,6 +6483,11 @@ setTimeout(() => aldLoadProjects().catch(() => {}), 2500)
 
 // ── Website type selector ─────────────────────────────────────────────────
 let _wzType = 'crypto'
+let _wzVibe = 'animated'
+document.querySelectorAll('.wz-vibe').forEach(b => b.addEventListener('click', () => {
+  _wzVibe = b.dataset.vibe
+  document.querySelectorAll('.wz-vibe').forEach(x => { const on = x.dataset.vibe === _wzVibe; x.style.border = on ? '2px solid #7c3aed' : '1px solid #334155'; x.style.background = on ? 'rgba(124,58,237,0.15)' : 'rgba(30,41,59,0.5)' })
+}))
 const _typeLabels = {
   crypto: { name:'Token name', tagline:'Vibe / tagline', desc:'What is this coin about?' },
   business: { name:'Business name', tagline:'Slogan / what you do', desc:'Describe your business, services, who you serve' },
@@ -6164,7 +6614,7 @@ document.getElementById('wz-create')?.addEventListener('click', async function()
     this.textContent = '🌐 building...'; wzSay('Building your ' + _wzType + ' website... (~30s)')
     let logoDataUri = _wzImageData || null
     const r = await ipcRenderer.invoke('build-general-site', {
-      siteType: _wzType, name: c.name, tagline: c.tagline, description: c.description,
+      siteType: _wzType, vibe: _wzVibe, name: c.name, tagline: c.tagline, description: c.description,
       customBrief: c.customBrief, contact: c.twitter, socials: (c.twitter||'') + ' ' + (c.telegram||''),
       logoDataUri, wantLogo: !logoDataUri
     }).catch(()=>null)
@@ -6180,7 +6630,7 @@ document.getElementById('wz-create')?.addEventListener('click', async function()
   let logoDataUri = _wzImageData || null
   if (!logoDataUri) { const art = await ipcRenderer.invoke('launch-generate-art', c).catch(()=>null); if (art?.dataUri) logoDataUri = art.dataUri }
   this.textContent = '🌐 building site...'
-  const site = await ipcRenderer.invoke('launch-generate-site', { name:c.name, symbol:c.symbol, tagline:c.tagline, chain:c.chain, twitter:c.twitter, telegram:c.telegram, ca:c.ca, customBrief:c.customBrief, logoDataUri }).catch(()=>null)
+  const site = await ipcRenderer.invoke('launch-generate-site', { name:c.name, symbol:c.symbol, tagline:c.tagline, chain:c.chain, twitter:c.twitter, telegram:c.telegram, ca:c.ca, customBrief:c.customBrief, vibe:_wzVibe, logoDataUri }).catch(()=>null)
   // Save the project too (so Auto-Desk can manage it)
   const proj = await ipcRenderer.invoke('launch-create-project', { ...c, mode:'manual', sitePath: site?.path }).catch(()=>null)
   this.textContent = '🌐 Create Website'

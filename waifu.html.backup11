@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+<link rel="stylesheet" href="asuka-design.css">
   <meta charset="UTF-8">
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -21,6 +22,7 @@
     #mic-mute-btn  { bottom:430px; left:10px; background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.3); }
     #webcam-btn    { bottom:380px; left:10px; background:rgba(255,140,0,0.15);  border:1px solid rgba(255,140,0,0.3); }
     #dashboard-btn { bottom:330px; left:10px; background:rgba(150,0,255,0.15);  border:1px solid rgba(150,0,255,0.3); }
+    #care-btn { bottom:385px; left:10px; background:rgba(240,168,208,0.18); border:1px solid rgba(240,168,208,0.4); }
 
     #her-mute-btn.muted { background:rgba(248,113,113,0.2); border-color:rgba(248,113,113,0.4); }
     #mic-mute-btn.muted { background:rgba(248,113,113,0.2); border-color:rgba(248,113,113,0.4); }
@@ -126,6 +128,39 @@
   <div id="mic-mute-btn" class="btn" title="Mute your mic">🎤</div>
   <div id="webcam-btn"   class="btn" title="Toggle camera">📷</div>
   <div id="dashboard-btn" class="btn" title="Dashboard">📊</div>
+  <div id="care-btn" class="btn" title="Care & Shop">🎀</div>
+
+  <div id="levelup-pop" style="display:none;position:fixed;inset:0;z-index:10001;background:rgba(10,12,22,0.85);backdrop-filter:blur(8px);align-items:center;justify-content:center;flex-direction:column;font-family:system-ui;pointer-events:none;">
+    <div style="text-align:center;animation:lupop .5s ease;">
+      <div id="lu-emoji" style="font-size:72px;margin-bottom:10px;">💖</div>
+      <div style="font-size:14px;color:#f0a8d0;font-weight:700;letter-spacing:2px;">RELATIONSHIP LEVEL UP</div>
+      <div id="lu-tier" style="font-size:32px;font-weight:600;font-family:'Fraunces',serif;color:#fff;margin:6px 0;">Friend</div>
+      <div id="lu-unlock" style="font-size:14px;color:#a78bfa;"></div>
+    </div>
+  </div>
+  <style>@keyframes lupop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}</style>
+
+  <div id="care-panel" style="display:none;position:fixed;left:64px;bottom:20px;width:280px;z-index:9998;background:linear-gradient(180deg,rgba(22,27,46,0.98),rgba(15,19,32,0.98));border:1px solid rgba(167,139,250,0.3);border-radius:20px;padding:16px;box-shadow:0 12px 48px rgba(0,0,0,0.6);font-family:system-ui;color:#e8edf4;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <div style="font-size:15px;font-weight:600;font-family:'Fraunces',serif;">🎀 Care</div>
+      <div style="font-size:12px;font-family:'JetBrains Mono',monospace;"><span id="care-coins">0</span> 🪙 · 🔥<span id="care-streak">0</span></div>
+    </div>
+    <div id="rel-box" style="background:rgba(240,168,208,0.1);border:1px solid rgba(240,168,208,0.25);border-radius:11px;padding:9px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:5px;">
+        <span id="rel-tier">🌱 Acquaintance</span><span id="rel-next" style="color:#94a3b8;font-weight:500;"></span>
+      </div>
+      <div style="height:8px;background:#1e293b;border-radius:5px;overflow:hidden;"><div id="rel-fill" style="height:100%;width:0%;background:linear-gradient(90deg,#f0a8d0,#a78bfa);border-radius:5px;transition:.4s;"></div></div>
+    </div>
+    <div id="care-stats" style="font-size:11px;display:flex;flex-direction:column;gap:6px;margin-bottom:12px;"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:8px;">
+      <button class="care-act" data-a="feed" style="padding:10px;border-radius:11px;border:1px solid #334155;background:#1e293b;color:#fff;cursor:pointer;font-size:13px;">🍰 Feed</button>
+      <button class="care-act" data-a="pat" style="padding:10px;border-radius:11px;border:1px solid #334155;background:#1e293b;color:#fff;cursor:pointer;font-size:13px;">🤚 Pat</button>
+      <button class="care-act" data-a="clean" style="padding:10px;border-radius:11px;border:1px solid #334155;background:#1e293b;color:#fff;cursor:pointer;font-size:13px;">🧼 Clean</button>
+      <button class="care-act" data-a="play" style="padding:10px;border-radius:11px;border:1px solid #334155;background:#1e293b;color:#fff;cursor:pointer;font-size:13px;">🎀 Play</button>
+    </div>
+    <button id="shop-open-btn" style="width:100%;padding:11px;border-radius:11px;border:none;background:linear-gradient(135deg,#8b7cff,#c08bf0,#f3a8d0);color:#fff;cursor:pointer;font-weight:800;font-size:13px;">🛍️ Dress-Up Shop</button>
+    <div id="care-close" style="text-align:center;margin-top:8px;font-size:11px;color:#64748b;cursor:pointer;">close</div>
+  </div>
 
   <div id="quiz-box" style="display:none;position:fixed;right:12px;bottom:12px;width:min(42vw,420px);z-index:10000;background:rgba(13,20,32,0.97);border:2px solid #a78bfa;border-radius:16px;padding:14px;box-shadow:0 12px 48px rgba(0,0,0,0.6);font-family:system-ui;">
     <div id="quiz-q" style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:10px;line-height:1.4;"></div>
@@ -258,7 +293,7 @@
 
     // ── Drag window ────────────────────────────────────────────────────────
     let isDragging = false, dragX, dragY
-    const noDragIds = ['history-btn','chat-btn','her-mute-btn','mic-mute-btn','user-input','send-btn','webcam-btn','dashboard-btn','confirm-yes','confirm-no','history-clear']
+    const noDragIds = ['history-btn','chat-btn','her-mute-btn','mic-mute-btn','user-input','send-btn','webcam-btn','dashboard-btn','care-btn','confirm-yes','confirm-no','history-clear']
     document.addEventListener('mousedown', e => {
       if (noDragIds.includes(e.target.id) || e.target.closest('#chat-panel') || e.target.closest('#confirm-bar') || e.target.closest('#history-panel')) return
       isDragging = true; dragX = e.screenX; dragY = e.screenY; e.preventDefault()
@@ -1185,6 +1220,170 @@ VOICE RESPONSE RULES — CRITICAL:
         setStatus('Listening...')
       }
       reader.readAsDataURL(file)
+    })
+
+
+    // ── Care system ───────────────────────────────────────────────────────
+    const careBtn = document.getElementById('care-btn')
+    function statBar(label, val, color) {
+      const v = Math.round(val)
+      return `<div><div style="display:flex;justify-content:space-between;"><span>${label}</span><span>${v}%</span></div><div style="height:7px;background:#1e293b;border-radius:5px;overflow:hidden;"><div style="height:100%;width:${v}%;background:${color};border-radius:5px;transition:.3s;"></div></div></div>`
+    }
+    function renderCare(d) {
+      document.getElementById('care-coins').textContent = d.coins ?? 0
+      document.getElementById('care-streak').textContent = d.streak ?? 0
+      document.getElementById('care-stats').innerHTML =
+        statBar('🍰 Hunger', d.hunger, '#fbbf24') +
+        statBar('😊 Happiness', d.happiness, '#34d399') +
+        statBar('✨ Cleanliness', d.cleanliness, '#60a5fa') +
+        statBar('💕 Affection', d.affection, '#f472b6')
+    }
+
+    async function refreshRelationship() {
+      const r = await ipcRenderer.invoke('get-relationship').catch(()=>null)
+      if (!r) return
+      document.getElementById('rel-tier').textContent = r.tier.emoji + ' ' + r.tier.name
+      document.getElementById('rel-next').textContent = r.next ? `${r.toNext} XP → ${r.next.name}` : 'MAX 👑'
+      document.getElementById('rel-fill').style.width = r.progress + '%'
+    }
+    ipcRenderer.on('relationship-levelup', (e, info) => {
+      const pop = document.getElementById('levelup-pop')
+      document.getElementById('lu-emoji').textContent = info.tier.emoji
+      document.getElementById('lu-tier').textContent = info.tier.name
+      const names = (info.unlocked||[]).map(u=>u.split(':')[1]).join(', ')
+      document.getElementById('lu-unlock').textContent = names ? '🎁 Unlocked: ' + names + ` · +${info.coinBonus} 🪙` : `+${info.coinBonus} 🪙`
+      pop.style.display = 'flex'
+      setTimeout(()=>{ pop.style.display='none' }, 3500)
+      refreshRelationship()
+    })
+
+    async function refreshCare() { const d = await ipcRenderer.invoke('get-care').catch(()=>null); if (d) renderCare(d) }
+    careBtn?.addEventListener('click', () => {
+      const p = document.getElementById('care-panel')
+      const show = p.style.display === 'none'
+      p.style.display = show ? 'block' : 'none'
+      if (show) { refreshCare(); refreshRelationship() }
+    })
+    document.getElementById('care-close')?.addEventListener('click', () => document.getElementById('care-panel').style.display='none')
+    document.querySelectorAll('.care-act').forEach(b => b.addEventListener('click', async () => {
+      const r = await ipcRenderer.invoke('care-action', b.dataset.a).catch(()=>null)
+      if (r?.success) { renderCare(r.state); refreshRelationship() }
+    }))
+    document.getElementById('shop-open-btn')?.addEventListener('click', () => ipcRenderer.send('open-shop'))
+    ipcRenderer.on('care-updated', (e, d) => renderCare(d))
+    // include care-btn in no-drag
+    setTimeout(()=>{refreshCare();refreshRelationship()}, 1500)
+
+
+    // ══ REACTION SYSTEM — she reacts to live events (Comnyang-inspired) ══════
+    // Tries Live2D expression params (common names), always shows an emotion bubble fallback.
+    let _emotionTimer = null
+    function setEmotion(emotion) {
+      if (!model) return
+      // Try common Live2D expression parameters (safe — wrapped, no-op if model lacks them)
+      const cm = model.internalModel?.coreModel
+      if (!cm) return
+      const tryParam = (id, val) => { try { cm.setParameterValueById(id, val) } catch(e){} }
+      // Reset common expression params
+      tryParam('ParamBrowLY', 0); tryParam('ParamBrowRY', 0)
+      tryParam('ParamMouthForm', 0); tryParam('ParamEyeLOpen', 1); tryParam('ParamEyeROpen', 1)
+      if (emotion === 'happy') { tryParam('ParamMouthForm', 1); tryParam('ParamBrowLY', 0.5); tryParam('ParamBrowRY', 0.5) }
+      else if (emotion === 'excited') { tryParam('ParamMouthForm', 1); tryParam('ParamMouthOpenY', 0.6); tryParam('ParamEyeLOpen', 1.2); tryParam('ParamEyeROpen', 1.2) }
+      else if (emotion === 'worried') { tryParam('ParamMouthForm', -0.8); tryParam('ParamBrowLY', -0.6); tryParam('ParamBrowRY', -0.6) }
+      else if (emotion === 'sad') { tryParam('ParamMouthForm', -1); tryParam('ParamBrowLY', -0.8); tryParam('ParamBrowRY', -0.8); tryParam('ParamEyeLOpen', 0.6); tryParam('ParamEyeROpen', 0.6) }
+      else if (emotion === 'thinking') { tryParam('ParamEyeBallX', 0.5); tryParam('ParamEyeBallY', 0.5); tryParam('ParamBrowLY', -0.3); tryParam('ParamBrowRY', -0.3) }
+      else if (emotion === 'love') { tryParam('ParamMouthForm', 1); tryParam('ParamEyeLOpen', 0.7); tryParam('ParamEyeROpen', 0.7) }
+      // try a named expression too (some models have these)
+      try { model.expression?.(emotion) } catch(e) {}
+    }
+    // Visual emotion bubble (works for ANY model — the reliable feedback)
+    function showEmotionBubble(emoji, text, color) {
+      let b = document.getElementById('emotion-bubble')
+      if (!b) {
+        b = document.createElement('div'); b.id = 'emotion-bubble'
+        b.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-10px);z-index:10002;background:linear-gradient(135deg,rgba(22,27,46,.97),rgba(15,19,32,.97));border:1px solid rgba(167,139,250,.4);border-radius:16px;padding:9px 15px;font-family:Outfit,system-ui;font-size:12px;color:#f4f5fb;box-shadow:0 8px 28px rgba(0,0,0,.5);opacity:0;transition:.3s;display:flex;align-items:center;gap:7px;max-width:260px;'
+        document.body.appendChild(b)
+      }
+      b.style.borderColor = color || 'rgba(167,139,250,.4)'
+      b.innerHTML = `<span style="font-size:18px;">${emoji}</span><span>${text}</span>`
+      requestAnimationFrame(() => { b.style.opacity = '1'; b.style.transform = 'translateX(-50%) translateY(0)' })
+      clearTimeout(b._t); b._t = setTimeout(() => { b.style.opacity = '0'; b.style.transform = 'translateX(-50%) translateY(-10px)' }, 4000)
+    }
+    // The master reaction trigger
+    function react(emotion, emoji, text, color, speakIt) {
+      setEmotion(emotion)
+      if (emoji) showEmotionBubble(emoji, text || '', color)
+      if (model) try { model.motion?.(emotion === 'excited' || emotion === 'happy' ? 'tap_body' : 'idle') } catch(e){}
+      clearTimeout(_emotionTimer)
+      _emotionTimer = setTimeout(() => setEmotion('neutral'), 6000)
+      if (speakIt && text && !isHerMuted) ipcRenderer.invoke('speak-text', text).catch(()=>{})
+    }
+
+    // ── Event reactions from the backend ──────────────────────────────────
+    ipcRenderer.on('asuka-react', (e, ev) => {
+      const R = {
+        swarm_thinking: ['thinking', '🤔', 'Let me think on this trade...', 'rgba(45,212,255,.4)', false],
+        swarm_strong:   ['excited', '🐟', `The agents strongly agree!`, 'rgba(52,211,153,.4)', false],
+        swarm_split:    ['worried', '😟', `The agents are split — being careful`, 'rgba(251,191,36,.4)', false],
+        trade_win:      ['excited', '🎉', `We hit target! Nice trade!`, 'rgba(52,211,153,.4)', true],
+        trade_loss:     ['sad', '😔', `That one stopped out. We'll get the next.`, 'rgba(251,113,133,.4)', true],
+        trade_open:     ['happy', '💼', `Opened a ${ev.detail||'trade'}!`, 'rgba(167,139,250,.4)', false],
+        trade_skip:     ['thinking', '🛑', `Skipped that one — didn't meet the bar`, 'rgba(107,114,146,.4)', false],
+        rule_block:     ['worried', '📋', `Skipped — your rule said no`, 'rgba(251,191,36,.4)', false],
+        lesson_done:    ['happy', '🌸', `Great lesson! You're improving!`, 'rgba(243,168,208,.4)', false],
+        levelup:        ['love', '💖', ev.detail || `We grew closer!`, 'rgba(243,168,208,.5)', false],
+        care:           ['love', '💕', ev.detail || `Thank you!`, 'rgba(243,168,208,.4)', false]
+      }
+      const r = R[ev.type]
+      if (r) react(r[0], r[1], ev.text || r[2], r[3], r[4])
+    })
+
+    // ── PEEK MODE — shrink/fade when user is in fullscreen or idle-busy ──────
+    let _peeked = false
+    function setPeek(on) {
+      if (on === _peeked) return; _peeked = on
+      const canvas = document.getElementById('canvas') || document.querySelector('canvas')
+      if (canvas) { canvas.style.transition = 'opacity .5s, transform .5s'; canvas.style.opacity = on ? '0.35' : '1'; canvas.style.transform = on ? 'scale(0.75)' : 'scale(1)' }
+    }
+    ipcRenderer.on('set-peek', (e, on) => setPeek(on))
+
+    // ── Voice chunk QUEUE — plays streamed sentences in order (no interrupting) ──
+    let _voiceQueue = [], _voicePlaying = false
+    async function _drainVoiceQueue() {
+      if (_voicePlaying) return
+      _voicePlaying = true
+      while (_voiceQueue.length) {
+        const chunk = _voiceQueue.shift()
+        if (chunk.text) { setStatus('"' + chunk.text.slice(0,55) + '"'); addToHistory('asuka', chunk.text) }
+        try { await playAudioQueued(chunk.audio) } catch(e) {}
+      }
+      _voicePlaying = false
+      setStatus('Listening...')
+    }
+    // Like playAudio but does NOT stop the previous (we already wait for each to finish)
+    async function playAudioQueued(b64) {
+      if (!b64 || isHerMuted) return
+      try {
+        const bytes = new Uint8Array(atob(b64).split('').map(c => c.charCodeAt(0)))
+        const blob  = new Blob([bytes], { type:'audio/mpeg' })
+        const ctx   = new AudioContext()
+        const buf   = await ctx.decodeAudioData(await blob.arrayBuffer())
+        const src   = ctx.createBufferSource()
+        const an    = ctx.createAnalyser(); an.fftSize = 256
+        src.buffer = buf; src.connect(an); an.connect(ctx.destination)
+        currentSource = src; botIsSpeaking = true
+        src.start()
+        const arr = new Uint8Array(an.frequencyBinCount)
+        const tick = () => { if (!botIsSpeaking) return; an.getByteFrequencyData(arr); const v = arr.reduce((a,b)=>a+b)/arr.length; if (model) try { model.internalModel.coreModel.setParameterValueById('ParamMouthOpenY', Math.min(v/80,1)) } catch(e){}; requestAnimationFrame(tick) }
+        tick()
+        await new Promise(r => { src.onended = () => { if (model) try { model.internalModel.coreModel.setParameterValueById('ParamMouthOpenY', 0) } catch(e){}; r() } })
+      } catch(e) {}
+    }
+    ipcRenderer.on('voice-chunk', (e, chunk) => {
+      if (isHerMuted) return
+      if (chunk.isFirst) { _voiceQueue = [] } // new utterance — clear stale
+      _voiceQueue.push(chunk)
+      _drainVoiceQueue()
     })
 
     // ── IPC Events ────────────────────────────────────────────────────────

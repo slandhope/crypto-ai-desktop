@@ -1,118 +1,175 @@
 <!DOCTYPE html>
 <html>
 <head>
+<link rel="stylesheet" href="asuka-design.css">
   <meta charset="UTF-8">
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body { background:transparent !important; overflow:hidden; }
     canvas { display:block; background:transparent !important; position:fixed; bottom:0; right:0; }
 
+    /* ── Control buttons ── */
     .btn {
       position:fixed; width:36px; height:36px; border-radius:50%;
       display:flex; align-items:center; justify-content:center;
       cursor:pointer; font-size:15px; z-index:100;
-      transition:all 0.2s; backdrop-filter:blur(8px);
+      transition: transform 0.2s, box-shadow 0.2s;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
     }
-    .btn:hover { transform:scale(1.12); }
+    .btn:hover { transform: scale(1.14); }
 
-    #history-btn   { bottom:580px; left:10px; background:rgba(255,200,0,0.15);  border:1px solid rgba(255,200,0,0.3); }
-    #chat-btn      { bottom:530px; left:10px; background:rgba(0,212,255,0.15);  border:1px solid rgba(0,212,255,0.3); }
-    #her-mute-btn  { bottom:480px; left:10px; background:rgba(52,211,153,0.15); border:1px solid rgba(52,211,153,0.3); }
-    #mic-mute-btn  { bottom:430px; left:10px; background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.3); }
-    #webcam-btn    { bottom:380px; left:10px; background:rgba(255,140,0,0.15);  border:1px solid rgba(255,140,0,0.3); }
-    #dashboard-btn { bottom:330px; left:10px; background:rgba(150,0,255,0.15);  border:1px solid rgba(150,0,255,0.3); }
-    #care-btn { bottom:385px; left:10px; background:rgba(240,168,208,0.18); border:1px solid rgba(240,168,208,0.4); }
+    #history-btn   { bottom:580px; left:10px; background:rgba(255,200,0,0.14);   border:1px solid rgba(255,200,0,0.32); }
+    #history-btn:hover   { box-shadow: 0 0 16px rgba(255,200,0,0.28); }
+    #chat-btn      { bottom:530px; left:10px; background:rgba(139,124,255,0.18); border:1px solid rgba(139,124,255,0.35); }
+    #chat-btn:hover      { box-shadow: 0 0 16px rgba(139,124,255,0.35); }
+    #her-mute-btn  { bottom:480px; left:10px; background:rgba(52,211,153,0.15);  border:1px solid rgba(52,211,153,0.3); }
+    #her-mute-btn:hover  { box-shadow: 0 0 16px rgba(52,211,153,0.28); }
+    #mic-mute-btn  { bottom:430px; left:10px; background:rgba(251,191,36,0.15);  border:1px solid rgba(251,191,36,0.3); }
+    #mic-mute-btn:hover  { box-shadow: 0 0 16px rgba(251,191,36,0.28); }
+    #webcam-btn    { bottom:380px; left:10px; background:rgba(255,140,0,0.15);   border:1px solid rgba(255,140,0,0.3); }
+    #webcam-btn:hover    { box-shadow: 0 0 16px rgba(255,140,0,0.28); }
+    #dashboard-btn { bottom:330px; left:10px; background:rgba(139,124,255,0.18); border:1px solid rgba(139,124,255,0.35); }
+    #dashboard-btn:hover { box-shadow: 0 0 16px rgba(139,124,255,0.35); }
+    #care-btn      { bottom:385px; left:10px; background:rgba(243,168,208,0.18); border:1px solid rgba(243,168,208,0.42); }
+    #care-btn:hover      { box-shadow: 0 0 18px rgba(243,168,208,0.38); }
 
-    #her-mute-btn.muted { background:rgba(248,113,113,0.2); border-color:rgba(248,113,113,0.4); }
-    #mic-mute-btn.muted { background:rgba(248,113,113,0.2); border-color:rgba(248,113,113,0.4); }
-    #webcam-btn.active  { background:rgba(52,211,153,0.2);  border-color:rgba(52,211,153,0.4); }
+    #her-mute-btn.muted { background:rgba(251,113,133,0.2); border-color:rgba(251,113,133,0.42); }
+    #mic-mute-btn.muted { background:rgba(251,113,133,0.2); border-color:rgba(251,113,133,0.42); }
+    #webcam-btn.active  { background:rgba(52,211,153,0.2);  border-color:rgba(52,211,153,0.45); }
 
+    /* ── Chat panel ── */
     #chat-panel {
       position:fixed; bottom:530px; left:54px; width:260px;
-      background:rgba(4,7,26,0.96); border:1px solid rgba(0,212,255,0.2);
+      background: linear-gradient(160deg, rgba(22,27,46,0.88), rgba(15,19,32,0.93));
+      border: 1px solid rgba(139,124,255,0.25);
       padding:10px; display:none; flex-direction:column; gap:8px;
-      z-index:100; border-radius:10px; backdrop-filter:blur(20px);
-      box-shadow:0 8px 32px rgba(0,0,0,0.4);
+      z-index:100; border-radius:18px;
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      box-shadow: 0 14px 44px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05);
     }
     #chat-panel.open { display:flex; }
     #input-row { display:flex; gap:6px; }
     #user-input {
-      flex:1; background:rgba(0,212,255,0.06);
-      border:1px solid rgba(0,212,255,0.2); border-radius:6px;
-      color:#e0f4ff; font-family:-apple-system,sans-serif; font-size:12px;
-      padding:7px 10px; outline:none; transition:border 0.2s;
+      flex:1; background: rgba(139,124,255,0.08);
+      border: 1px solid rgba(139,124,255,0.2); border-radius:11px;
+      color: #f4f5fb; font-family: 'Outfit', system-ui; font-size:12px;
+      padding:8px 11px; outline:none; transition: border-color 0.2s, box-shadow 0.2s;
     }
-    #user-input:focus { border-color:rgba(0,212,255,0.5); }
-    #user-input::placeholder { color:rgba(255,255,255,0.2); }
+    #user-input:focus { border-color: rgba(167,139,250,0.5); box-shadow: 0 0 0 3px rgba(139,124,255,0.1); }
+    #user-input::placeholder { color: rgba(170,178,199,0.5); }
     #send-btn {
-      padding:7px 12px; background:rgba(0,212,255,0.15);
-      border:1px solid rgba(0,212,255,0.3); border-radius:6px;
-      color:#00d4ff; font-size:11px; font-weight:600; cursor:pointer;
+      padding:8px 13px;
+      background: linear-gradient(135deg, #8b7cff 0%, #c08bf0 45%, #f3a8d0 100%);
+      border: none; border-radius:11px;
+      color: #fff; font-size:11px; font-weight:700; cursor:pointer;
+      font-family: 'Outfit', system-ui;
+      transition: filter 0.18s;
     }
-    #send-btn:hover { background:rgba(0,212,255,0.3); }
+    #send-btn:hover { filter: brightness(1.1); }
 
-    /* History panel */
+    /* ── History panel ── */
     #history-panel {
       position:fixed; bottom:580px; left:54px; width:280px; max-height:340px;
-      background:rgba(4,7,26,0.97); border:1px solid rgba(255,200,0,0.2);
-      display:none; flex-direction:column; z-index:100; border-radius:10px;
-      box-shadow:0 8px 32px rgba(0,0,0,0.4); backdrop-filter:blur(20px);
+      background: linear-gradient(160deg, rgba(22,27,46,0.88), rgba(15,19,32,0.93));
+      border: 1px solid rgba(255,200,0,0.2);
+      display:none; flex-direction:column; z-index:100; border-radius:18px;
+      box-shadow: 0 14px 44px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
       overflow:hidden;
     }
     #history-panel.open { display:flex; }
     #history-header {
-      padding:8px 12px; font-size:10px; font-weight:600; color:rgba(255,200,0,0.8);
-      letter-spacing:1px; border-bottom:1px solid rgba(255,200,0,0.1);
+      padding:9px 13px; font-size:10px; font-weight:700;
+      color: rgba(255,200,0,0.85); letter-spacing:0.12em; text-transform:uppercase;
+      border-bottom: 1px solid rgba(255,200,0,0.1);
       display:flex; justify-content:space-between; align-items:center; flex-shrink:0;
+      font-family: 'Outfit', system-ui;
     }
-    #history-clear { font-size:9px; color:rgba(248,113,113,0.7); cursor:pointer; padding:2px 6px; border:1px solid rgba(248,113,113,0.2); border-radius:4px; }
+    #history-clear { font-size:9px; color:rgba(251,113,133,0.75); cursor:pointer; padding:2px 8px; border:1px solid rgba(251,113,133,0.22); border-radius:6px; transition: background 0.15s; }
+    #history-clear:hover { background: rgba(251,113,133,0.1); }
     #history-list { overflow-y:auto; flex:1; padding:8px; display:flex; flex-direction:column; gap:6px; }
-    #history-list::-webkit-scrollbar { width:2px; }
-    #history-list::-webkit-scrollbar-thumb { background:rgba(255,200,0,0.2); }
-    .history-msg { padding:6px 10px; border-radius:8px; font-size:10px; line-height:1.4; max-width:100%; }
-    .history-msg.user { background:rgba(0,212,255,0.1); border:1px solid rgba(0,212,255,0.15); color:#e0f4ff; align-self:flex-end; text-align:right; }
-    .history-msg.asuka { background:rgba(255,200,0,0.08); border:1px solid rgba(255,200,0,0.12); color:rgba(255,230,150,0.9); align-self:flex-start; }
-    .msg-label { font-size:8px; opacity:0.5; margin-bottom:2px; letter-spacing:0.5px; }
+    #history-list::-webkit-scrollbar { width:3px; }
+    #history-list::-webkit-scrollbar-thumb { background:rgba(167,139,250,0.22); border-radius:3px; }
+    .history-msg { padding:7px 11px; border-radius:11px; font-size:10px; line-height:1.5; max-width:100%; font-family:'Outfit',system-ui; }
+    .history-msg.user  { background:rgba(139,124,255,0.12); border:1px solid rgba(139,124,255,0.18); color:#f4f5fb; align-self:flex-end; text-align:right; }
+    .history-msg.asuka { background:rgba(255,200,0,0.07); border:1px solid rgba(255,200,0,0.12); color:rgba(255,230,150,0.9); align-self:flex-start; }
+    .msg-label { font-size:8px; opacity:0.5; margin-bottom:2px; letter-spacing:0.06em; text-transform:uppercase; }
 
-    /* Status bar */
+    /* ── Status bar ── */
     #status {
       position:fixed; bottom:10px; left:10px;
-      color:#00d4ff; font-family:-apple-system,monospace; font-size:10px;
-      background:rgba(0,0,0,0.7); padding:4px 10px; border-radius:20px;
+      color: #2dd4ff; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size:10px;
+      background: rgba(10,12,22,0.78); padding:4px 11px; border-radius:20px;
       pointer-events:none; z-index:1000;
-      border:1px solid rgba(0,212,255,0.15); backdrop-filter:blur(10px);
+      border: 1px solid rgba(45,212,255,0.18);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       max-width:300px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     }
 
-    /* Gemini indicator */
+    /* ── Gemini indicator ── */
     #gemini-indicator {
       position:fixed; bottom:36px; left:10px;
-      font-size:9px; color:rgba(52,211,153,0.6);
-      font-family:monospace; pointer-events:none; z-index:1000;
+      font-size:9px; color:rgba(52,211,153,0.65);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      pointer-events:none; z-index:1000; letter-spacing:0.06em;
     }
 
+    /* ── Drop overlay ── */
     #drop-overlay {
       position:fixed; inset:0;
-      background:rgba(0,212,255,0.06); border:2px dashed rgba(0,212,255,0.5);
+      background: rgba(139,124,255,0.06); border:2px dashed rgba(167,139,250,0.44);
       display:none; align-items:center; justify-content:center;
-      color:#00d4ff; font-family:-apple-system,sans-serif; font-size:13px;
-      z-index:200; pointer-events:none; border-radius:12px;
+      color: #a78bfa; font-family: 'Outfit', system-ui; font-size:13px;
+      z-index:200; pointer-events:none; border-radius:16px;
     }
     #drop-overlay.active { display:flex; }
 
+    /* ── Confirm bar ── */
     #confirm-bar {
       position:fixed; bottom:300px; left:54px; width:240px;
-      background:rgba(4,7,26,0.96); border:1px solid rgba(0,212,255,0.2);
-      padding:12px; display:none; flex-direction:column; gap:10px;
-      z-index:100; border-radius:10px; backdrop-filter:blur(20px);
+      background: linear-gradient(160deg, rgba(22,27,46,0.9), rgba(15,19,32,0.95));
+      border: 1px solid rgba(139,124,255,0.22);
+      padding:13px; display:none; flex-direction:column; gap:10px;
+      z-index:100; border-radius:18px;
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      box-shadow: 0 14px 44px rgba(0,0,0,0.55);
     }
     #confirm-bar.open { display:flex; }
-    #confirm-text { color:#e0f4ff; font-size:11px; }
+    #confirm-text { color: #f4f5fb; font-size:11px; font-family:'Outfit',system-ui; line-height:1.5; }
     #confirm-btns { display:flex; gap:8px; }
-    .c-yes { flex:1; padding:6px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:600; text-align:center; background:rgba(52,211,153,0.15); border:1px solid rgba(52,211,153,0.3); color:#34d399; }
-    .c-no  { flex:1; padding:6px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:600; text-align:center; background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.2); color:#f87171; }
+    .c-yes { flex:1; padding:7px; border-radius:10px; cursor:pointer; font-size:11px; font-weight:700; text-align:center; background:rgba(52,211,153,0.14); border:1px solid rgba(52,211,153,0.3); color:#34d399; font-family:'Outfit',system-ui; transition:background 0.15s; }
+    .c-yes:hover { background: rgba(52,211,153,0.24); }
+    .c-no  { flex:1; padding:7px; border-radius:10px; cursor:pointer; font-size:11px; font-weight:700; text-align:center; background:rgba(251,113,133,0.1); border:1px solid rgba(251,113,133,0.22); color:#fb7185; font-family:'Outfit',system-ui; transition:background 0.15s; }
+    .c-no:hover { background: rgba(251,113,133,0.2); }
+
+    /* ── Care action buttons ── */
+    .care-act {
+      padding:10px; border-radius:13px;
+      border: 1px solid rgba(167,139,250,0.18);
+      background: rgba(22,27,46,0.7);
+      color: #f4f5fb; cursor:pointer; font-size:13px;
+      font-family: 'Outfit', system-ui;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: all 0.18s;
+    }
+    .care-act:hover {
+      background: rgba(139,124,255,0.2);
+      border-color: rgba(167,139,250,0.44);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(139,124,255,0.22);
+    }
+    .care-act:active { transform: translateY(0); }
 
     video { display:none; }
+
+    @keyframes lupop { 0%{transform:scale(.6);opacity:0} 60%{transform:scale(1.08)} 100%{transform:scale(1);opacity:1} }
+    @keyframes glowpulse { 0%,100%{box-shadow:0 0 40px rgba(139,124,255,0.22),0 0 80px rgba(243,168,208,0.08),0 28px 72px rgba(0,0,0,0.7)} 50%{box-shadow:0 0 60px rgba(139,124,255,0.42),0 0 120px rgba(243,168,208,0.18),0 28px 72px rgba(0,0,0,0.7)} }
   </style>
 </head>
 <body>
@@ -133,16 +190,16 @@
     <div style="text-align:center;animation:lupop .5s ease;">
       <div id="lu-emoji" style="font-size:72px;margin-bottom:10px;">💖</div>
       <div style="font-size:14px;color:#f0a8d0;font-weight:700;letter-spacing:2px;">RELATIONSHIP LEVEL UP</div>
-      <div id="lu-tier" style="font-size:30px;font-weight:900;color:#fff;margin:6px 0;">Friend</div>
+      <div id="lu-tier" style="font-size:32px;font-weight:600;font-family:'Fraunces',serif;color:#fff;margin:6px 0;">Friend</div>
       <div id="lu-unlock" style="font-size:14px;color:#a78bfa;"></div>
     </div>
   </div>
   <style>@keyframes lupop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}</style>
 
-  <div id="care-panel" style="display:none;position:fixed;left:64px;bottom:20px;width:280px;z-index:9998;background:rgba(13,20,32,0.97);border:2px solid #f0a8d0;border-radius:18px;padding:16px;box-shadow:0 12px 48px rgba(0,0,0,0.6);font-family:system-ui;color:#e8edf4;">
+  <div id="care-panel" style="display:none;position:fixed;left:64px;bottom:20px;width:280px;z-index:9998;background:linear-gradient(180deg,rgba(22,27,46,0.98),rgba(15,19,32,0.98));border:1px solid rgba(167,139,250,0.3);border-radius:20px;padding:16px;box-shadow:0 12px 48px rgba(0,0,0,0.6);font-family:system-ui;color:#e8edf4;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <div style="font-size:14px;font-weight:800;">🎀 Care</div>
-      <div style="font-size:12px;"><span id="care-coins">0</span> 🪙 · 🔥<span id="care-streak">0</span></div>
+      <div style="font-size:15px;font-weight:600;font-family:'Fraunces',serif;">🎀 Care</div>
+      <div style="font-size:12px;font-family:'JetBrains Mono',monospace;"><span id="care-coins">0</span> 🪙 · 🔥<span id="care-streak">0</span></div>
     </div>
     <div id="rel-box" style="background:rgba(240,168,208,0.1);border:1px solid rgba(240,168,208,0.25);border-radius:11px;padding:9px;margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:5px;">
@@ -157,7 +214,7 @@
       <button class="care-act" data-a="clean" style="padding:10px;border-radius:11px;border:1px solid #334155;background:#1e293b;color:#fff;cursor:pointer;font-size:13px;">🧼 Clean</button>
       <button class="care-act" data-a="play" style="padding:10px;border-radius:11px;border:1px solid #334155;background:#1e293b;color:#fff;cursor:pointer;font-size:13px;">🎀 Play</button>
     </div>
-    <button id="shop-open-btn" style="width:100%;padding:11px;border-radius:11px;border:none;background:linear-gradient(135deg,#f0a8d0,#a78bfa);color:#fff;cursor:pointer;font-weight:800;font-size:13px;">🛍️ Dress-Up Shop</button>
+    <button id="shop-open-btn" style="width:100%;padding:11px;border-radius:11px;border:none;background:linear-gradient(135deg,#8b7cff,#c08bf0,#f3a8d0);color:#fff;cursor:pointer;font-weight:800;font-size:13px;">🛍️ Dress-Up Shop</button>
     <div id="care-close" style="text-align:center;margin-top:8px;font-size:11px;color:#64748b;cursor:pointer;">close</div>
   </div>
 
@@ -1272,6 +1329,79 @@ VOICE RESPONSE RULES — CRITICAL:
     ipcRenderer.on('care-updated', (e, d) => renderCare(d))
     // include care-btn in no-drag
     setTimeout(()=>{refreshCare();refreshRelationship()}, 1500)
+
+
+    // ══ REACTION SYSTEM — she reacts to live events (Comnyang-inspired) ══════
+    // Tries Live2D expression params (common names), always shows an emotion bubble fallback.
+    let _emotionTimer = null
+    function setEmotion(emotion) {
+      if (!model) return
+      // Try common Live2D expression parameters (safe — wrapped, no-op if model lacks them)
+      const cm = model.internalModel?.coreModel
+      if (!cm) return
+      const tryParam = (id, val) => { try { cm.setParameterValueById(id, val) } catch(e){} }
+      // Reset common expression params
+      tryParam('ParamBrowLY', 0); tryParam('ParamBrowRY', 0)
+      tryParam('ParamMouthForm', 0); tryParam('ParamEyeLOpen', 1); tryParam('ParamEyeROpen', 1)
+      if (emotion === 'happy') { tryParam('ParamMouthForm', 1); tryParam('ParamBrowLY', 0.5); tryParam('ParamBrowRY', 0.5) }
+      else if (emotion === 'excited') { tryParam('ParamMouthForm', 1); tryParam('ParamMouthOpenY', 0.6); tryParam('ParamEyeLOpen', 1.2); tryParam('ParamEyeROpen', 1.2) }
+      else if (emotion === 'worried') { tryParam('ParamMouthForm', -0.8); tryParam('ParamBrowLY', -0.6); tryParam('ParamBrowRY', -0.6) }
+      else if (emotion === 'sad') { tryParam('ParamMouthForm', -1); tryParam('ParamBrowLY', -0.8); tryParam('ParamBrowRY', -0.8); tryParam('ParamEyeLOpen', 0.6); tryParam('ParamEyeROpen', 0.6) }
+      else if (emotion === 'thinking') { tryParam('ParamEyeBallX', 0.5); tryParam('ParamEyeBallY', 0.5); tryParam('ParamBrowLY', -0.3); tryParam('ParamBrowRY', -0.3) }
+      else if (emotion === 'love') { tryParam('ParamMouthForm', 1); tryParam('ParamEyeLOpen', 0.7); tryParam('ParamEyeROpen', 0.7) }
+      // try a named expression too (some models have these)
+      try { model.expression?.(emotion) } catch(e) {}
+    }
+    // Visual emotion bubble (works for ANY model — the reliable feedback)
+    function showEmotionBubble(emoji, text, color) {
+      let b = document.getElementById('emotion-bubble')
+      if (!b) {
+        b = document.createElement('div'); b.id = 'emotion-bubble'
+        b.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-10px);z-index:10002;background:linear-gradient(135deg,rgba(22,27,46,.97),rgba(15,19,32,.97));border:1px solid rgba(167,139,250,.4);border-radius:16px;padding:9px 15px;font-family:Outfit,system-ui;font-size:12px;color:#f4f5fb;box-shadow:0 8px 28px rgba(0,0,0,.5);opacity:0;transition:.3s;display:flex;align-items:center;gap:7px;max-width:260px;'
+        document.body.appendChild(b)
+      }
+      b.style.borderColor = color || 'rgba(167,139,250,.4)'
+      b.innerHTML = `<span style="font-size:18px;">${emoji}</span><span>${text}</span>`
+      requestAnimationFrame(() => { b.style.opacity = '1'; b.style.transform = 'translateX(-50%) translateY(0)' })
+      clearTimeout(b._t); b._t = setTimeout(() => { b.style.opacity = '0'; b.style.transform = 'translateX(-50%) translateY(-10px)' }, 4000)
+    }
+    // The master reaction trigger
+    function react(emotion, emoji, text, color, speakIt) {
+      setEmotion(emotion)
+      if (emoji) showEmotionBubble(emoji, text || '', color)
+      if (model) try { model.motion?.(emotion === 'excited' || emotion === 'happy' ? 'tap_body' : 'idle') } catch(e){}
+      clearTimeout(_emotionTimer)
+      _emotionTimer = setTimeout(() => setEmotion('neutral'), 6000)
+      if (speakIt && text && !isHerMuted) ipcRenderer.invoke('speak-text', text).catch(()=>{})
+    }
+
+    // ── Event reactions from the backend ──────────────────────────────────
+    ipcRenderer.on('asuka-react', (e, ev) => {
+      const R = {
+        swarm_thinking: ['thinking', '🤔', 'Let me think on this trade...', 'rgba(45,212,255,.4)', false],
+        swarm_strong:   ['excited', '🐟', `The agents strongly agree!`, 'rgba(52,211,153,.4)', false],
+        swarm_split:    ['worried', '😟', `The agents are split — being careful`, 'rgba(251,191,36,.4)', false],
+        trade_win:      ['excited', '🎉', `We hit target! Nice trade!`, 'rgba(52,211,153,.4)', true],
+        trade_loss:     ['sad', '😔', `That one stopped out. We'll get the next.`, 'rgba(251,113,133,.4)', true],
+        trade_open:     ['happy', '💼', `Opened a ${ev.detail||'trade'}!`, 'rgba(167,139,250,.4)', false],
+        trade_skip:     ['thinking', '🛑', `Skipped that one — didn't meet the bar`, 'rgba(107,114,146,.4)', false],
+        rule_block:     ['worried', '📋', `Skipped — your rule said no`, 'rgba(251,191,36,.4)', false],
+        lesson_done:    ['happy', '🌸', `Great lesson! You're improving!`, 'rgba(243,168,208,.4)', false],
+        levelup:        ['love', '💖', ev.detail || `We grew closer!`, 'rgba(243,168,208,.5)', false],
+        care:           ['love', '💕', ev.detail || `Thank you!`, 'rgba(243,168,208,.4)', false]
+      }
+      const r = R[ev.type]
+      if (r) react(r[0], r[1], ev.text || r[2], r[3], r[4])
+    })
+
+    // ── PEEK MODE — shrink/fade when user is in fullscreen or idle-busy ──────
+    let _peeked = false
+    function setPeek(on) {
+      if (on === _peeked) return; _peeked = on
+      const canvas = document.getElementById('canvas') || document.querySelector('canvas')
+      if (canvas) { canvas.style.transition = 'opacity .5s, transform .5s'; canvas.style.opacity = on ? '0.35' : '1'; canvas.style.transform = on ? 'scale(0.75)' : 'scale(1)' }
+    }
+    ipcRenderer.on('set-peek', (e, on) => setPeek(on))
 
     // ── Voice chunk QUEUE — plays streamed sentences in order (no interrupting) ──
     let _voiceQueue = [], _voicePlaying = false

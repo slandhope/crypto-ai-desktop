@@ -1,0 +1,133 @@
+/* ═══════════════════════════════════════════════════════════════════
+   ASUKA DESIGN SYSTEM — "Twilight"
+   One identity across every window. Import this first, everywhere.
+
+   Concept: deep indigo night (premium, serious, good for data) with a
+   living iris→sakura gradient that belongs to HER. Cyan is reserved for
+   machine/data states; violet–pink is reserved for Asuka herself. The
+   color tells you whether you're looking at the system or at her.
+   ═══════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  /* ── Night base (indigo, not flat black — warmer, premium) ── */
+  --night-0:  #0a0c16;   /* deepest bg */
+  --night-1:  #0f1320;   /* panels */
+  --night-2:  #161b2e;   /* raised cards */
+  --night-3:  #1f2640;   /* hover / inputs */
+  --hair:     rgba(255,255,255,0.07);   /* hairline borders */
+  --hair-2:   rgba(255,255,255,0.04);
+
+  /* ── Asuka accent: iris → sakura (HER, alive, warm) ── */
+  --iris:     #8b7cff;
+  --violet:   #a78bfa;
+  --sakura:   #f3a8d0;
+  --rose:     #ff8fb8;
+  --asuka-grad: linear-gradient(135deg, #8b7cff 0%, #c08bf0 45%, #f3a8d0 100%);
+  --asuka-glow: 0 0 24px rgba(167,139,250,0.35);
+
+  /* ── System/data accent: cyan (the MACHINE, trading, precision) ── */
+  --data:     #2dd4ff;
+  --data-dim: #1b9fc4;
+  --data-grad: linear-gradient(135deg, #2dd4ff 0%, #0ea5e9 100%);
+
+  /* ── Semantic ── */
+  --up:       #34d399;   /* profit / correct / happy */
+  --down:     #fb7185;   /* loss / wrong (rose-red, softer than pure red) */
+  --warn:     #fbbf24;   /* caution / hunger / coins */
+  --coin:     #ffce5c;   /* currency gold */
+
+  /* ── Text ── */
+  --ink:      #f4f5fb;   /* primary */
+  --ink-2:    #aab2c7;   /* secondary */
+  --ink-3:    #6b7392;   /* tertiary / captions */
+
+  /* ── Type ── */
+  --display:  'Fraunces', Georgia, serif;        /* her name, big moments, warmth */
+  --body:     'Outfit', system-ui, sans-serif;   /* everything */
+  --mono:     'JetBrains Mono', ui-monospace, monospace; /* data, prices, code */
+
+  /* ── Shape & depth ── */
+  --r-sm: 9px;
+  --r:    14px;
+  --r-lg: 20px;
+  --r-xl: 26px;
+  --shadow-1: 0 2px 12px rgba(0,0,0,0.35);
+  --shadow-2: 0 12px 40px rgba(0,0,0,0.5);
+  --shadow-float: 0 16px 56px rgba(10,12,22,0.7);
+
+  /* ── Motion ── */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --fast: 0.16s var(--ease);
+  --med:  0.3s var(--ease);
+}
+
+/* ── Base reset shared by all windows ── */
+*, *::before, *::after { box-sizing: border-box; }
+
+.asuka-surface {
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(139,124,255,0.08), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(243,168,208,0.06), transparent 55%),
+    var(--night-0);
+  color: var(--ink);
+  font-family: var(--body);
+  font-feature-settings: 'ss01';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Reusable component classes ── */
+.as-card {
+  background: linear-gradient(180deg, var(--night-2), var(--night-1));
+  border: 1px solid var(--hair);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-1);
+}
+.as-card-glow { box-shadow: var(--shadow-1), var(--asuka-glow); border-color: rgba(167,139,250,0.3); }
+
+.as-title { font-family: var(--display); font-weight: 600; letter-spacing: -0.01em; }
+.as-eyebrow { font-family: var(--body); font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); }
+.as-data { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.as-btn {
+  font-family: var(--body); font-weight: 700; font-size: 13px;
+  border: none; border-radius: var(--r-sm); padding: 11px 18px; cursor: pointer;
+  transition: transform var(--fast), filter var(--fast), box-shadow var(--fast);
+  color: #fff;
+}
+.as-btn:active { transform: translateY(1px); }
+.as-btn-her    { background: var(--asuka-grad); box-shadow: var(--asuka-glow); }
+.as-btn-her:hover { filter: brightness(1.08); }
+.as-btn-data   { background: var(--data-grad); color: #04141c; }
+.as-btn-ghost  { background: var(--night-3); color: var(--ink); border: 1px solid var(--hair); }
+.as-btn-ghost:hover { border-color: var(--violet); }
+
+.as-input {
+  font-family: var(--body); font-size: 13px;
+  background: var(--night-3); border: 1px solid var(--hair);
+  border-radius: var(--r-sm); padding: 11px 13px; color: var(--ink); width: 100%;
+  transition: border-color var(--fast);
+}
+.as-input:focus { outline: none; border-color: var(--violet); }
+
+.as-pill { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+.as-pill-her  { background: rgba(167,139,250,0.15); color: var(--violet); }
+.as-pill-data { background: rgba(45,212,255,0.12); color: var(--data); }
+.as-pill-up   { background: rgba(52,211,153,0.14); color: var(--up); }
+.as-pill-down { background: rgba(251,113,133,0.14); color: var(--down); }
+
+/* progress bars */
+.as-track { height: 8px; background: var(--night-3); border-radius: 999px; overflow: hidden; }
+.as-fill  { height: 100%; border-radius: 999px; transition: width var(--med); }
+.as-fill-her  { background: var(--asuka-grad); }
+.as-fill-data { background: var(--data-grad); }
+
+/* scrollbars */
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--night-3); border-radius: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

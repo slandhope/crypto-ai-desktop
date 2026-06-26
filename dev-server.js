@@ -15,6 +15,7 @@ const COST_LOG_FILE = path.join(DATA_DIR, 'api-cost-log.json');
 const ANALYTICS_FILE = path.join(DATA_DIR, 'coin-analytics.json');
 const MASTER_COINS_FILE = path.join(DATA_DIR, 'master-coins.json');
 const TIERS_FILE = path.join(DATA_DIR, 'tiers-config.json');
+const ADVISORS_FILE = path.join(DATA_DIR, 'advisors.json');
 const CUSTOM_COSMETICS_FILE = path.join(DATA_DIR, 'custom-cosmetics.json');
 const DEFAULT_TIERS = [
   { level: 1, name: 'Acquaintance', xp: 0,    emoji: '🌱', unlocks: [] },
@@ -334,6 +335,53 @@ const server = http.createServer((req, res) => {
     }
 
     // ── Progression tiers ──
+    // ── Advisor management (dev-only: tokens are secrets) ──
+    if (pathname === '/api/advisors' && req.method === 'GET') {
+      res.setHeader('Content-Type', 'application/json');
+      let d = loadJSON(ADVISORS_FILE, { advisors: [] });
+      // Seed a default advisor if none exist yet (so the panel is never empty)
+      if (!d.advisors || !d.advisors.length) {
+        d = { advisors: [{ id: 'main', name: 'Your Guy', handle: '@youradvisor', avatar: '',
+          botToken: '', followMode: 'notify', riskUsd: 50, maxPerDay: 200, wins: 0, losses: 0, active: true }] };
+        saveJSON(ADVISORS_FILE, d);
+      }
+      res.writeHead(200); res.end(JSON.stringify(d));
+      return;
+    }
+    if (pathname === '/api/advisors' && req.method === 'POST') {
+      res.setHeader('Content-Type', 'application/json');
+      try {
+        const d = loadJSON(ADVISORS_FILE, { advisors: [] });
+        d.advisors = JSON.parse(body).advisors || [];
+        saveJSON(ADVISORS_FILE, d);
+        res.writeHead(200); res.end(JSON.stringify({ success:true, advisors:d.advisors }));
+      } catch(e) { res.writeHead(200); res.end(JSON.stringify({ success:false, error:e.message })); }
+      return;
+    }
+    if (pathname === '/api/advisor-add' && req.method === 'POST') {
+      res.setHeader('Content-Type', 'application/json');
+      try {
+        const a = JSON.parse(body);
+        const d = loadJSON(ADVISORS_FILE, { advisors: [] });
+        d.advisors.push({ id:'adv_'+Date.now(), name:a.name||'Advisor', handle:a.handle||'', avatar:'',
+          botToken:a.botToken||'', followMode:'notify', riskUsd:50, maxPerDay:200, wins:0, losses:0, active:true });
+        saveJSON(ADVISORS_FILE, d);
+        res.writeHead(200); res.end(JSON.stringify({ success:true, advisors:d.advisors }));
+      } catch(e) { res.writeHead(200); res.end(JSON.stringify({ success:false, error:e.message })); }
+      return;
+    }
+    if (pathname === '/api/advisor-delete' && req.method === 'POST') {
+      res.setHeader('Content-Type', 'application/json');
+      try {
+        const { id } = JSON.parse(body);
+        const d = loadJSON(ADVISORS_FILE, { advisors: [] });
+        d.advisors = d.advisors.filter(x => x.id !== id);
+        saveJSON(ADVISORS_FILE, d);
+        res.writeHead(200); res.end(JSON.stringify({ success:true, advisors:d.advisors }));
+      } catch(e) { res.writeHead(200); res.end(JSON.stringify({ success:false, error:e.message })); }
+      return;
+    }
+
     if (pathname === '/api/tiers' && req.method === 'GET') {
       res.setHeader('Content-Type', 'application/json');
       const tiers = loadJSON(TIERS_FILE, null);
@@ -638,6 +686,21 @@ input:focus{border-color:#00d4ff}
         <div id="daily-sigs">Loading...</div>
       </div>
 
+      <!-- Advisor Manager (dev-only — tokens are secrets) -->
+      <div class="card" style="margin-top:12px;">
+        <div class="card-title">📣 Advisor Manager</div>
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">Set advisor bot tokens + add advisors. Tokens live only on this machine. Users follow these advisors in the app (notify/auto), but never see or set tokens.</div>
+        <div id="adv-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;">Loading...</div>
+        <div style="font-size:13px;font-weight:700;margin:12px 0 6px;color:#e8edf4;">➕ Add Advisor</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+          <input id="nadv-name" placeholder="Name" style="padding:7px;border-radius:7px;background:#1e293b;border:1px solid #334155;color:#fff;">
+          <input id="nadv-handle" placeholder="@handle (optional)" style="padding:7px;border-radius:7px;background:#1e293b;border:1px solid #334155;color:#fff;">
+        </div>
+        <input id="nadv-token" placeholder="Bot token from @BotFather" style="width:100%;padding:7px;border-radius:7px;background:#1e293b;border:1px solid #334155;color:#fff;margin-bottom:6px;">
+        <button class="btn-ghost btn-sm" onclick="addAdvisor()" style="background:rgba(52,211,153,.15);">➕ Add Advisor</button>
+        <div id="adv-msg" style="font-size:12px;color:#94a3b8;margin-top:6px;"></div>
+      </div>
+
       <!-- Progression Editor -->
       <div class="card" style="margin-top:12px;">
         <div class="card-title">🎀 Progression Editor (Levels & Cosmetics)</div>
@@ -883,6 +946,56 @@ async function api(url, method='GET', body=null) {
   return r.json();
 }
 
+async function loadAdvisors() {
+  const list = document.getElementById('adv-list'); if (!list) return;
+  try {
+    const r = await api('/api/advisors', 'GET');
+    if (!r) { list.innerHTML = '<div style="color:#fbbf24;font-size:12px;">Not authorized — log in again.</div>'; return; }
+    const advs = r.advisors || [];
+    if (!advs.length) { list.innerHTML = '<div style="color:#64748b;font-size:12px;">No advisors yet. Add one below.</div>'; return; }
+    list.innerHTML = advs.map(function(a){
+      var connected = a.botToken ? '#34d399' : '#64748b';
+      var status = a.botToken ? '● connected' : '○ no token';
+      return '<div style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+        + '<span style="font-weight:700;font-size:13px;">' + a.name + ' <span style="color:#64748b;font-weight:400;">' + (a.handle||'') + '</span></span>'
+        + '<span style="font-size:11px;color:' + connected + ';">' + status + ' · ' + (a.wins||0) + 'W/' + (a.losses||0) + 'L</span>'
+        + '</div>'
+        + '<div style="display:flex;gap:6px;">'
+        + '<input id="tok-' + a.id + '" type="password" value="' + (a.botToken||'') + '" placeholder="Bot token" style="flex:1;padding:6px;border-radius:6px;background:#1e293b;border:1px solid #334155;color:#fff;font-size:11px;">'
+        + '<button class="btn-ghost btn-sm adv-save" data-id="' + a.id + '">Save</button>'
+        + '<button class="btn-ghost btn-sm adv-del" data-id="' + a.id + '" style="background:rgba(239,68,68,.12);">✕</button>'
+        + '</div></div>';
+    }).join('');
+    list.querySelectorAll('.adv-save').forEach(function(b){ b.onclick = function(){ saveAdvToken(b.getAttribute('data-id')); }; });
+    list.querySelectorAll('.adv-del').forEach(function(b){ b.onclick = function(){ delAdvisor(b.getAttribute('data-id')); }; });
+  } catch(e) { const l = document.getElementById('adv-list'); if (l) l.innerHTML = '<div style="color:#ef4444;font-size:12px;">'+e.message+'</div>'; }
+}
+async function saveAdvToken(id) {
+  const token2 = document.getElementById('tok-'+id).value.trim();
+  const r = await api('/api/advisors', 'GET'); if (!r) return;
+  const advs = r.advisors || [];
+  const a = advs.find(x => x.id === id); if (a) a.botToken = token2;
+  await api('/api/advisors', 'POST', { advisors: advs });
+  const m = document.getElementById('adv-msg'); if (m) m.textContent = 'Saved ✓'; loadAdvisors();
+}
+async function addAdvisor() {
+  const name = document.getElementById('nadv-name').value.trim();
+  const handle = document.getElementById('nadv-handle').value.trim();
+  const botToken = document.getElementById('nadv-token').value.trim();
+  const m = document.getElementById('adv-msg');
+  if (!name) { if (m) m.textContent = 'Name required'; return; }
+  await api('/api/advisor-add', 'POST', { name, handle, botToken });
+  document.getElementById('nadv-name').value=''; document.getElementById('nadv-handle').value=''; document.getElementById('nadv-token').value='';
+  if (m) m.textContent = 'Added ✓'; loadAdvisors();
+}
+async function delAdvisor(id) {
+  if (!confirm('Remove this advisor?')) return;
+  await api('/api/advisor-delete', 'POST', { id });
+  loadAdvisors();
+}
+
+
 // ── Tabs ──
 function showTab(name) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -904,7 +1017,8 @@ function showCoinType(type) {
 
 // ── Refresh ──
 async function refresh() {
-  if (typeof loadTiers === "function") loadTiers();
+  try { if (typeof loadTiers === "function") loadTiers(); } catch(e){ console.error("loadTiers", e); }
+  try { loadAdvisors(); } catch(e){ console.error("loadAdvisors", e); }
   stats = await api('/api/stats');
   if (!stats) return;
   document.getElementById('refresh-time').textContent = new Date().toLocaleTimeString();
@@ -1280,6 +1394,10 @@ async function addCosmetic() {
 </html>`; }
 
 server.listen(PORT, '127.0.0.1', () => {
- 
+  console.log('');
+  console.log('  ⚙️  CRYPTO.AI Dev Panel');
+  console.log('  → http://localhost:' + PORT);
+  console.log('  → Password: Asuka2026!');
+  console.log('');
 });
 process.on('uncaughtException', e => console.error('Dev server:', e.message));

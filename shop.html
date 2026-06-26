@@ -2,24 +2,25 @@
 <html>
 <head>
 <meta charset="utf-8">
+<link rel="stylesheet" href="asuka-design.css">
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; font-family:system-ui,-apple-system,sans-serif; -webkit-user-select:none; }
-  html,body { width:100%; height:100%; background:#0f1420; color:#e8edf4; overflow:hidden; }
+  * { margin:0; padding:0; box-sizing:border-box; font-family:var(--body); -webkit-user-select:none; }
+  html,body { width:100%; height:100%; overflow:hidden; }
   #top { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; -webkit-app-region:drag; border-bottom:1px solid #1e293b; }
-  #top .title { font-size:17px; font-weight:800; }
-  #coins { font-size:14px; font-weight:700; color:#fbbf24; -webkit-app-region:no-drag; }
+  #top .title { font-size:18px; font-weight:600; font-family:var(--display); }
+  #coins { font-size:14px; font-weight:700; color:var(--coin); font-family:var(--mono); -webkit-app-region:no-drag; }
   #close { -webkit-app-region:no-drag; cursor:pointer; color:#64748b; font-size:20px; margin-left:12px; }
   #tabs { display:flex; gap:8px; padding:12px 18px; }
   .tab { cursor:pointer; padding:7px 16px; border-radius:10px; background:#1e293b; font-size:13px; font-weight:700; }
-  .tab.active { background:linear-gradient(135deg,#f0a8d0,#a78bfa); }
+  .tab.active { background:var(--asuka-grad); }
   #grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; padding:8px 18px; height:calc(100% - 200px); overflow-y:auto; }
-  .item { background:#1e293b; border:2px solid #334155; border-radius:14px; padding:14px; text-align:center; }
+  .item { background:var(--night-2); border:1px solid var(--hair); border-radius:14px; padding:14px; text-align:center; }
   .item .thumb { width:100%; height:80px; border-radius:10px; background:linear-gradient(135deg,#2d3748,#1a202c); display:flex; align-items:center; justify-content:center; font-size:32px; margin-bottom:8px; }
   .item .name { font-size:13px; font-weight:700; margin-bottom:8px; }
   .item button { width:100%; padding:8px; border-radius:9px; border:none; cursor:pointer; font-weight:700; font-size:12px; }
-  .buy { background:#fbbf24; color:#1a1a2e; }
-  .equip { background:#a78bfa; color:#fff; }
-  .equipped { background:#22c55e; color:#06210f; }
+  .buy { background:var(--coin); color:#1a1426; }
+  .equip { background:var(--asuka-grad); color:#fff; }
+  .equipped { background:var(--up); color:#06210f; }
   .owned-tag { background:#334155; color:#94a3b8; }
   .limited { border-color:#f0a8d0; }
   .badge { font-size:9px; background:#f0a8d0; color:#1a1a2e; border-radius:5px; padding:1px 6px; margin-left:4px; font-weight:800; }
@@ -28,14 +29,14 @@
   #pack-row { display:flex; gap:8px; }
   .pack { flex:1; background:#1e293b; border:1px solid #334155; border-radius:11px; padding:10px; text-align:center; cursor:pointer; }
   .pack:hover { border-color:#fbbf24; }
-  .pack .c { font-size:14px; font-weight:800; color:#fbbf24; }
+  .pack .c { font-size:14px; font-weight:800; color:var(--coin); font-family:var(--mono); }
   .pack .p { font-size:11px; color:#94a3b8; }
   .pack .b { font-size:9px; color:#34d399; font-weight:700; }
-  #toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#a78bfa; color:#fff; padding:10px 20px; border-radius:12px; font-size:13px; font-weight:700; opacity:0; transition:.3s; pointer-events:none; }
+  #toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--asuka-grad); color:#fff; padding:10px 20px; border-radius:12px; font-size:13px; font-weight:700; opacity:0; transition:.3s; pointer-events:none; }
   #toast.show { opacity:1; }
 </style>
 </head>
-<body>
+<body class="asuka-surface">
   <div id="top">
     <div><div class="title">🛍️ Dress-Up Shop</div><div id="shop-tier" style="font-size:11px;color:#f0a8d0;font-weight:700;margin-top:2px;"></div></div>
     <div style="display:flex;align-items:center;"><span id="coins">0 🪙</span><span id="close">✕</span></div>

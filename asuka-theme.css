@@ -1,0 +1,184 @@
+/* ════════════════════════════════════════════════════════════════════
+   ASUKA THEME — "Stealth & Air"
+   Drop-in restyle to the locked Apple/Calm design (dark #4 + light #5).
+   Add ONE line to dashboard.html's <head>, AFTER all other styles:
+     <link rel="stylesheet" href="asuka-theme.css">
+   It remaps the existing token system + overrides the inline colors
+   that were blocking previous attempts. No HTML/JS changes needed.
+   Toggle light mode by setting <html data-theme="light"> (default dark).
+   ════════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* ── DARK (default) — stealth near-black, red pop ── */
+:root, html[data-theme="dark"]{
+  --bg:        #0a0a0c !important;
+  --bg1:       #0e0e12 !important;
+  --bg2:       #131318 !important;
+  --bg3:       #1b1b22 !important;
+  --border:    rgba(255,255,255,0.07) !important;
+  --border2:   rgba(255,255,255,0.045) !important;
+  --accent:    #ff5a5f !important;
+  --accent2:   #ff8a6a !important;
+  --green:     #4ade80 !important;
+  --red:       #ff5a5f !important;
+  --gold:      #f0cf8a !important;
+  --text:      #ededf0 !important;
+  --text2:     #9a9aa8 !important;
+  --text3:     #5e5e6e !important;
+  --glow:      rgba(255,90,95,0.22) !important;
+  --iris:      #ff5a5f !important;
+  --violet:    #ff7a7f !important;
+  --sakura:    #ff8a6a !important;
+  --asuka-grad: linear-gradient(135deg,#ff5a5f,#ff8a6a) !important;
+  --radius:    16px !important;
+  --radius-sm: 11px !important;
+  --th-veil:   rgba(255,255,255,0.025);
+  --th-shadow: none;
+  --th-glow1:  rgba(255,90,95,0.06);
+  --th-glow2:  rgba(255,138,106,0.04);
+}
+
+/* ── LIGHT — airy Apple-store white, indigo ── */
+html[data-theme="light"]{
+  --bg:        #fbfbfd !important;
+  --bg1:       #ffffff !important;
+  --bg2:       #ffffff !important;
+  --bg3:       #f4f5f9 !important;
+  --border:    rgba(0,0,0,0.08) !important;
+  --border2:   rgba(0,0,0,0.05) !important;
+  --accent:    #5b6bff !important;
+  --accent2:   #8a96ff !important;
+  --green:     #30c14e !important;
+  --red:       #ff3b30 !important;
+  --gold:      #c69a3f !important;
+  --text:      #1c1c26 !important;
+  --text2:     #6b6f80 !important;
+  --text3:     #a8abbb !important;
+  --glow:      rgba(91,107,255,0.18) !important;
+  --iris:      #5b6bff !important;
+  --violet:    #6b78ff !important;
+  --sakura:    #8a96ff !important;
+  --asuka-grad: linear-gradient(135deg,#5b6bff,#8a96ff) !important;
+  --th-veil:   #ffffff;
+  --th-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+  --th-glow1:  rgba(91,107,255,0.10);
+  --th-glow2:  rgba(138,150,255,0.05);
+}
+
+/* ── Base atmosphere ── */
+body{
+  font-family:'Inter',-apple-system,system-ui,sans-serif !important;
+  letter-spacing:-0.011em;
+  background:
+    radial-gradient(1000px 640px at 80% -12%, var(--th-glow1), transparent 60%),
+    radial-gradient(820px 560px at 10% 116%, var(--th-glow2), transparent 56%),
+    var(--bg) !important;
+  background-attachment:fixed !important;
+  color:var(--text) !important;
+}
+
+/* ── Typography: serif for headers, mono for numbers ── */
+#logo, .page-head h1, h1, h2, .greet,
+.trading-stat-val, .opt-name{ font-family:'Fraunces',serif !important; font-weight:400 !important; letter-spacing:-0.01em; }
+.port-value, #port-value, .trading-stat-val, .coin .price, .price, .pnl,
+[class*="-val"], [class*="value"]{ font-family:'JetBrains Mono',ui-monospace,monospace !important; font-variant-numeric:tabular-nums; }
+
+/* ── Cards / panels → soft veil, generous radius, real depth ── */
+.tg-section, .col, .trading-stat, .opt-card, .empty-state,
+.caller-stats, .auto-trade-toggle, #wallet-modal-box,
+.intel-item, .signal-item, .trade-item, .tg-group-item, .caller-item,
+.as-card{
+  background:var(--th-veil) !important;
+  border:1px solid var(--border) !important;
+  border-radius:var(--radius) !important;
+  box-shadow:var(--th-shadow) !important;
+  backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
+}
+
+/* a little more breathing room inside cards */
+.tg-section{ padding:20px 22px !important; }
+
+/* ── Inputs ── */
+.tg-input, .s-input, input, select, textarea{
+  background:var(--bg3) !important;
+  border:1px solid var(--border) !important;
+  border-radius:var(--radius-sm) !important;
+  color:var(--text) !important;
+}
+.tg-input:focus, .s-input:focus, input:focus, select:focus{
+  outline:none !important; border-color:var(--accent) !important;
+}
+
+/* ── Buttons ── */
+.tg-add-btn, .s-btn-primary, button.primary{
+  border-radius:var(--radius-sm) !important;
+  font-weight:500 !important;
+  transition:transform .18s ease, filter .18s ease !important;
+}
+.tg-add-btn:hover{ transform:translateY(-1px); filter:brightness(1.06); }
+
+/* primary action buttons get the accent */
+.s-btn-primary, #add-coin-btn{
+  background:var(--accent) !important; border:none !important;
+  color:#fff !important; box-shadow:0 4px 18px var(--glow) !important;
+}
+
+/* ── Tabs ── */
+.trade-tab, .page-tab{ font-family:'Inter',sans-serif !important; border-radius:10px !important; }
+.trade-tab.active, .page-tab.active{
+  background:var(--accent) !important; color:#fff !important;
+  box-shadow:0 2px 14px var(--glow) !important;
+}
+
+/* ── Toggles (iOS pill) ── */
+.toggle-switch, .sw{ border-radius:999px !important; }
+.toggle-switch.active, .toggle-switch.on, .sw.on{ background:var(--green) !important; }
+
+/* ── Stat rows: clean Apple-settings hairlines ── */
+.s-row, .trade-info, .row{
+  border-bottom:1px solid var(--border) !important;
+}
+.s-label, .trading-stat-label{ color:var(--text2) !important; }
+
+/* ── Coin cards (Auto-Desk) ── */
+.coin-btn, .ov-chip, .coin{
+  background:var(--th-veil) !important;
+  border:1px solid var(--border) !important;
+  border-radius:var(--radius-sm) !important;
+  box-shadow:var(--th-shadow) !important;
+  transition:transform .2s ease, border-color .2s ease !important;
+}
+.coin-btn:hover, .coin:hover, .ov-chip:hover{
+  transform:translateY(-2px); border-color:var(--accent) !important;
+}
+
+/* ── Top bar → frosted ── */
+#topbar{
+  background:var(--th-veil) !important;
+  backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
+  border-bottom:1px solid var(--border) !important;
+}
+#logo{ background:var(--asuka-grad) !important; -webkit-background-clip:text !important; -webkit-text-fill-color:transparent !important; }
+
+/* ── Companion column ambient glow ── */
+#col-waifu, #waifu-ambient{
+  background:linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent) !important;
+}
+#waifu-name{ font-family:'Fraunces',serif !important; }
+
+/* ── KILL the stubborn inline flat colors that blocked previous attempts ──
+   These target elements whose inline style uses the old dead hexes. */
+[style*="#0a0a0a"], [style*="#000000"], [style*="#111111"], [style*="#1a1a1a"],
+[style*="#0a0c16"], [style*="#0f1320"], [style*="#161b2e"], [style*="#1e293b"],
+[style*="#334155"], [style*="rgba(8,12,22"], [style*="rgba(15,23,42"]{
+  background-color:var(--th-veil) !important;
+  border-color:var(--border) !important;
+}
+
+/* scrollbars */
+*::-webkit-scrollbar{ width:8px;height:8px; }
+*::-webkit-scrollbar-thumb{ background:var(--bg3);border-radius:8px; }
+*::-webkit-scrollbar-track{ background:transparent; }
+
+@media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }

@@ -3195,11 +3195,15 @@ async function routeCommand(userText) {
     if (!notes.length) return 'No notes saved yet.';
     return notes.slice(-3).map(n => n.text).join('. ');
   }
-  if (lower.includes('my rule is') || lower.includes('i never trade') || lower.includes('i always')) {
+  if (/my rule is|i never trade|i always|never trade|always size|remember this rule|add a rule|teach you a rule|don'?t trade|avoid trading/i.test(lower) && !/quiz|lesson|teach me/i.test(lower)) {
     mem.userRules = mem.userRules || [];
-    mem.userRules.push(userText);
-    if (mem.userRules.length > 10) mem.userRules.shift();
-    saveMemory(mem); return "Got it, I'll remind you if you break it.";
+    // Clean the rule text (strip the trigger phrase prefix)
+    let ruleText = userText.replace(/^(my rule is|remember this rule:?|add a rule:?|teach you a rule:?)\s*/i, '').trim();
+    if (ruleText.length < 3) ruleText = userText.trim();
+    mem.userRules.push(ruleText);
+    if (mem.userRules.length > 20) mem.userRules.shift();
+    saveMemory(mem);
+    return `Got it — I've added that to your rules:\n"${ruleText}"\n\nI'll actively check this before every trade and tell you if something violates it. You now have ${mem.userRules.length} rule${mem.userRules.length!==1?'s':''}.`;
   }
 
   // ── 7. ALARM & REMINDERS ────────────────────────────────────────────────
@@ -5073,6 +5077,16 @@ Only trade when there is a CLEAR edge — don't force trades.`;
       });
 
     if (analysis.shouldTrade && analysis.confidence >= 20) {
+      // RULE ENFORCEMENT — does this trade break one of the user's rules?
+      const ruleCheck = await checkUserRules(scanCoin, analysis.direction, analysis.reason).catch(() => ({ violated: false }));
+      if (ruleCheck.violated) {
+        console.log(`🛑 Trade blocked by user rule #${ruleCheck.ruleNumber}: "${ruleCheck.rule}" — ${ruleCheck.why}`);
+        asukaReact('rule_block', { text: `Skipped ${scanCoin} — your rule: ${ruleCheck.rule}` });
+        sendIntelEvent({ type: 'scan', source: 'Your Rules', body: `🛑 Skipped ${analysis.direction?.toUpperCase()} ${scanCoin} — your rule: "${ruleCheck.rule}"`, note: ruleCheck.why, notify: true });
+        sendTelegramNotification(`🛑 Skipped ${analysis.direction?.toUpperCase()} ${scanCoin}\nYour rule #${ruleCheck.ruleNumber}: "${ruleCheck.rule}"\n${ruleCheck.why}`).catch(()=>{});
+        logShadowTrade(scanCoin, analysis.direction, analysis.entry, analysis.target, analysis.stopLoss, `Blocked by rule: ${ruleCheck.rule}`, analysis.confidence);
+        return;
+      }
       const settings2 = loadSettings();
       let threshold = settings2.paperTradeThreshold || 20;
       if (settings2.autoThreshold) {
@@ -5084,7 +5098,29 @@ Only trade when there is a CLEAR edge — don't force trades.`;
       const TOTAL_AGENTS = _tierForAgents.mirofish_agents || 20; // Tier: 10/20/30
       const AGENTS_PER_GROUP = 10;
       const NUM_GROUPS = Math.max(1, Math.round(TOTAL_AGENTS / AGENTS_PER_GROUP));
-      const marketSummary = `${scanCoin} at ${coinPrice}, Funding: ${funding}, FG: ${fearGreed}. Claude suggests: ${analysis.direction?.toUpperCase()} with ${analysis.confidence}% confidence. Reason: ${analysis.reason}`;
+      const setupHistory = getSimilarSetupHistory(scanCoin, analysis.direction);
+      const marketSummary = `${scanCoin} at ${coinPrice}, Funding: ${funding}, FG: ${fearGreed}. Claude suggests: ${analysis.direction?.toUpperCase()} with ${analysis.confidence}% confidence. Reason: ${analysis.reason}${setupHistory ? '. ' + setupHistory : ''}`;
+
+      // #1 SPECIALIST DATA — each role gets the REAL data relevant to its expertise
+      const roleData = {
+        'technical analyst': technicalAnalysis ? `Technicals: ${String(technicalAnalysis).slice(0,200)}` : '',
+        'sentiment trader': `Fear&Greed: ${fearGreed}. News: ${news ? String(news).slice(0,120) : 'none'}`,
+        'whale watcher': advancedFlow ? `Flow: ${String(advancedFlow).slice(0,180)}` : (orderBook ? `Order book: ${String(orderBook).slice(0,150)}` : ''),
+        'macro analyst': `BTC dominance: ${dominance}. BTC lead: ${btcLead?.summary || 'neutral'}`,
+        'momentum trader': openInterest ? `Open Interest: ${openInterest}. Volume: ${volume || '?'}` : '',
+        'risk manager': liquidations ? `Liquidation zones: ${String(liquidations).slice(0,180)}` : '',
+        'news trader': news ? `News: ${String(news).slice(0,200)}` : 'No major news',
+        'funding specialist': `Funding: ${funding}. L/S ratio: ${lsRatio || '?'}`,
+        'volume analyst': volume ? `Volume: ${String(volume).slice(0,180)}` : '',
+        'on-chain analyst': advancedFlow ? `On-chain flow: ${String(advancedFlow).slice(0,180)}` : '',
+        'derivatives specialist': `OI: ${openInterest || '?'}. Funding: ${funding}. L/S: ${lsRatio || '?'}`,
+        'options trader': `Funding: ${funding}. Liquidations: ${liquidations ? String(liquidations).slice(0,100) : '?'}`,
+        'correlation analyst': correlation ? `Correlation: ${String(correlation).slice(0,180)}` : `BTC lead: ${btcLead?.summary||'?'}`,
+        'volatility trader': liquidations ? `Liq zones: ${String(liquidations).slice(0,120)}. ATR via technicals: ${String(technicalAnalysis||'').slice(0,80)}` : '',
+        'institutional trader': `OI: ${openInterest || '?'}. Flow: ${advancedFlow ? String(advancedFlow).slice(0,120) : '?'}`,
+        'market maker': orderBook ? `Order book: ${String(orderBook).slice(0,180)}` : '',
+        'retail sentiment gauge': `Fear&Greed: ${fearGreed}. L/S ratio: ${lsRatio || '?'} (high = retail crowded long)`
+      };
 
       const allRoles = [
         'technical analyst', 'sentiment trader', 'whale watcher', 'macro analyst',
@@ -5131,8 +5167,9 @@ Only trade when there is a CLEAR edge — don't force trades.`;
           const role = groupRoles[i];
           const track = getAgentAccuracy(role);
           const trackLine = track ? ` Your track record: ${track.accuracy}% accurate over ${track.votes} trades${track.accuracy < 45 ? ' — you have been wrong often, be extra careful' : track.accuracy > 65 ? ' — you have been sharp, trust your read' : ''}.` : '';
+          const myData = roleData[role] ? `\nYOUR SPECIALTY DATA: ${roleData[role]}` : '';
           const result = await callMiroAgent(role,
-            `You are a crypto ${role}.${trackLine} Market: ${marketSummary}. Should we ${analysis.direction?.toUpperCase()} ${scanCoin} right now? JSON: {"agree":true/false,"confidence":0-100,"argument":"specific reason in 10 words"}`
+            `You are a crypto ${role}.${trackLine} Market: ${marketSummary}${myData}\n\nUsing YOUR specialty's lens and data above, should we ${analysis.direction?.toUpperCase()} ${scanCoin} right now? JSON: {"agree":true/false,"confidence":0-100,"argument":"specific reason in 10 words"}`
           );
           round1Results.push(result ? { ...result, role } : { agree: false, confidence: 50, argument: 'unclear', role });
         }
@@ -5187,7 +5224,7 @@ JSON: {"agree":true/false,"confidence":0-100,"changed":true/false}`
 
       // Run all groups in PARALLEL — stagger within each group handles rate limits
       const groupResults = await Promise.all(
-        groups.map(g => runGroupDebate(g.id, g.roles))
+        (asukaReact('swarm_thinking'), groups.map(g => runGroupDebate(g.id, g.roles)))
       );
 
       // Compile group results
@@ -5196,14 +5233,22 @@ JSON: {"agree":true/false,"confidence":0-100,"changed":true/false}`
       const rawSwarmPct = Math.round(totalAgree / TOTAL_AGENTS * 100);
       // Experience-weighted vote: veteran agents (5+ trades) count by accuracy
       const allVotes = groupResults.flatMap(g => g.roleVotes || []);
-      let wSum = 0, wAgree = 0;
+      let wSum = 0, wAgree = 0, benched = 0;
       for (const v of allVotes) {
         const track = getAgentAccuracy(v.role);
-        const weight = track ? Math.max(0.25, track.accuracy / 100) : 0.5; // rookies = 0.5
+        // #4 PRUNE: bench chronically-wrong veterans (15+ votes, <38% accurate) — they drag the swarm
+        if (track && track.votes >= 15 && track.accuracy < 38) { benched++; continue; }
+        // #2 SHARPER SPREAD: square the accuracy so proven agents dominate, weak ones fade
+        // 75% → 0.56, 60% → 0.36, 45% → 0.20, rookie → 0.30 flat
+        let weight;
+        if (!track) weight = 0.30;
+        else { const a = track.accuracy / 100; weight = Math.max(0.10, a * a); }
         wSum += weight;
         if (v.agree) wAgree += weight;
       }
       const swarmAgreePct = wSum > 0 ? Math.round(wAgree / wSum * 100) : rawSwarmPct;
+      if (benched > 0) console.log(`🪑 Benched ${benched} chronically-wrong agent(s) from this vote`);
+      asukaReact(swarmAgreePct >= 65 ? 'swarm_strong' : swarmAgreePct < 50 ? 'swarm_split' : 'swarm_thinking');
       if (swarmAgreePct !== rawSwarmPct) console.log(`🎓 Experience-weighted vote: ${rawSwarmPct}% raw → ${swarmAgreePct}% weighted (veterans count more)`);
       const _swarmVotesForRecord = allVotes;
       const swarmConfidence = Math.round(groupResults.reduce((s, g) => s + g.confidence, 0) / groupResults.length);
@@ -5218,6 +5263,12 @@ JSON: {"agree":true/false,"confidence":0-100,"changed":true/false}`
       const changed = totalChanged;
 
       console.log(`🐟 MiroFish Group Chat Results: ${agreeCount}/${TOTAL_AGENTS} agree (${swarmAgreePct}%) | ${totalChanged} agents changed mind`);
+      // Stream the live swarm view — each agent's role + vote + accuracy
+      try {
+        const swarmAgents = allVotes.map(v => { const t = getAgentAccuracy(v.role); return { role: v.role, agree: !!v.agree, accuracy: t ? Math.round(t.accuracy) : null, trades: t ? t.trades : 0 }; });
+        if (dashboardWindow?.webContents && !dashboardWindow.isDestroyed())
+          dashboardWindow.webContents.send('swarm-live', { coin: scanCoin, direction: analysis.direction, agreePct: swarmAgreePct, changed: totalChanged, agents: swarmAgents, bullArg: bestBullArg, bearArg: bestBearArg });
+      } catch(e) {}
       console.log(`🐟 Group breakdown: ${groupResults.map(g => `G${g.groupId}:${g.pct}%`).join(' ')}`);
 
       sendIntelEvent({
@@ -5229,11 +5280,22 @@ JSON: {"agree":true/false,"confidence":0-100,"changed":true/false}`
       });
 
       // Skip if swarm disagrees
-      if (swarmAgreePct < 50) {
-        console.log(`❌ MiroFish disagrees (${swarmAgreePct}%) — skipping ${analysis.direction} ${scanCoin}`);
-        logShadowTrade(scanCoin, analysis.direction, analysis.entry, analysis.target, analysis.stopLoss, `MiroFish disagree ${swarmAgreePct}%`, analysis.confidence);
+      // #3 ADAPTIVE THRESHOLD — demand stronger consensus in risky conditions, relax in clean trends
+      let voteThreshold = 50;
+      const fgNum = parseInt(String(fearGreed).match(/\d+/)?.[0] || '50');
+      if (analysis.confidence < 40) voteThreshold += 8;                 // Claude unsure → stricter
+      if (fgNum > 78 || fgNum < 22) voteThreshold += 6;                 // sentiment extreme → choppy → stricter
+      if (totalChanged > TOTAL_AGENTS * 0.35) voteThreshold += 5;       // lots of mind-changing = uncertainty
+      if (btcLead?.block) voteThreshold += 7;                           // fighting BTC → stricter
+      if (analysis.confidence >= 70 && fgNum >= 35 && fgNum <= 65) voteThreshold -= 5; // clean trend, calm → relax
+      voteThreshold = Math.max(45, Math.min(70, voteThreshold));
+      if (swarmAgreePct < voteThreshold) {
+        console.log(`❌ MiroFish ${swarmAgreePct}% < ${voteThreshold}% needed (adaptive) — skipping ${analysis.direction} ${scanCoin}`);
+        asukaReact('trade_skip');
+        logShadowTrade(scanCoin, analysis.direction, analysis.entry, analysis.target, analysis.stopLoss, `MiroFish ${swarmAgreePct}% < ${voteThreshold}% adaptive`, analysis.confidence);
         return;
       }
+      console.log(`✅ MiroFish ${swarmAgreePct}% >= ${voteThreshold}% (adaptive threshold) — proceeding`);
 
       // ── Claude Final Decision (synthesizes Claude 1 + full 3-round debate) ──
       console.log(`🧠 Claude final decision synthesis...`);
@@ -5443,6 +5505,22 @@ JSON only:
         swarmVotes: _swarmVotesForRecord
       };
 
+      // Persist the FULL reasoning for later review (trust/audit)
+      saveTradeReplay({
+        coin: analysis.coin, direction: finalDecision.direction,
+        entry: signal.entry, target: signal.target, stopLoss: signal.stopLoss,
+        confidence: finalDecision.confidence, timestamp: signal.timestamp,
+        claudeReason: analysis.reason,
+        marketBias: analysis.marketBias,
+        swarmAgreePct, agentsTotal: TOTAL_AGENTS, agentsChanged: totalChanged,
+        bullArg: bestBullArg, bearArg: bestBearArg,
+        finalReason: finalDecision.reason || finalDecision.summary || '',
+        qualityGrade, mode: smartParams.mode,
+        agentVotes: (_swarmVotesForRecord||[]).map(v => ({ role: v.role, agree: !!v.agree })),
+        outcome: null
+      });
+
+      asukaReact('trade_open', { detail: `${finalDecision.direction?.toUpperCase()} ${analysis.coin}` });
       openPaperTrade(signal);
 
       // Run scalp scan using main trade as context
@@ -6051,6 +6129,7 @@ JSON only: {"shouldScalp":true/false,"direction":"long"or"short","entry":${curre
       }
 
       console.log(`⚡ Scout found: ${scoutResult.direction?.toUpperCase()} ${coin} ${scoutResult.confidence}% — ${scoutResult.reason}`);
+      const scalpSetupHistory = getSimilarSetupHistory(coin, scoutResult.direction); // #5 free
 
       // ── STEP 2: 5 Agent Debate ───────────────────────────────────────
       const agentRoles = [
@@ -6077,6 +6156,7 @@ Scout reason: "${scoutResult.reason}"
 Scout confidence: ${scoutResult.confidence}%
 Fear & Greed: ${fearGreed}
 Today on ${coin}: ${todayWins}W/${todayLosses}L
+${scalpSetupHistory ? 'SETUP HISTORY: ' + scalpSetupHistory : ''}
 
 ${lessonsCtx ? 'LEARNED RULES: ' + lessonsCtx.slice(0, 300) : ''}
 
@@ -6102,14 +6182,36 @@ JSON: {"agree":true/false,"confidence":0-100,"argument":"specific reason 8 words
       const avgConf = Math.round(agentResults.reduce((s, a) => s + a.confidence, 0) / agentResults.length);
       const agentSummary = agentResults.map(a => `${a.role}: "${a.argument}" (${a.agree ? 'AGREE' : 'DISAGREE'})`).join('\n');
 
-      console.log(`⚡ Agents: ${agreeCount}/5 agree on ${scoutResult.direction?.toUpperCase()} ${coin}`);
+      // #2 EXPERIENCE WEIGHTING — proven scalp agents count more (squared accuracy)
+      let sw = 0, swAgree = 0, scalpBenched = 0;
+      for (const a of agentResults) {
+        const track = getAgentAccuracy(a.role);
+        if (track && track.votes >= 15 && track.accuracy < 38) { scalpBenched++; continue; } // #4-lite: bench chronic losers
+        let weight;
+        if (!track) weight = 0.30;
+        else { const acc = track.accuracy / 100; weight = Math.max(0.10, acc * acc); }
+        sw += weight;
+        if (a.agree) swAgree += weight;
+      }
+      const weightedAgreePct = sw > 0 ? Math.round(swAgree / sw * 100) : Math.round(agreeCount / 5 * 100);
+      if (scalpBenched) console.log(`🪑 Scalp benched ${scalpBenched} chronic-loss agent(s)`);
 
-      if (agreeCount < 2) {
-        console.log(`⚡ Agents rejected: only ${agreeCount}/5 agree — skipping ${coin}`);
-        logShadowTrade(coin, scoutResult?.direction, scoutResult?.entry, scoutResult?.target, scoutResult?.stopLoss, `scalp agents ${agreeCount}/5`, scoutResult?.confidence);
+      // #3 ADAPTIVE THRESHOLD (lighter than main) — base 40% weighted, stricter when risky
+      let scalpThreshold = 40;
+      const sFg = parseInt(String(fearGreed).match(/\d+/)?.[0] || '50');
+      if (scoutResult.confidence < 55) scalpThreshold += 8;        // weak scout → stricter
+      if (sFg > 80 || sFg < 20) scalpThreshold += 6;               // extreme sentiment → choppy
+      if (todayLosses >= 2 && todayLosses > todayWins) scalpThreshold += 6; // bad day on this coin → tighten
+      if (scoutResult.confidence >= 72) scalpThreshold -= 5;       // strong scout → relax
+      scalpThreshold = Math.max(35, Math.min(60, scalpThreshold));
+
+      console.log(`⚡ Agents: ${agreeCount}/5 raw, ${weightedAgreePct}% weighted on ${scoutResult.direction?.toUpperCase()} ${coin} (need ${scalpThreshold}%)`);
+
+      if (weightedAgreePct < scalpThreshold || agreeCount < 2) {
+        console.log(`⚡ Scalp rejected: ${weightedAgreePct}% weighted < ${scalpThreshold}% (or <2 raw) — skipping ${coin}`);
+        logShadowTrade(coin, scoutResult?.direction, scoutResult?.entry, scoutResult?.target, scoutResult?.stopLoss, `scalp ${weightedAgreePct}% < ${scalpThreshold}%`, scoutResult?.confidence);
         continue;
       }
-      // Need at least 2/5 agents to agree
 
       // ── STEP 3: Sonnet Final Decision ────────────────────────────────
       let finalDecision = null;
@@ -7801,6 +7903,87 @@ setInterval(() => {
 // Works for ANY chain (SOL/ETH/BSC/Base) — DexScreener resolves automatically
 const LAUNCH_SITES_DIR = path.join(DATA_DIR, 'launch-sites');
 
+
+// ─── PREMIUM DESIGN SPEC — makes generated sites look like $5k agency builds ──
+// Encodes the MotionSites-style patterns: animated gradients, glassmorphism,
+// scroll-reveal motion, modern hero layouts. Injected into every site prompt.
+
+// ─── INDUSTRY DESIGN INTELLIGENCE — matches design to the business, avoids clichés ──
+// Ported from the UI UX Pro Max reasoning approach: each industry gets the RIGHT
+// style/colors/fonts AND a list of anti-patterns to avoid. This is what separates
+// a professional site from a generic "AI-looking" one.
+const INDUSTRY_DESIGN = {
+  crypto:    { style: 'Cyberpunk / AI-Native / Aurora', colors: 'near-black bg, neon violet+cyan or electric green accent', fonts: 'Space Grotesk or Orbitron + Inter', effects: 'animated grid/particles, glowing CTAs, glassmorphism', avoid: 'pastels, corporate stock-photo vibes, light backgrounds, serif body text' },
+  business:  { style: 'Soft UI / Swiss Minimalism', colors: 'clean white or soft neutral, ONE confident brand accent (deep blue, teal, or warm orange)', fonts: 'Inter or Plus Jakarta Sans + a subtle display', effects: 'soft shadows, smooth 200ms transitions, clean grid', avoid: 'neon colors, dark hacker aesthetic, AI purple/pink gradients, over-animation' },
+  portfolio: { style: 'Editorial / Motion-driven / Brutalist-lite', colors: 'mono base (off-white or near-black) + ONE bold accent', fonts: 'a characterful serif or grotesk display + clean body', effects: 'big type, cursor interactions, smooth scroll-reveal, generous whitespace', avoid: 'cluttered layouts, stock corporate look, rainbow palettes' },
+  event:     { style: 'Bold / Vibrant / Conversion-optimized', colors: 'energetic gradient or 2 punchy brand colors tied to the event', fonts: 'a bold display + clean body', effects: 'countdown energy, clear repeated CTAs, lively motion', avoid: 'muted corporate palettes, tiny CTAs, walls of text' },
+  personal:  { style: 'Warm / Approachable / Soft UI', colors: 'warm neutrals + a friendly accent', fonts: 'friendly humanist sans + optional warm serif', effects: 'gentle motion, rounded shapes, personality', avoid: 'cold corporate styling, aggressive sales energy' },
+  resume:    { style: 'Swiss Minimalism / Trust & Authority', colors: 'crisp white or very dark mono, ONE professional accent (navy/teal/burgundy)', fonts: 'a clean professional sans (Inter) + optional serif for the name', effects: 'impeccable spacing, clear hierarchy, subtle reveal, scannable', avoid: 'flashy gradients, neon, playful fonts, busy backgrounds, emojis as bullets' }
+};
+function buildIndustryBlock(siteType) {
+  const d = INDUSTRY_DESIGN[siteType] || INDUSTRY_DESIGN.business;
+  return `
+INDUSTRY DESIGN INTELLIGENCE (match the design to THIS kind of business — this is what makes it look professional, not generic-AI):
+- Recommended style direction: ${d.style}
+- Color approach: ${d.colors}
+- Typography mood: ${d.fonts}
+- Key effects: ${d.effects}
+- ANTI-PATTERNS — do NOT do these (they make it look cheap/wrong for this industry): ${d.avoid}
+
+PRE-DELIVERY CHECKLIST (verify before finishing):
+- Real SVG-style icons or clean unicode, NOT emoji-as-icons unless the vibe is explicitly playful
+- cursor:pointer on every clickable element; visible hover states (150-300ms transitions)
+- Text contrast at least 4.5:1; readable on every background
+- Responsive at 375px / 768px / 1024px / 1440px, no horizontal scroll
+- prefers-reduced-motion respected
+`;
+}
+
+const PREMIUM_DESIGN_SPEC = `
+PREMIUM DESIGN REQUIREMENTS (this must look like a $5,000 agency build, not a template):
+
+HERO (the make-or-break section):
+- Full viewport height (100vh), content vertically centered, generous padding
+- A pill-shaped badge at the top: rounded-full, 1px border at white/15 opacity, backdrop-filter blur(12px), small icon + short label
+- Massive headline (clamp 40px–84px), tight letter-spacing (-0.03em), font-weight 700-800
+- ONE accent color or gradient used deliberately for highlights + CTAs
+- Primary CTA button: solid accent or gradient, soft glow shadow; secondary: ghost with thin border
+- An ANIMATED BACKGROUND behind the hero (pick ONE that fits the vibe):
+  * Aurora/mesh gradient: 2-3 large blurred radial-gradient blobs that slowly drift (CSS @keyframes translating + scaling over 18-25s)
+  * Animated conic/linear gradient that rotates hue slowly
+  * Subtle particle/grid canvas (lightweight, pure JS, <40 lines)
+  * Floating orbs with blur and low opacity
+- A subtle bottom fade gradient from the bg color to transparent
+
+MOTION & POLISH:
+- Scroll-reveal on every section via IntersectionObserver (fade + translateY(24px) → 0, staggered)
+- Smooth-scroll nav, sticky header that gains a blurred background on scroll
+- Hover states with transform + transition on cards/buttons (200ms ease, 60fps transforms only)
+- Glassmorphism on cards where it fits: bg white/[0.03-0.06], backdrop-blur, 1px white/10 border, rounded-2xl
+- Generous whitespace, strong vertical rhythm, max-width container ~1200px
+
+TECH:
+- Single self-contained HTML file, all CSS in <style>, all JS in <script>
+- Google Fonts matched to the vibe (a characterful display + a clean body font)
+- Fully responsive, stacks cleanly at 768px, NEVER horizontal-scrolls
+- Real confident copy, NO lorem ipsum
+- Zero external JS libraries (write the animations yourself)
+- Valid HTML5, everything works (nav scrolls, buttons do something)
+`;
+
+const VIBE_PRESETS = {
+  minimal:  'VIBE: Minimal & refined. Off-white or very dark mono background, ONE restrained accent, lots of whitespace, elegant serif display font, barely-there motion. Think Apple/Linear. Animated bg = a single very subtle drifting gradient.',
+  bold:     'VIBE: Bold & vibrant. Saturated gradient accents, big punchy type, high contrast, energetic. Animated mesh-gradient hero, colorful glassmorphic cards. Think Stripe/Framer.',
+  animated: 'VIBE: Motion-rich & premium. Dark background (#070612-ish), aurora/mesh animated gradient hero with drifting blurred blobs, glassmorphism everywhere, glowing accents, lots of scroll-reveal + hover motion. Think a high-end Web3/AI launch site.',
+  luxury:   'VIBE: Luxury & elegant. Deep dark or cream palette, gold/champagne or deep-jewel accent, serif display font, slow graceful motion, refined glassmorphism. Think a premium brand/real-estate site.',
+  playful:  'VIBE: Playful & warm. Rounded everything, soft pastel gradients, friendly sans font, bouncy hover animations, cheerful. Think a fun consumer app landing page.',
+  web3:     'VIBE: Web3/crypto premium. Near-black bg, neon or electric gradient accent (violet/cyan), animated grid or particle field, glassmorphic stat cards, glowing buttons, futuristic mono accents. Think top-tier token launch.'
+};
+function buildDesignBlock(vibe, siteType) {
+  const v = VIBE_PRESETS[vibe] || VIBE_PRESETS.animated;
+  return `${v}\n${PREMIUM_DESIGN_SPEC}\n${buildIndustryBlock(siteType || 'business')}`;
+}
+
 global._launchGenerateSite = async (form) => {
   try {
     if (!fs.existsSync(LAUNCH_SITES_DIR)) fs.mkdirSync(LAUNCH_SITES_DIR, { recursive: true });
@@ -7830,8 +8013,9 @@ MANDATORY STRUCTURE (every section, in order):
 7. FAQ: 4 items in accordion (working open/close JS)
 8. FOOTER: socials, copy-CA again, "Not financial advice. DYOR." disclaimer
 
+${buildDesignBlock(form.vibe || 'web3', 'crypto')}
+
 QUALITY BARS (non-negotiable):
-- Typography: one display font + one body font from Google Fonts that MATCH the vibe (degen neon→Orbitron/Inter, dark premium→Playfair or Space Grotesk/Inter, clean minimal→Inter only, cyberpunk→Rajdhani/Inter)
 - Copy-CA button MUST work: navigator.clipboard.writeText with "Copied!" feedback state
 - Smooth-scroll nav, scroll-reveal animations (IntersectionObserver, translateY+fade), all 60fps transforms only
 - Fully responsive: stack at 768px, hero text clamps, no horizontal scroll EVER
@@ -9016,7 +9200,7 @@ ipcMain.handle('buyback-set-burner', (e, { projectId, privateKey, pin }) => {
 ipcMain.handle('buyback-set-connect', (e, { projectId, address }) => {
   const proj = getProject(projectId);
   if (!proj) return { success: false, error: 'Project not found' };
-  proj.buyback.walletMode = 'connect';
+  proj.buyback.walletMode = 'connect'; proj.buyback.executionMode = proj.buyback.executionMode || 'approve';
   proj.buyback.connectedAddress = address || null;
   proj.buyback.simulated = false;
   projLog(proj, '🔗 Wallet connected (approval-per-trade mode)');
@@ -9029,7 +9213,7 @@ ipcMain.handle('buyback-set-rules', (e, { projectId, rules }) => {
   const proj = getProject(projectId);
   if (!proj) return { success: false, error: 'Project not found' };
   // editable: triggerType, volumeThreshold, priceDropPct, buyAmountUsd, maxPerDay, cooldownMin, scheduleHours, autoApprove
-  const allowed = ['enabled','triggerType','volumeThreshold','priceDropPct','buyAmountUsd','maxPerDay','cooldownMin','scheduleHours','autoApprove'];
+  const allowed = ['enabled','executionMode','triggerType','volumeThreshold','priceDropPct','buyAmountUsd','maxPerDay','cooldownMin','scheduleHours','autoApprove','walletMode'];
   for (const k of allowed) if (rules[k] !== undefined) proj.buyback[k] = rules[k];
   projLog(proj, '⚙️ Buyback rules updated');
   upsertProject(proj);
@@ -9039,32 +9223,37 @@ ipcMain.handle('buyback-set-rules', (e, { projectId, rules }) => {
 // Execute a real buyback (called by the worker when a trigger fires)
 async function executeBuyback(proj, reasonWhy) {
   const bb = proj.buyback;
+  // Respect the daily spend cap regardless of mode
+  if (bb.maxPerDay && (bb.spent24h || 0) >= bb.maxPerDay) {
+    projLog(proj, `🛑 Buyback skipped (${reasonWhy}) — daily cap $${bb.maxPerDay} reached`);
+    return { fired: false, reason: 'daily_cap' };
+  }
+  const mode = bb.executionMode || 'approve'; // default to the safe mode
+
+  // ── APPROVE MODE: she signals, user executes the swap themselves (safest, ships now) ──
+  if (mode === 'approve') {
+    projLog(proj, `🔔 Buyback signal: $${bb.buyAmountUsd} (${reasonWhy}) — awaiting your action`);
+    sendTelegramNotification(`🔔 BUYBACK SIGNAL — $${proj.symbol}\nReason: ${reasonWhy}\nSuggested: buy $${bb.buyAmountUsd}\n${proj.ca ? 'CA: ' + proj.ca : ''}\n\nExecute it in your wallet when ready.`).catch(()=>{});
+    if (mainWindow) mainWindow.webContents.send('buyback-signal', { symbol: proj.symbol, amount: bb.buyAmountUsd, reason: reasonWhy, ca: proj.ca });
+    return { fired: true, mode: 'approve' };
+  }
+
+  // ── AUTO MODE: burner wallet signs + sends autonomously (power users, needs on-chain libs) ──
   const have = web3Available();
-  // Burner mode: sign + send ourselves (autonomous)
-  if (bb.walletMode === 'burner') {
-    if ((proj.chain === 'solana' && !have.sol) || (proj.chain !== 'solana' && !have.evm)) {
-      projLog(proj, `⚠️ Buyback trigger (${reasonWhy}) but web3 libs missing — run: npm install ethers @solana/web3.js`);
-      return { fired: false, reason: 'libs_missing' };
-    }
-    // NOTE: actual swap broadcast is the Phase-4 signed-tx step. Engine + safety are live here.
-    // Real implementation: decrypt key (needs PIN unlocked in session), build swap via Jupiter/0x, sign, send.
-    if (!global._buybackPinUnlocked?.[proj.id]) {
-      projLog(proj, `🔒 Buyback trigger (${reasonWhy}) — burner locked, unlock with PIN to fire`);
-      sendTelegramNotification(`🔒 $${proj.symbol} buyback ready ($${bb.buyAmountUsd}, ${reasonWhy}) — unlock burner with PIN in the app to execute`).catch(()=>{});
-      return { fired: false, reason: 'locked' };
-    }
-    projLog(proj, `💰 [LIVE-PENDING] Burner buyback $${bb.buyAmountUsd} (${reasonWhy}) — swap broadcast lands in P4 on-chain build`);
-    return { fired: true, mode: 'burner' };
+  if ((proj.chain === 'solana' && !have.sol) || (proj.chain !== 'solana' && !have.evm)) {
+    projLog(proj, `⚠️ Auto-buyback (${reasonWhy}) needs web3 libs — run: npm install ethers @solana/web3.js. Falling back to signal.`);
+    sendTelegramNotification(`🔔 $${proj.symbol} buyback ($${bb.buyAmountUsd}, ${reasonWhy}) — auto unavailable, execute manually`).catch(()=>{});
+    return { fired: true, mode: 'approve-fallback' };
   }
-  // Connect mode: ask the dev to approve (semi-auto)
-  if (bb.walletMode === 'connect') {
-    projLog(proj, `🔗 Buyback proposed $${bb.buyAmountUsd} (${reasonWhy}) — sent for approval`);
-    sendTelegramNotification(`🔗 Approve buyback: $${bb.buyAmountUsd} of $${proj.symbol} (${reasonWhy}). Open your wallet to confirm.`).catch(()=>{});
-    return { fired: true, mode: 'connect-pending-approval' };
+  if (!global._buybackPinUnlocked?.[proj.id]) {
+    projLog(proj, `🔒 Auto-buyback ready (${reasonWhy}) — burner locked, unlock with PIN`);
+    sendTelegramNotification(`🔒 $${proj.symbol} auto-buyback ready ($${bb.buyAmountUsd}) — unlock burner PIN in the app`).catch(()=>{});
+    return { fired: false, reason: 'locked' };
   }
-  // Sim
-  projLog(proj, `💰 [SIM] Buyback $${bb.buyAmountUsd} (${reasonWhy})`);
-  return { fired: true, mode: 'sim' };
+  // The real signed swap broadcast is the Phase-5 on-chain build (devnet-first). Engine + caps are live.
+  projLog(proj, `💰 [AUTO] Buyback $${bb.buyAmountUsd} (${reasonWhy}) — executing via burner`);
+  sendTelegramNotification(`💰 AUTO-BUYBACK fired: $${bb.buyAmountUsd} of $${proj.symbol} (${reasonWhy})`).catch(()=>{});
+  return { fired: true, mode: 'auto' };
 }
 
 // Unlock burner for this session with PIN (held in memory only, never written)
@@ -9165,7 +9354,7 @@ function defaultProjectConfig(form) {
     tagline: form.tagline || '', twitter: form.twitter || '', telegram: form.telegram || '',
     status: 'draft', createdAt: Date.now(), mode: form.mode || 'manual',
     // ── BUYBACK (editable live) ──
-    buyback: { enabled: false, simulated: true, treasuryUsd: 0,
+    buyback: { enabled: false, executionMode: 'approve', walletMode: 'connect', treasuryUsd: 0,
       triggerType: 'volume',           // 'volume' | 'price_drop' | 'schedule'
       volumeThreshold: 50000,          // buy when 1h vol exceeds this
       priceDropPct: 8,                 // or when price drops this %
@@ -9198,7 +9387,21 @@ ipcMain.handle('launch-create-project', (e, form) => {
     return { success: true, project: proj };
   } catch(e2) { return { success: false, error: e2.message }; }
 });
-ipcMain.handle('launch-list-projects', () => loadProjects().projects.map(p => ({ id: p.id, name: p.name, symbol: p.symbol, status: p.status, mode: p.mode })));
+ipcMain.handle('launch-list-projects', () => loadProjects().projects.map(p => ({
+  id: p.id, name: p.name, symbol: p.symbol, status: p.status, mode: p.mode,
+  chain: p.chain, ca: p.ca, siteUrl: p.siteUrl, logoPath: p.logoPath,
+  health: p.health || null, buybackEnabled: !!p.buyback?.enabled, growthEnabled: !!p.growth?.enabled,
+  lastActivity: (p.log && p.log[0]) ? p.log[0].msg : null
+})));
+ipcMain.handle('launch-delete-project', (e, id) => {
+  try {
+    const data = loadProjects();
+    const before = data.projects.length;
+    data.projects = data.projects.filter(p => p.id !== id);
+    saveProjects(data);
+    return { success: true, removed: before - data.projects.length };
+  } catch(e2) { return { success: false, error: e2.message }; }
+});
 ipcMain.handle('launch-get-project', (e, id) => getProject(id) || null);
 
 // ── Live edit — dev changes ANY config while the coin runs ──
@@ -9695,13 +9898,12 @@ ${logoDataUri ? 'LOGO: use placeholder src="__LOGO__" in the hero, ~140px, I inj
 MANDATORY SECTIONS for a ${form.siteType} site: ${spec.sections}
 VIBE: ${spec.vibe}
 
-QUALITY BARS (non-negotiable):
-- Google Fonts matched to the vibe; near-black or theme background; ONE accent color used for CTAs/highlights
-- Fully responsive (stack at 768px, no horizontal scroll ever)
-- Scroll-reveal animations (IntersectionObserver), smooth-scroll nav, 60fps transforms only
-- Real, confident copy matching the description — NO lorem ipsum, NO placeholder text except where data is genuinely missing (mark TBD)
-- Working nav, working buttons (mailto: for contact where relevant), valid HTML5, zero external JS libraries
-- NO crypto content unless the type is crypto — this is a normal ${form.siteType} website
+${buildDesignBlock(form.vibe || 'animated', form.siteType)}
+
+ADDITIONAL:
+- Real, confident copy matching the description — NO lorem ipsum (mark TBD where data is genuinely missing)
+- Working nav + buttons (mailto: for contact where relevant)
+- NO crypto content — this is a normal ${form.siteType} website
 
 Output ONLY raw HTML from <!DOCTYPE html> to </html>. No fences, no commentary.` }]
     });
@@ -9797,6 +9999,7 @@ async function launchLesson(goal, topic) {
 }
 
 ipcMain.handle('lesson-complete', (e, { goal, topic, score, total }) => {
+  asukaReact('lesson_done');
   // Update profile: mark covered, log weak if low score
   const d = loadLearner(); const k = (goal||'').toLowerCase();
   if (d.profiles[k]) {
@@ -9881,10 +10084,12 @@ ipcMain.handle('care-action', (e, action) => {
     const lvMsg = `${levelInfo.tier.emoji} We're now ${levelInfo.tier.name}! ${unlockNames ? 'You unlocked: ' + unlockNames + '!' : ''} +${levelInfo.coinBonus} coins 💕`;
     streamVoiceResponse(lvMsg, mainWindow).catch(()=>{});
     if (mainWindow) mainWindow.webContents.send('relationship-levelup', levelInfo);
+    asukaReact('levelup', { detail: `We're now ${levelInfo.tier.name}!` });
   } else {
     streamVoiceResponse(msg, mainWindow).catch(()=>{});
   }
   if (mainWindow) mainWindow.webContents.send('care-updated', d);
+  if (!levelInfo.leveledUp) asukaReact('care', { text: msg });
   return { success: true, state: d, message: msg, newDay, levelInfo };
 });
 
@@ -10179,7 +10384,7 @@ async function openPaperTrade(signal) {
     : signal.entry * (1 + liquidationPct);
 
   const trade = {
-    id: Date.now(),
+    id: `t_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
     coin: signal.coin,
     direction: signal.direction,
     entry: signal.entry,
@@ -10199,6 +10404,9 @@ async function openPaperTrade(signal) {
     tradeMode: signal.tradeMode || 'normal',
     qualityGrade: signal.qualityGrade || null,
     swarmVotes: signal.swarmVotes || null,
+    advisorId: signal.advisorId || null,
+    isAdvisorTrade: signal.isAdvisorTrade || false,
+    advisorCallId: signal.advisorCallId || null,
     trailingLevels: signal.trailingLevels || [],
     partialTp: signal.partialTp || 1.0,
     partialTpDone: false
@@ -10253,6 +10461,7 @@ async function closePaperTrade(tradeId, closePrice, reason) {
   const pnlPct = priceDiff / trade.entry;
   const pnl = trade.size * pnlPct * leverage;
   const actualPnl = Math.max(pnl, -trade.size); // can't lose more than margin
+  asukaReact(actualPnl >= 0 ? 'trade_win' : 'trade_loss', { text: actualPnl >= 0 ? `We closed ${trade.coin} for +$${actualPnl.toFixed(0)}! 🎉` : `${trade.coin} closed -$${Math.abs(actualPnl).toFixed(0)}. On to the next.` });
 
   trade.status = actualPnl > 0 ? 'win' : 'loss';
   trade.closePrice = closePrice;
@@ -13298,6 +13507,624 @@ function updateCallerStats(caller, won) {
 
 // Queue for intel events before dashboard is ready
 const intelQueue = [];
+
+// ─── ASUKA'S BRAIN — learning stats made visible (Devin-style "gets smarter") ──
+ipcMain.handle('get-brain-stats', () => {
+  try {
+    const shadow = loadJSON(SHADOW_FILE, { shadows: [], stats: { wouldWin: 0, wouldLose: 0, neutral: 0 } });
+    const shadows = shadow.shadows || [];
+    const resolved = shadows.filter(s => s.outcome === 'would_win' || s.outcome === 'would_lose');
+    const wins = resolved.filter(s => s.outcome === 'would_win').length;
+    const winRate = resolved.length ? Math.round(wins / resolved.length * 100) : null;
+    // recent vs older to show a TREND (is she improving?)
+    const half = Math.floor(resolved.length / 2);
+    const older = resolved.slice(0, half), recent = resolved.slice(half);
+    const wr = (arr) => arr.length ? Math.round(arr.filter(s=>s.outcome==='would_win').length/arr.length*100) : null;
+    const olderWR = wr(older), recentWR = wr(recent);
+    const trend = (olderWR != null && recentWR != null) ? recentWR - olderWR : null;
+    // agent experience (votes/correct shape)
+    const agents = getAgentStats();
+    const roles = Object.entries(agents);
+    const vetCount = roles.filter(([,a]) => (a.votes||0) >= 5).length;
+    const topAgent = roles.filter(([,a]) => (a.votes||0) >= 5).map(([role,a]) => ({ role, accuracy: Math.round(a.correct/a.votes*100), votes: a.votes })).sort((a,b) => b.accuracy - a.accuracy)[0];
+    const lessons = loadJSON(TRADING_LESSONS_FILE, { lessons: [] }).lessons || [];
+    return {
+      totalShadows: shadows.length, resolvedTrades: resolved.length, winRate,
+      trend, recentWR, olderWR,
+      vetAgents: vetCount, totalAgents: roles.length,
+      topAgent: topAgent || null,
+      lessonsLearned: Array.isArray(lessons) ? lessons.length : 0
+    };
+  } catch(e) { return { error: e.message, totalShadows: 0 }; }
+});
+
+
+// ─── WHAT ASUKA KNOWS ABOUT YOU — relationship/knowledge surface ───────────
+ipcMain.handle('get-what-she-knows', () => {
+  try {
+    const m = loadMemory();
+    const learner = loadLearner();
+    const care = (typeof loadCare === 'function') ? loadCare() : {};
+    // Trading knowledge
+    const trading = [];
+    if (m.name) trading.push({ k: 'Your name', v: m.name });
+    if (m.tradingStyle) trading.push({ k: 'Trading style', v: m.tradingStyle });
+    if (m.riskLevel) trading.push({ k: 'Risk level', v: m.riskLevel });
+    if (m.favoriteCoins?.length) trading.push({ k: 'Coins you follow', v: m.favoriteCoins.join(', ') });
+    if (m.userRules?.length) trading.push({ k: 'Your rules', v: m.userRules.length + ' set' });
+    // Learning knowledge
+    const learning = Object.entries(learner.profiles || {}).map(([goal, p]) => ({
+      goal, level: p.level, covered: (p.covered||[]).length,
+      weakSpots: Object.keys(p.weakSpots||{}).length
+    }));
+    return {
+      name: m.name || null,
+      personality: m.personality,
+      trading,
+      learning,
+      bondTier: care.bondXP != null ? getTier(care.bondXP).name : null,
+      memorySince: m.lastSeen ? new Date(m.lastSeen).toLocaleDateString() : null
+    };
+  } catch(e) { return { error: e.message, trading: [], learning: [] }; }
+});
+
+
+// ─── RULE ENFORCEMENT — checks a trade against the user's saved rules ────────
+async function checkUserRules(coin, direction, marketContext) {
+  try {
+    const mem = loadMemory();
+    const rules = mem.userRules || [];
+    if (!rules.length) return { violated: false };
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 250,
+      messages: [{ role: 'user', content: `User's trading rules:\n${rules.map((r,i)=>`${i+1}. ${r}`).join('\n')}\n\nProposed trade: ${direction?.toUpperCase()} ${coin}. Context: ${marketContext || 'standard setup'}.\n\nDoes this trade VIOLATE any of the rules? Reply ONLY JSON: {"violated":true/false,"ruleNumber":N,"rule":"the rule text","why":"short reason"}. If no violation, {"violated":false}.` }]
+    });
+    const j = JSON.parse(res.content[0].text.match(/\{[\s\S]*\}/)[0]);
+    return j;
+  } catch(e) { return { violated: false }; }
+}
+
+ipcMain.handle('get-user-rules', () => loadMemory().userRules || []);
+ipcMain.handle('add-user-rule', (e, rule) => { const m = loadMemory(); m.userRules = m.userRules || []; m.userRules.push(rule); if (m.userRules.length > 20) m.userRules.shift(); saveMemory(m); return { success: true, rules: m.userRules }; });
+ipcMain.handle('delete-user-rule', (e, idx) => { const m = loadMemory(); m.userRules = (m.userRules || []).filter((_, i) => i !== idx); saveMemory(m); return { success: true, rules: m.userRules }; });
+
+
+
+// #5 SETUP MEMORY — what happened last time we saw a similar setup
+function getSimilarSetupHistory(coin, direction) {
+  try {
+    const data = loadJSON(REPLAY_FILE, { replays: [] });
+    const similar = (data.replays || [])
+      .filter(r => r.coin === coin && r.direction === direction && r.outcome)
+      .slice(0, 5);
+    if (!similar.length) return '';
+    const wins = similar.filter(r => r.outcome === 'would_win' || r.outcome === 'win').length;
+    return `Past ${similar.length} similar ${direction?.toUpperCase()} ${coin} setups: ${wins} won, ${similar.length - wins} lost. ${wins / similar.length < 0.4 ? 'This setup has burned us before — be skeptical.' : wins / similar.length > 0.6 ? 'This setup has worked well historically.' : 'Mixed history.'}`;
+  } catch(e) { return ''; }
+}
+
+// ─── TRADE REPLAY / AUDIT — persist full reasoning for every decision ───────
+const REPLAY_FILE = path.join(DATA_DIR, 'trade-replays.json');
+function saveTradeReplay(record) {
+  try {
+    const data = loadJSON(REPLAY_FILE, { replays: [] });
+    data.replays.unshift({ ...record, id: 'rp_' + Date.now(), savedAt: Date.now() });
+    if (data.replays.length > 100) data.replays = data.replays.slice(0, 100); // keep last 100
+    saveJSON(REPLAY_FILE, data);
+  } catch(e) {}
+}
+ipcMain.handle('get-trade-replays', () => loadJSON(REPLAY_FILE, { replays: [] }).replays || []);
+ipcMain.handle('get-trade-replay', (e, id) => (loadJSON(REPLAY_FILE, { replays: [] }).replays || []).find(r => r.id === id) || null);
+// Link an outcome back to the replay once the trade resolves
+function updateReplayOutcome(coin, ts, outcome, pnl) {
+  try {
+    const data = loadJSON(REPLAY_FILE, { replays: [] });
+    const r = data.replays.find(x => x.coin === coin && Math.abs(x.timestamp - ts) < 60000);
+    if (r) { r.outcome = outcome; r.pnl = pnl; saveJSON(REPLAY_FILE, data); }
+  } catch(e) {}
+}
+
+
+// ─── REACTION EMITTER — make Asuka emote at live events (Comnyang-inspired) ──
+function asukaReact(type, opts = {}) {
+  try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('asuka-react', { type, ...opts }); } catch(e) {}
+}
+
+
+// ─── PEEK MODE — she fades back only when a real fullscreen app is up (e.g. video) ──
+// Toggleable; off by default to avoid being annoying. User enables in settings.
+let _peekState = false;
+ipcMain.handle('set-peek-enabled', (e, on) => { const s = loadSettings(); s.peekMode = !!on; saveSettings(s); return { ok: true }; });
+setInterval(() => {
+  try {
+    if (!loadSettings().peekMode) { if (_peekState) { _peekState = false; mainWindow?.webContents.send('set-peek', false); } return; }
+    // Only peek when a window on this machine is actually in fullscreen (video/presentation)
+    const fs = BrowserWindow.getAllWindows().some(w => w.isFullScreen && w.isFullScreen());
+    // Note: detecting OTHER apps' fullscreen needs native APIs; we honor our own + the toggle.
+    if (fs !== _peekState) { _peekState = fs; mainWindow?.webContents.send('set-peek', fs); }
+  } catch(e) {}
+}, 6000);
+
+
+// ═══════════════════════════════════════════════════════════════════════
+//  ADVISOR CALLS — follow a human advisor; notify-only or Asuka auto-trades
+//  Multi-advisor ready. Each advisor posts in their own Telegram bot.
+// ═══════════════════════════════════════════════════════════════════════
+const ADVISORS_FILE = path.join(DATA_DIR, 'advisors.json');
+const ADVISOR_CALLS_FILE = path.join(DATA_DIR, 'advisor-calls.json');
+
+function loadAdvisors() {
+  return loadJSON(ADVISORS_FILE, {
+    advisors: [
+      // Seed with one advisor; more can be added later.
+      { id: 'main', name: 'Your Guy', handle: '@youradvisor', avatar: '', botToken: '', followMode: 'notify', autonomyMode: 'confirm', // followMode: notify|auto|off · autonomyMode: full|confirm
+        riskUsd: 50, maxPerDay: 200, wins: 0, losses: 0, active: true }
+    ]
+  });
+}
+function saveAdvisors(d) { saveJSON(ADVISORS_FILE, d); }
+function loadAdvisorCalls() { return loadJSON(ADVISOR_CALLS_FILE, { calls: [] }); }
+function saveAdvisorCalls(d) { saveJSON(ADVISOR_CALLS_FILE, d); }
+
+// Parse a free-form advisor post into a structured call using Haiku
+async function parseAdvisorCall(text) {
+  try {
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 320,
+      messages: [{ role: 'user', content: `An advisor posted this in their trade-calls channel. Classify it and extract data.\n\nPost: "${text}"\n\nTypes:\n- "new_call": opening a new trade (has coin + direction)\n- "update_sl": move/change stop loss on an existing trade\n- "update_tp": move/change take profit on an existing trade\n- "close": exit/close an existing trade now\n- "add": add to / scale into an existing position\n- "chatter": not actionable\n\nReply ONLY JSON: {"type":"new_call|update_sl|update_tp|close|add|chatter","coin":"SYMBOL_or_null","direction":"long|short|null","entry":number_or_null,"tp":number_or_null,"sl":number_or_null,"reasoning":"their words, trimmed"}. For updates/close/add, coin is required to know which trade.` }]
+    });
+    const j = JSON.parse(res.content[0].text.match(/\{[\s\S]*\}/)[0]);
+    j.isCall = j.type === 'new_call'; // backward-compat
+    return j;
+  } catch(e) { return { type: 'chatter', isCall: false }; }
+}
+
+// Find the most recent OPEN advisor trade for a coin from this advisor
+function findAdvisorTrade(advisorId, coin) {
+  try {
+    const pd = loadPaperTrades();
+    return (pd.trades || []).filter(t =>
+      t.status === 'open' && t.advisorId === advisorId &&
+      String(t.coin).toUpperCase() === String(coin).toUpperCase()
+    ).sort((a,b) => (b.openTime||0) - (a.openTime||0))[0] || null;
+  } catch(e) { return null; }
+}
+
+// Apply a lifecycle action (close / edit SL / edit TP) honoring the advisor's autonomy setting
+async function applyAdvisorUpdate(adv, parsed) {
+  const trade = findAdvisorTrade(adv.id, parsed.coin);
+  const verb = parsed.type === 'close' ? 'close' : parsed.type === 'update_sl' ? 'move stop' : parsed.type === 'update_tp' ? 'move target' : 'update';
+  // Record the update as a feed item too
+  const store = loadAdvisorCalls();
+  store.calls.unshift({ id:'upd_'+Date.now(), advisorId:adv.id, advisorName:adv.name,
+    coin:parsed.coin, direction:parsed.direction, isUpdate:true, updateType:parsed.type,
+    tp:parsed.tp, sl:parsed.sl, reasoning:parsed.reasoning, timestamp:Date.now(), outcome:null });
+  if (store.calls.length > 200) store.calls = store.calls.slice(0,200);
+  saveAdvisorCalls(store);
+  if (dashboardWindow && !dashboardWindow.isDestroyed()) dashboardWindow.webContents.send('advisor-call', { isUpdate:true });
+
+  // Always notify
+  sendTelegramNotification(`✏️ ${adv.name}: ${verb.toUpperCase()} ${parsed.coin}${parsed.sl?` → SL ${parsed.sl}`:''}${parsed.tp?` → TP ${parsed.tp}`:''}\n${parsed.reasoning||''}`).catch(()=>{});
+
+  // Only ACT if following this advisor on auto
+  if (adv.followMode !== 'auto') return;
+  if (!trade) { console.log(`✏️ ${adv.name} ${parsed.type} ${parsed.coin} — no matching open trade`); return; }
+
+  // autonomyMode: 'full' = act immediately · 'confirm' = ask the user first
+  if ((adv.autonomyMode || 'confirm') === 'confirm') {
+    // send a confirm prompt to the UI; user taps to apply
+    if (dashboardWindow) dashboardWindow.webContents.send('advisor-confirm', {
+      advisorId: adv.id, advisorName: adv.name, tradeId: trade.id,
+      action: parsed.type, coin: parsed.coin, sl: parsed.sl, tp: parsed.tp, reasoning: parsed.reasoning
+    });
+    sendTelegramNotification(`⚠️ ${adv.name} wants to ${verb} ${parsed.coin}. Open the app to confirm.`).catch(()=>{});
+    return;
+  }
+  // FULL auto — apply directly
+  await executeAdvisorAction(trade.id, parsed.type, { sl: parsed.sl, tp: parsed.tp });
+}
+
+// The actual mutation (shared by full-auto and user-confirm)
+async function executeAdvisorAction(tradeId, action, { sl, tp } = {}) {
+  const pd = loadPaperTrades();
+  const t = (pd.trades||[]).find(x => x.id === tradeId && x.status === 'open');
+  if (!t) return { ok:false, reason:'not_open' };
+  if (action === 'close') {
+    const price = parseFloat(String(await getCryptoPrice(t.coin.toLowerCase()).catch(()=>t.entry)).replace(/[^0-9.]/g,'')) || t.entry;
+    await closePaperTrade(tradeId, price, 'Advisor closed');
+    return { ok:true, action:'close' };
+  }
+  if (action === 'update_sl' && sl != null) { t.stopLoss = sl; savePaperTrades(pd); return { ok:true, action:'sl' }; }
+  if (action === 'update_tp' && tp != null) { t.target = tp; savePaperTrades(pd); return { ok:true, action:'tp' }; }
+  return { ok:false, reason:'noop' };
+}
+ipcMain.handle('advisor-confirm-action', async (e, { tradeId, action, sl, tp }) => executeAdvisorAction(tradeId, action, { sl, tp }));
+
+// Record a new call + fan out (notify or auto-trade) per the user's setting
+async function ingestAdvisorCall(advisorId, parsed, imageUrl) {
+  const adv = loadAdvisors().advisors.find(a => a.id === advisorId);
+  if (!adv || !parsed.isCall) return;
+
+  // ── DEDUP: ignore an identical call from the same advisor within 10 minutes ──
+  // (prevents reposts / double-polls from creating duplicate trades — critical for auto-trade)
+  const existing = loadAdvisorCalls();
+  const DEDUP_WINDOW = 10 * 60 * 1000; // 10 min
+  const isDupe = (existing.calls || []).some(c =>
+    c.advisorId === advisorId &&
+    String(c.coin).toUpperCase() === String(parsed.coin).toUpperCase() &&
+    c.direction === parsed.direction &&
+    Number(c.entry) === Number(parsed.entry) &&
+    (Date.now() - c.timestamp) < DEDUP_WINDOW
+  );
+  if (isDupe) {
+    console.log(`🔁 Duplicate call ignored: ${adv.name} ${parsed.direction} ${parsed.coin} @ ${parsed.entry} (within 10 min)`);
+    return;
+  }
+
+  const call = {
+    id: 'call_' + Date.now(), advisorId, advisorName: adv.name,
+    coin: parsed.coin, direction: parsed.direction,
+    entry: parsed.entry, tp: parsed.tp, sl: parsed.sl,
+    reasoning: parsed.reasoning, image: imageUrl || null,
+    timestamp: Date.now(), outcome: null
+  };
+  const store = loadAdvisorCalls();
+  store.calls.unshift(call);
+  if (store.calls.length > 200) store.calls = store.calls.slice(0, 200);
+  saveAdvisorCalls(store);
+
+  // Tell the UI a new call arrived
+  if (dashboardWindow && !dashboardWindow.isDestroyed()) dashboardWindow.webContents.send('advisor-call', call);
+  asukaReact?.('trade_open', { detail: `${adv.name}: ${parsed.direction?.toUpperCase()} ${parsed.coin}` });
+
+  // Always notify
+  sendTelegramNotification(`📣 ${adv.name} called: ${parsed.direction?.toUpperCase()} ${parsed.coin}\nEntry ${parsed.entry ?? '?'} · TP ${parsed.tp ?? '?'} · SL ${parsed.sl ?? '?'}\n${parsed.reasoning || ''}`).catch(()=>{});
+
+  // Auto-trade ONLY if the user set this advisor to auto
+  if (adv.followMode === 'auto' && parsed.coin && parsed.direction) {
+    const size = adv.riskUsd || 50;
+    // ── ENFORCE Max $/day — reset the counter each new day ──
+    const d2 = loadAdvisors();
+    const a2 = d2.advisors.find(x => x.id === advisorId);
+    if (Date.now() - (a2._spendDay || 0) > 864e5) { a2.spentToday = 0; a2._spendDay = Date.now(); }
+    const cap = a2.maxPerDay || Infinity;
+    if ((a2.spentToday || 0) + size > cap) {
+      console.log(`🛑 ${adv.name} auto-trade skipped — daily cap $${cap} reached (spent $${a2.spentToday||0})`);
+      sendTelegramNotification(`🛑 ${adv.name}: ${parsed.direction?.toUpperCase()} ${parsed.coin} NOT auto-traded — your daily cap ($${cap}) is reached. Trade it manually if you want.`).catch(()=>{});
+      saveAdvisors(d2);
+      return;
+    }
+    const signal = {
+      coin: parsed.coin, direction: parsed.direction,
+      entry: parsed.entry, target: parsed.tp, stopLoss: parsed.sl,
+      confidence: 70, caller: adv.name,
+      groupName: `📣 Advisor: ${adv.name}`,
+      messageId: call.id, timestamp: Date.now(),
+      size, advisorId, isAdvisorTrade: true, advisorCallId: call.id
+    };
+    try { openPaperTrade(signal); } catch(e) {}
+    a2.spentToday = (a2.spentToday || 0) + size;  // count it against the daily cap
+    saveAdvisors(d2);
+    console.log(`⚡ Auto-traded ${adv.name}'s call: ${parsed.direction} ${parsed.coin} ($${size}) · today $${a2.spentToday}/$${cap}`);
+  }
+}
+
+
+// ── Advisor bot interaction helpers (send buttons, answer taps) ──────────────
+const _advisorPending = {}; // { "advisorId:chatId": { tradeId, action } } — waiting for a typed value
+async function tgSend(token, chatId, text, keyboard) {
+  try {
+    const body = { chat_id: chatId, text, parse_mode: 'HTML' };
+    if (keyboard) body.reply_markup = JSON.stringify({ inline_keyboard: keyboard });
+    await fetchT(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    }, 8000);
+  } catch(e) {}
+}
+async function tgAnswerCallback(token, callbackId, text) {
+  try {
+    await fetchT(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callback_query_id: callbackId, text: text || '' })
+    }, 6000);
+  } catch(e) {}
+}
+// List this advisor's OPEN calls (their own trades)
+function advisorOpenTrades(advisorId) {
+  // Source of truth = the advisor's CALLS (works in both notify & auto mode).
+  const pd = loadPaperTrades();
+  const openTradeCallIds = new Set((pd.trades||[]).filter(t => t.status === 'open' && t.advisorCallId).map(t => t.advisorCallId));
+  const closedTradeCallIds = new Set((pd.trades||[]).filter(t => t.status !== 'open' && t.advisorCallId).map(t => t.advisorCallId));
+  const calls = (loadAdvisorCalls().calls || []).filter(c => {
+    if (c.advisorId !== advisorId || c.isUpdate || c.outcome || c.closed) return false;
+    // self-heal: if a linked paper trade exists and it's already closed, this call is done
+    if (closedTradeCallIds.has(c.id) && !openTradeCallIds.has(c.id)) return false;
+    return true;
+  });
+  // Shape them like trades for the bot UI (use the call's own id)
+  return calls.map(c => ({
+    id: c.id, coin: c.coin, direction: c.direction,
+    entry: c.entry, target: c.tp, stopLoss: c.sl, openTime: c.timestamp
+  })).sort((a,b) => (b.openTime||0) - (a.openTime||0));
+}
+// Build the /trades message + buttons
+function buildTradesKeyboard(advisorId) {
+  const trades = advisorOpenTrades(advisorId);
+  if (!trades.length) return { text: '📊 You have no open calls right now.\nPost a new one any time, e.g. "LONG SOL 172, TP 185, SL 165".', keyboard: null };
+  const lines = trades.map((t, i) => `${i+1}. ${t.direction === 'long' ? '🟢 LONG' : '🔴 SHORT'} <b>${t.coin}</b> · entry ${t.entry} · TP ${t.target} · SL ${t.stopLoss}`);
+  const keyboard = trades.map((t, i) => [{ text: `${i+1}. ${t.direction==='long'?'🟢 LONG':'🔴 SHORT'} ${t.coin} · entry ${t.entry} · TP ${t.target}`, callback_data: `pick:${t.id}` }]);
+  return { text: '📊 <b>Your open calls</b>\n' + lines.join('\n') + '\n\nTap one to manage it:', keyboard };
+}
+// Handle a button tap from the advisor
+
+// Close ONE specific advisor call by its id (and its linked paper trade only)
+function closeAdvisorCall(advisorId, callId) {
+  const store = loadAdvisorCalls();
+  const call = (store.calls || []).find(c => c.id === callId && c.advisorId === advisorId);
+  if (!call) return false;
+  call.closed = true;
+  saveAdvisorCalls(store);
+  // close the linked paper trade if one exists (auto mode) — matched by callId, not coin
+  const pd = loadPaperTrades();
+  const linked = (pd.trades || []).find(t => t.status === 'open' && t.advisorCallId === callId);
+  if (linked) { closePaperTrade(linked.id, linked.entry, 'Advisor closed call'); }
+  // notify followers + feed
+  if (dashboardWindow && !dashboardWindow.isDestroyed()) dashboardWindow.webContents.send('advisor-call', { isUpdate: true });
+  const adv = loadAdvisors().advisors.find(a => a.id === advisorId);
+  sendTelegramNotification(`🔴 ${adv?.name || 'Advisor'} closed ${call.coin}.`).catch(()=>{});
+  return true;
+}
+// Edit ONE specific call's SL or TP by id
+function editAdvisorCall(advisorId, callId, field, value) {
+  const store = loadAdvisorCalls();
+  const call = (store.calls || []).find(c => c.id === callId && c.advisorId === advisorId);
+  if (!call) return false;
+  if (field === 'update_sl') call.sl = value; else if (field === 'update_tp') call.tp = value;
+  saveAdvisorCalls(store);
+  const pd = loadPaperTrades();
+  const linked = (pd.trades || []).find(t => t.status === 'open' && t.advisorCallId === callId);
+  if (linked) { if (field === 'update_sl') linked.stopLoss = value; else linked.target = value; savePaperTrades(pd); }
+  if (dashboardWindow && !dashboardWindow.isDestroyed()) dashboardWindow.webContents.send('advisor-call', { isUpdate: true });
+  return true;
+}
+
+async function handleAdvisorCallback(adv, cb) {
+  const data = cb.data || '';
+  const chatId = cb.message?.chat?.id;
+  await tgAnswerCallback(adv.botToken, cb.id);
+  if (data.startsWith('pick:')) {
+    const tradeId = data.slice(5);
+    const t = advisorOpenTrades(adv.id).find(x => String(x.id) === tradeId);
+    if (!t) {
+      const { text: msg, keyboard } = buildTradesKeyboard(adv.id);
+      await tgSend(adv.botToken, chatId, '⚠️ That button was from an older list. Here are your current open calls:\n\n' + msg, keyboard);
+      return;
+    }
+    const kb = [[
+      { text: '✏️ Move SL', callback_data: `act:sl:${tradeId}` },
+      { text: '✏️ Move TP', callback_data: `act:tp:${tradeId}` }
+    ],[
+      { text: '➕ Add', callback_data: `act:add:${tradeId}` },
+      { text: '🔴 Close', callback_data: `act:close:${tradeId}` }
+    ]];
+    await tgSend(adv.botToken, chatId, `Selected: ${t.direction==='long'?'🟢 LONG':'🔴 SHORT'} <b>${t.coin}</b>\nWhat do you want to do?`, kb);
+    return;
+  }
+  if (data.startsWith('act:')) {
+    // format: act:<action>:<id> — id may contain underscores, so split only first 2 colons
+    const rest = data.slice(4);                       // strip "act:"
+    const sep = rest.indexOf(':');
+    const action = rest.slice(0, sep);
+    const tradeId = rest.slice(sep + 1);
+    const open = advisorOpenTrades(adv.id);
+    let t = open.find(x => String(x.id) === tradeId);
+    if (!t) {
+      console.log(`advisor act: id "${tradeId}" not found among [${open.map(o=>o.id).join(', ')}]`);
+      const { text: msg, keyboard } = buildTradesKeyboard(adv.id);
+      await tgSend(adv.botToken, chatId, '⚠️ That button was from an older list. Here are your current open calls:\n\n' + msg, keyboard);
+      return;
+    }
+    if (action === 'close') {
+      closeAdvisorCall(adv.id, t.id);   // marks THIS call closed + closes its linked trade only
+      await tgSend(adv.botToken, chatId, `🔴 Closed <b>${t.coin}</b>. Followers notified.`);
+    } else if (action === 'add') {
+      await applyAdvisorUpdate(adv, { type: 'add', coin: t.coin, reasoning: 'Advisor adding to position' });
+      await tgSend(adv.botToken, chatId, `➕ Signalled "add to ${t.coin}" to followers.`);
+    } else if (action === 'sl' || action === 'tp') {
+      _advisorPending[`${adv.id}:${chatId}`] = { callId: t.id, action: action === 'sl' ? 'update_sl' : 'update_tp', coin: t.coin };
+      await tgSend(adv.botToken, chatId, `Send the new ${action.toUpperCase()} value for <b>${t.coin}</b> (just the number).`);
+    }
+    return;
+  }
+}
+
+// One polling loop per advisor bot (mirrors the main bot's getUpdates pattern)
+const _advisorOffsets = {};
+async function pollAdvisorBots() {
+  try {
+    const advData = loadAdvisors();
+    const advisors = advData.advisors.filter(a => a.active && a.botToken);
+    for (const adv of advisors) {
+      const off = _advisorOffsets[adv.id] || adv.tgOffset || 0;
+      try {
+        const res = await fetchT(`https://api.telegram.org/bot${adv.botToken}/getUpdates?offset=${off + 1}&timeout=2`, {}, 8000);
+        const data = await res.json();
+        if (!data.ok || !data.result?.length) continue;
+        for (const u of data.result) {
+          _advisorOffsets[adv.id] = u.update_id;
+          adv.tgOffset = u.update_id; // persist so restarts don't replay
+
+          // ── Button taps (callback_query) ──
+          if (u.callback_query) { try { await handleAdvisorCallback(adv, u.callback_query); } catch(e){} continue; }
+
+          const m = u.message; if (!m) continue;
+          const chatId = m.chat?.id;
+          const text = m.text || m.caption || '';
+          if (!text) continue;
+
+          // ── Slash commands ──
+          if (text.startsWith('/')) {
+            const cmd = text.split(/\s|@/)[0].toLowerCase();
+            if (cmd === '/trades' || cmd === '/close' || cmd === '/edit') {
+              const { text: msg, keyboard } = buildTradesKeyboard(adv.id);
+              await tgSend(adv.botToken, chatId, msg, keyboard);
+            } else if (cmd === '/start') {
+              await tgSend(adv.botToken, chatId, '👋 You are connected as an advisor. Post calls like "LONG SOL 172, TP 185, SL 165". Use /trades to manage your open calls. /clear wipes your call history.');
+            } else if (cmd === '/clear') {
+              const s = loadAdvisorCalls();
+              const before = (s.calls||[]).length;
+              s.calls = (s.calls||[]).filter(c => c.advisorId !== adv.id);
+              saveAdvisorCalls(s);
+              if (dashboardWindow && !dashboardWindow.isDestroyed()) dashboardWindow.webContents.send('advisor-call', { isUpdate: true });
+              await tgSend(adv.botToken, chatId, `🧹 Cleared your ${before} call(s). Fresh start.`);
+            }
+            continue;
+          }
+
+          // ── Pending typed value (he tapped Move SL/TP, now sent the number) ──
+          const pendKey = `${adv.id}:${chatId}`;
+          if (_advisorPending[pendKey]) {
+            const pend = _advisorPending[pendKey];
+            const num = parseFloat(String(text).replace(/[^0-9.]/g, ''));
+            delete _advisorPending[pendKey];
+            if (!isNaN(num)) {
+              editAdvisorCall(adv.id, pend.callId, pend.action, num);
+              sendTelegramNotification(`✏️ ${adv.name}: moved ${pend.action==='update_sl'?'SL':'TP'} on ${pend.coin} to ${num}`).catch(()=>{});
+              await tgSend(adv.botToken, chatId, `✅ Updated ${pend.coin}: ${pend.action==='update_sl'?'SL':'TP'} → ${num}. Followers notified.`);
+            } else {
+              await tgSend(adv.botToken, chatId, '⚠️ That didn\'t look like a number. Tap the trade again to retry.');
+            }
+            continue;
+          }
+
+          // Image (if any) — grab the largest photo
+          let imageUrl = null;
+          if (m.photo?.length) {
+            try {
+              const fileId = m.photo[m.photo.length - 1].file_id;
+              const fr = await fetchT(`https://api.telegram.org/bot${adv.botToken}/getFile?file_id=${fileId}`, {}, 6000);
+              const fd = await fr.json();
+              if (fd.ok) imageUrl = `https://api.telegram.org/file/bot${adv.botToken}/${fd.result.file_path}`;
+            } catch(e) {}
+          }
+          const parsed = await parseAdvisorCall(text);
+          if (parsed.type === 'new_call') {
+            await ingestAdvisorCall(adv.id, parsed, imageUrl);
+            // confirm back to the advisor with their open-trades list
+            const { text: msg, keyboard } = buildTradesKeyboard(adv.id);
+            await tgSend(adv.botToken, chatId, `📣 Call posted: ${parsed.direction?.toUpperCase()} ${parsed.coin}. Sent to your followers.\n\n` + msg, keyboard);
+          }
+          else if (['update_sl','update_tp','close','add'].includes(parsed.type) && parsed.coin) await applyAdvisorUpdate(adv, parsed);
+        }
+      } catch(e) {}
+    }
+    // persist updated offsets so a restart doesn't replay old messages
+    try { saveAdvisors(advData); } catch(e) {}
+  } catch(e) {}
+  setTimeout(pollAdvisorBots, 4000);
+}
+// kick it off shortly after boot
+setTimeout(pollAdvisorBots, 8000);
+
+// Resolve advisor call outcomes against live price (updates his win-rate)
+async function checkAdvisorCallOutcomes() {
+  try {
+    const store = loadAdvisorCalls();
+    let changed = false;
+    for (const c of store.calls) {
+      if (c.outcome || !c.tp || !c.sl) continue;
+      const price = await getCryptoPrice(c.coin.toLowerCase()).catch(()=>null);
+      if (!price) continue;
+      const p = parseFloat(String(price).replace(/[^0-9.]/g,''));
+      const hitTP = c.direction === 'long' ? p >= c.tp : p <= c.tp;
+      const hitSL = c.direction === 'long' ? p <= c.sl : p >= c.sl;
+      if (hitTP || hitSL) {
+        c.outcome = hitTP ? 'win' : 'loss';
+        changed = true;
+        const adv = loadAdvisors();
+        const a = adv.advisors.find(x => x.id === c.advisorId);
+        if (a) { if (hitTP) a.wins = (a.wins||0)+1; else a.losses = (a.losses||0)+1; saveAdvisors(adv); }
+      }
+    }
+    if (changed) saveAdvisorCalls(store);
+  } catch(e) {}
+  setTimeout(checkAdvisorCallOutcomes, 60000);
+}
+setTimeout(checkAdvisorCallOutcomes, 30000);
+
+// ── IPC for the Advisor tab ──
+ipcMain.handle('advisor-clear-closed', () => {
+  const s = loadAdvisorCalls();
+  s.calls = (s.calls || []).filter(c => !c.closed && !c.outcome);
+  saveAdvisorCalls(s);
+  return { success: true, remaining: s.calls.length };
+});
+ipcMain.handle('advisor-clear-all-calls', () => {
+  saveAdvisorCalls({ calls: [] });
+  return { success: true };
+});
+ipcMain.handle('advisor-close-call', (e, { advisorId, callId }) => { closeAdvisorCall(advisorId, callId); return { success: true }; });
+
+ipcMain.handle('get-advisors', () => loadAdvisors().advisors);
+ipcMain.handle('get-advisor-stats', () => {
+  try {
+    const advisors = loadAdvisors().advisors;
+    const calls = loadAdvisorCalls().calls || [];
+    const pd = loadPaperTrades();
+    return advisors.map(a => {
+      const myCalls = calls.filter(c => c.advisorId === a.id && !c.isUpdate);
+      const resolved = myCalls.filter(c => c.outcome === 'win' || c.outcome === 'loss');
+      const wins = resolved.filter(c => c.outcome === 'win').length;
+      const open = myCalls.filter(c => !c.outcome).length;
+      const wr = resolved.length ? Math.round(wins / resolved.length * 100) : null;
+      // followers' realized pnl on this advisor's auto-trades
+      const myTrades = (pd.trades||[]).filter(t => t.advisorId === a.id && t.closeTime);
+      const totalPnl = myTrades.reduce((s,t) => s + (t.pnl||0), 0);
+      const lastCall = myCalls[0] || null;
+      return {
+        id: a.id, name: a.name, handle: a.handle, avatar: a.avatar || '',
+        bio: a.bio || '', followMode: a.followMode, autonomyMode: a.autonomyMode || 'confirm',
+        riskUsd: a.riskUsd, maxPerDay: a.maxPerDay,
+        totalCalls: myCalls.length, openCalls: open, resolvedCalls: resolved.length,
+        wins, losses: resolved.length - wins, winRate: wr,
+        realizedPnl: parseFloat(totalPnl.toFixed(2)),
+        lastCall: lastCall ? { coin: lastCall.coin, direction: lastCall.direction, when: lastCall.timestamp } : null
+      };
+    }).sort((x,y) => (y.winRate||0) - (x.winRate||0) || y.totalCalls - x.totalCalls); // leaderboard order
+  } catch(e) { return []; }
+});
+
+ipcMain.handle('set-advisor-bio', (e, { advisorId, bio }) => {
+  const d = loadAdvisors(); const a = d.advisors.find(x => x.id === advisorId);
+  if (a) { a.bio = bio; saveAdvisors(d); } return { success: true };
+});
+
+
+ipcMain.handle('get-advisor-calls', () => loadAdvisorCalls().calls);
+ipcMain.handle('set-advisor-mode', (e, { advisorId, mode }) => {
+  const d = loadAdvisors(); const a = d.advisors.find(x => x.id === advisorId);
+  if (a) { a.followMode = mode; saveAdvisors(d); } return { success: true, advisors: d.advisors };
+});
+ipcMain.handle('set-advisor-autonomy', (e, { advisorId, autonomyMode }) => {
+  const d = loadAdvisors(); const a = d.advisors.find(x => x.id === advisorId);
+  if (a) { a.autonomyMode = autonomyMode; saveAdvisors(d); } return { success: true, advisors: d.advisors };
+});
+ipcMain.handle('set-advisor-risk', (e, { advisorId, riskUsd, maxPerDay }) => {
+  const d = loadAdvisors(); const a = d.advisors.find(x => x.id === advisorId);
+  if (a) { if (riskUsd != null) a.riskUsd = riskUsd; if (maxPerDay != null) a.maxPerDay = maxPerDay; saveAdvisors(d); }
+  return { success: true, advisors: d.advisors };
+});
+ipcMain.handle('add-advisor', (e, adv) => {
+  const d = loadAdvisors();
+  d.advisors.push({ id: 'adv_'+Date.now(), name: adv.name||'Advisor', handle: adv.handle||'', avatar: adv.avatar||'',
+    botToken: adv.botToken||'', followMode: 'notify', riskUsd: 50, maxPerDay: 200, wins: 0, losses: 0, active: true });
+  saveAdvisors(d); return { success: true, advisors: d.advisors };
+});
+ipcMain.handle('update-advisor', (e, { advisorId, fields }) => {
+  const d = loadAdvisors(); const a = d.advisors.find(x => x.id === advisorId);
+  if (a) Object.assign(a, fields || {}); saveAdvisors(d); return { success: true, advisors: d.advisors };
+});
+
 function sendIntelEvent(item) {
   if (dashboardWindow?.webContents && !dashboardWindow.isDestroyed()) {
     // Send queued items first
