@@ -3739,6 +3739,14 @@ function createDashboardWindow() {
 }
 
 // ─── IPC HANDLERS ──────────────────────────────────────────────────────────
+
+// Pixel pet mode — resize the floating window so the little buddy can wander
+let _preWaifuBounds = null;
+ipcMain.on('pixel-mode', (e, on) => {
+  // Keep the window the same size — resizing breaks Live2D positioning on exit.
+  // The pixel pet wanders within the existing window. (No-op kept for future use.)
+});
+
 ipcMain.on('move-waifu', (e, { dx, dy }) => {
   if (!mainWindow) return;
   const [x, y] = mainWindow.getPosition();
@@ -13671,7 +13679,7 @@ async function parseAdvisorCall(text) {
   try {
     const res = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001', max_tokens: 320,
-      messages: [{ role: 'user', content: `An advisor posted this in their trade-calls channel. Classify it and extract data.\n\nPost: "${text}"\n\nTypes:\n- "new_call": opening a new trade (has coin + direction)\n- "update_sl": move/change stop loss on an existing trade\n- "update_tp": move/change take profit on an existing trade\n- "close": exit/close an existing trade now\n- "add": add to / scale into an existing position\n- "chatter": not actionable\n\nReply ONLY JSON: {"type":"new_call|update_sl|update_tp|close|add|chatter","coin":"SYMBOL_or_null","direction":"long|short|null","entry":number_or_null,"tp":number_or_null,"sl":number_or_null,"reasoning":"their words, trimmed"}. For updates/close/add, coin is required to know which trade.` }]
+      messages: [{ role: 'user', content: `An advisor posted this in their trade-calls channel. Classify it and extract data.\n\nPost: "${text}"\n\nTypes:\n- "new_call": opening a new trade (has coin + direction)\n- "update_sl": move/change stop loss on an existing trade\n- "update_tp": move/change take profit on an existing trade\n- "close": exit/close an existing trade now\n- "add": add to / scale into an existing position\n- "chatter": not actionable\n\nReply ONLY JSON: {"type":"new_call|update_sl|update_tp|close|add|chatter","coin":"SYMBOL_or_null","direction":"long|short|null","entry":number_or_null,"marketEntry":true_if_they_said_now/market/current/here_else_false,"tp":number_or_null,"sl":number_or_null,"reasoning":"their words, trimmed"}. If they say "entry now", "market", "current", or "here", set entry:null and marketEntry:true. For updates/close/add, coin is required.` }]
     });
     const j = JSON.parse(res.content[0].text.match(/\{[\s\S]*\}/)[0]);
     j.isCall = j.type === 'new_call'; // backward-compat
@@ -13744,6 +13752,15 @@ ipcMain.handle('advisor-confirm-action', async (e, { tradeId, action, sl, tp }) 
 async function ingestAdvisorCall(advisorId, parsed, imageUrl) {
   const adv = loadAdvisors().advisors.find(a => a.id === advisorId);
   if (!adv || !parsed.isCall) return;
+
+  // "entry now"/market/current → fetch live price and use it as the entry
+  if ((parsed.entry == null || parsed.marketEntry) && parsed.coin) {
+    try {
+      const px = await getCryptoPrice(String(parsed.coin).toLowerCase());
+      const n = parseFloat(String(px).replace(/[^0-9.]/g, ''));
+      if (!isNaN(n) && n > 0) parsed.entry = n;
+    } catch(e) {}
+  }
 
   // ── DEDUP: ignore an identical call from the same advisor within 10 minutes ──
   // (prevents reposts / double-polls from creating duplicate trades — critical for auto-trade)
@@ -13851,8 +13868,8 @@ function advisorOpenTrades(advisorId) {
 function buildTradesKeyboard(advisorId) {
   const trades = advisorOpenTrades(advisorId);
   if (!trades.length) return { text: '📊 You have no open calls right now.\nPost a new one any time, e.g. "LONG SOL 172, TP 185, SL 165".', keyboard: null };
-  const lines = trades.map((t, i) => `${i+1}. ${t.direction === 'long' ? '🟢 LONG' : '🔴 SHORT'} <b>${t.coin}</b> · entry ${t.entry} · TP ${t.target} · SL ${t.stopLoss}`);
-  const keyboard = trades.map((t, i) => [{ text: `${i+1}. ${t.direction==='long'?'🟢 LONG':'🔴 SHORT'} ${t.coin} · entry ${t.entry} · TP ${t.target}`, callback_data: `pick:${t.id}` }]);
+  const lines = trades.map((t, i) => `${i+1}. ${t.direction === 'long' ? '🟢 LONG' : '🔴 SHORT'} <b>${t.coin}</b> · entry ${t.entry ?? 'market'} · TP ${t.target ?? '—'} · SL ${t.stopLoss ?? '—'}`);
+  const keyboard = trades.map((t, i) => [{ text: `${i+1}. ${t.direction==='long'?'🟢 LONG':'🔴 SHORT'} ${t.coin} · entry ${t.entry ?? 'mkt'} · TP ${t.target ?? '—'}`, callback_data: `pick:${t.id}` }]);
   return { text: '📊 <b>Your open calls</b>\n' + lines.join('\n') + '\n\nTap one to manage it:', keyboard };
 }
 // Handle a button tap from the advisor
@@ -14066,6 +14083,57 @@ ipcMain.handle('advisor-clear-all-calls', () => {
 ipcMain.handle('advisor-close-call', (e, { advisorId, callId }) => { closeAdvisorCall(advisorId, callId); return { success: true }; });
 
 ipcMain.handle('get-advisors', () => loadAdvisors().advisors);
+// ── Advisor trades (open + history) with LIVE P&L, for the per-advisor view ──
+async function computeTradePnl(t) {
+  let cur = t.entry;
+  try {
+    const px = await getCryptoPrice(String(t.coin).toLowerCase());
+    const n = parseFloat(String(px).replace(/[^0-9.]/g,''));
+    if (!isNaN(n) && n>0) cur = n;
+  } catch(e) {}
+  const lev = t.leverage || 1;
+  const diff = t.direction === 'long' ? (cur - t.entry) : (t.entry - cur);
+  const pnlPct = t.entry ? (diff / t.entry * lev * 100) : 0;
+  const pnlUsd = t.entry ? (t.size * diff / t.entry * lev) : 0;
+  // progress toward target / stop
+  let toTarget = null, toStop = null;
+  if (t.target && t.entry) { const span = Math.abs(t.target - t.entry); toTarget = span ? Math.max(0, Math.min(100, (Math.abs(cur - t.entry)/span)*100 * (diff>=0?1:0))) : null; }
+  return { currentPrice: cur, pnlPct: +pnlPct.toFixed(2), pnlUsd: +pnlUsd.toFixed(2),
+    toTargetPct: toTarget!=null?+toTarget.toFixed(0):null };
+}
+ipcMain.handle('get-advisor-trades', async (e, { advisorId, history } = {}) => {
+  const pd = loadPaperTrades();
+  let trades = (pd.trades || []).filter(t => t.advisorId === advisorId);
+  trades = trades.filter(t => history ? t.status !== 'open' : t.status === 'open');
+  trades.sort((a,b) => (b.openTime||0) - (a.openTime||0));
+  // attach live pnl to open trades
+  const out = [];
+  for (const t of trades) {
+    const base = { id: t.id, coin: t.coin, direction: t.direction, entry: t.entry,
+      target: t.target, stopLoss: t.stopLoss, size: t.size, leverage: t.leverage||1,
+      openTime: t.openTime, status: t.status, closeTime: t.closeTime || null,
+      closePrice: t.closePrice || null, advisorCallId: t.advisorCallId || null };
+    if (t.status === 'open') Object.assign(base, await computeTradePnl(t));
+    else base.pnlUsd = t.pnl || 0;
+    out.push(base);
+  }
+  return out;
+});
+// User edits/closes THEIR OWN copied trade (independent of advisor)
+ipcMain.handle('user-edit-trade', async (e, { tradeId, action, value }) => {
+  const pd = loadPaperTrades();
+  const t = (pd.trades||[]).find(x => x.id === tradeId && x.status === 'open');
+  if (!t) return { success:false, error:'not_open' };
+  if (action === 'close') {
+    const px = parseFloat(String(await getCryptoPrice(t.coin.toLowerCase()).catch(()=>t.entry)).replace(/[^0-9.]/g,'')) || t.entry;
+    await closePaperTrade(tradeId, px, 'Closed by you');
+    return { success:true };
+  }
+  if (action === 'sl') { t.stopLoss = parseFloat(value); savePaperTrades(pd); return { success:true }; }
+  if (action === 'tp') { t.target = parseFloat(value); savePaperTrades(pd); return { success:true }; }
+  return { success:false };
+});
+
 ipcMain.handle('get-advisor-stats', () => {
   try {
     const advisors = loadAdvisors().advisors;

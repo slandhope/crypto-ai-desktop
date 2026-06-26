@@ -5823,8 +5823,18 @@ async function renderAdvisors() {
           <button class="adv-auton" data-adv="${a.id}" data-auton="confirm" style="flex:1;padding:7px;border-radius:8px;font-size:10px;cursor:pointer;border:1px solid ${(a.autonomyMode||'confirm')==='confirm'?'var(--accent)':'var(--border)'};background:${(a.autonomyMode||'confirm')==='confirm'?'var(--accent)':'var(--bg3)'};color:${(a.autonomyMode||'confirm')==='confirm'?'#fff':'var(--text2)'};">✋ Ask me first</button>
         </div>
       </div>
+      <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
+        <div style="display:flex;gap:8px;">
+          <button class="adv-trades-btn" data-adv="${a.id}" style="flex:1;padding:8px;border-radius:9px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text);">📈 Current Trades${a.openCalls?` (${a.openCalls})`:''}</button>
+          <button class="adv-history-btn" data-adv="${a.id}" style="flex:1;padding:8px;border-radius:9px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text2);">🕓 History</button>
+        </div>
+        <div class="adv-trades-panel" id="adv-trades-${a.id}" style="display:none;margin-top:10px;"></div>
+      </div>
     </div>`
   }).join('')
+  // wire trades + history buttons
+  el.querySelectorAll('.adv-trades-btn').forEach(b => b.onclick = () => toggleAdvisorTrades(b.dataset.adv, false))
+  el.querySelectorAll('.adv-history-btn').forEach(b => b.onclick = () => toggleAdvisorTrades(b.dataset.adv, true))
   // wire mode buttons
   el.querySelectorAll('.adv-mode').forEach(b => b.onclick = async () => {
     await ipcRenderer.invoke('set-advisor-mode', { advisorId: b.dataset.adv, mode: b.dataset.mode }).catch(()=>{})
@@ -5870,7 +5880,7 @@ async function renderCalls() {
       ${c.image?`<img src="${c.image}" style="width:100%;border-radius:10px;margin-bottom:8px;max-height:240px;object-fit:cover;">`:''}
       <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:10px;">${c.reasoning||''}</div>
       <div style="display:flex;gap:8px;">
-        ${c.entry?`<div style="flex:1;background:var(--bg3);border-radius:8px;padding:7px;text-align:center;"><div style="font-size:9px;color:var(--text3);">ENTRY</div><div style="font-family:'JetBrains Mono',monospace;font-size:13px;">${c.entry}</div></div>`:''}
+        <div style="flex:1;background:var(--bg3);border-radius:8px;padding:7px;text-align:center;"><div style="font-size:9px;color:var(--text3);">ENTRY</div><div style="font-family:'JetBrains Mono',monospace;font-size:13px;">${c.entry ?? 'market'}</div></div>
         ${c.tp?`<div style="flex:1;background:var(--bg3);border-radius:8px;padding:7px;text-align:center;"><div style="font-size:9px;color:var(--text3);">TARGET</div><div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--green);">${c.tp}</div></div>`:''}
         ${c.sl?`<div style="flex:1;background:var(--bg3);border-radius:8px;padding:7px;text-align:center;"><div style="font-size:9px;color:var(--text3);">STOP</div><div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--red);">${c.sl}</div></div>`:''}
       </div>
@@ -5901,6 +5911,66 @@ ipcRenderer.on('advisor-confirm', (e, d) => {
 })
 
 // live update when a new call arrives
+
+// ── Per-advisor trades view (current + history) with live P&L + user edit ──
+let _advTradesTimer = null
+async function toggleAdvisorTrades(advisorId, history) {
+  const panel = document.getElementById('adv-trades-'+advisorId)
+  if (!panel) return
+  const isOpen = panel.style.display !== 'none' && panel.dataset.history === String(history)
+  // close any other open panels
+  document.querySelectorAll('.adv-trades-panel').forEach(p => { if (p!==panel) p.style.display='none' })
+  if (isOpen) { panel.style.display='none'; if(_advTradesTimer){clearInterval(_advTradesTimer);_advTradesTimer=null} return }
+  panel.style.display='block'; panel.dataset.history=String(history)
+  await renderAdvisorTrades(advisorId, history)
+  // live refresh open trades every 6s
+  if (_advTradesTimer) clearInterval(_advTradesTimer)
+  if (!history) _advTradesTimer = setInterval(() => renderAdvisorTrades(advisorId, false), 6000)
+}
+async function renderAdvisorTrades(advisorId, history) {
+  const panel = document.getElementById('adv-trades-'+advisorId); if (!panel) return
+  const trades = await ipcRenderer.invoke('get-advisor-trades', { advisorId, history }).catch(()=>[])
+  if (!trades.length) { panel.innerHTML = `<div style="color:var(--text3);font-size:11px;padding:10px;text-align:center;">${history?'No past trades yet.':'No open trades right now.'}</div>`; return }
+  panel.innerHTML = trades.map(t => {
+    const up = (t.pnlUsd||0) >= 0
+    const pnlColor = up ? 'var(--green)' : 'var(--red)'
+    const dirC = t.direction==='long'?'var(--green)':'var(--red)'
+    const live = t.status==='open'
+    const pnlStr = `${up?'+':''}$${Math.abs(t.pnlUsd||0).toFixed(2)} (${up?'+':''}${(t.pnlPct||0).toFixed(1)}%)`
+    const histStr = `${(t.pnlUsd||0)>=0?'+':''}$${(t.pnlUsd||0).toFixed(2)}`
+    return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-weight:600;font-size:13px;"><span style="color:${dirC};">${(t.direction||'').toUpperCase()}</span> ${t.coin} ${t.leverage>1?`<span style="font-size:10px;color:var(--text3);">${t.leverage}x</span>`:''}</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:${live?pnlColor:((t.pnlUsd||0)>=0?'var(--green)':'var(--red)')};">${live?pnlStr:histStr}</div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:${live?'10':'0'}px;">
+        <div style="flex:1;background:var(--bg2);border-radius:7px;padding:6px;text-align:center;"><div style="font-size:8px;color:var(--text3);">ENTRY</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;">${t.entry ?? 'mkt'}</div></div>
+        <div style="flex:1;background:var(--bg2);border-radius:7px;padding:6px;text-align:center;"><div style="font-size:8px;color:var(--text3);">${live?'NOW':'CLOSED'}</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);">${live?(t.currentPrice??'—'):(t.closePrice??'—')}</div></div>
+        <div style="flex:1;background:var(--bg2);border-radius:7px;padding:6px;text-align:center;"><div style="font-size:8px;color:var(--text3);">TARGET</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--green);">${t.target ?? '—'}</div></div>
+        <div style="flex:1;background:var(--bg2);border-radius:7px;padding:6px;text-align:center;"><div style="font-size:8px;color:var(--text3);">STOP</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--red);">${t.stopLoss ?? '—'}</div></div>
+      </div>
+      ${live ? `<div style="display:flex;gap:6px;">
+        <button class="ut-edit" data-id="${t.id}" data-act="sl" style="flex:1;padding:7px;border-radius:8px;font-size:10px;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--text2);">✏️ SL</button>
+        <button class="ut-edit" data-id="${t.id}" data-act="tp" style="flex:1;padding:7px;border-radius:8px;font-size:10px;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--text2);">✏️ TP</button>
+        <button class="ut-edit" data-id="${t.id}" data-act="close" style="flex:1;padding:7px;border-radius:8px;font-size:10px;cursor:pointer;border:1px solid var(--red);background:rgba(255,90,95,.12);color:var(--red);">🔴 Close</button>
+      </div>` : `<div style="font-size:9px;color:var(--text3);margin-top:6px;">${t.closeTime?new Date(t.closeTime).toLocaleString():''}</div>`}
+    </div>`
+  }).join('')
+  // wire user trade edits
+  panel.querySelectorAll('.ut-edit').forEach(b => b.onclick = async () => {
+    const id = b.dataset.id, act = b.dataset.act
+    if (act === 'close') {
+      if (!confirm('Close this trade?')) return
+      await ipcRenderer.invoke('user-edit-trade', { tradeId:id, action:'close' }).catch(()=>{})
+    } else {
+      const v = prompt(`New ${act.toUpperCase()} value:`)
+      if (v==null||v==='') return
+      await ipcRenderer.invoke('user-edit-trade', { tradeId:id, action:act, value:v }).catch(()=>{})
+    }
+    renderAdvisorTrades(advisorId, false)
+  })
+}
+
 ipcRenderer.on('advisor-call', () => { if (document.getElementById('page-7')?.style.display !== 'none') renderCalls() })
 
 // ── Study Timer ──────────────────────────────────────────────────────────

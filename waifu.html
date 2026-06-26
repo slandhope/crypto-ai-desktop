@@ -8,168 +8,112 @@
     body { background:transparent !important; overflow:hidden; }
     canvas { display:block; background:transparent !important; position:fixed; bottom:0; right:0; }
 
-    /* ── Control buttons ── */
     .btn {
       position:fixed; width:36px; height:36px; border-radius:50%;
       display:flex; align-items:center; justify-content:center;
       cursor:pointer; font-size:15px; z-index:100;
-      transition: transform 0.2s, box-shadow 0.2s;
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      transition:all 0.2s; backdrop-filter:blur(8px);
     }
-    .btn:hover { transform: scale(1.14); }
+    .btn:hover { transform:scale(1.12); }
 
-    #history-btn   { bottom:580px; left:10px; background:rgba(255,200,0,0.14);   border:1px solid rgba(255,200,0,0.32); }
-    #history-btn:hover   { box-shadow: 0 0 16px rgba(255,200,0,0.28); }
-    #chat-btn      { bottom:530px; left:10px; background:rgba(139,124,255,0.18); border:1px solid rgba(139,124,255,0.35); }
-    #chat-btn:hover      { box-shadow: 0 0 16px rgba(139,124,255,0.35); }
-    #her-mute-btn  { bottom:480px; left:10px; background:rgba(52,211,153,0.15);  border:1px solid rgba(52,211,153,0.3); }
-    #her-mute-btn:hover  { box-shadow: 0 0 16px rgba(52,211,153,0.28); }
-    #mic-mute-btn  { bottom:430px; left:10px; background:rgba(251,191,36,0.15);  border:1px solid rgba(251,191,36,0.3); }
-    #mic-mute-btn:hover  { box-shadow: 0 0 16px rgba(251,191,36,0.28); }
-    #webcam-btn    { bottom:380px; left:10px; background:rgba(255,140,0,0.15);   border:1px solid rgba(255,140,0,0.3); }
-    #webcam-btn:hover    { box-shadow: 0 0 16px rgba(255,140,0,0.28); }
-    #dashboard-btn { bottom:330px; left:10px; background:rgba(139,124,255,0.18); border:1px solid rgba(139,124,255,0.35); }
-    #dashboard-btn:hover { box-shadow: 0 0 16px rgba(139,124,255,0.35); }
-    #care-btn      { bottom:385px; left:10px; background:rgba(243,168,208,0.18); border:1px solid rgba(243,168,208,0.42); }
-    #care-btn:hover      { box-shadow: 0 0 18px rgba(243,168,208,0.38); }
+    #history-btn   { bottom:580px; left:10px; background:rgba(255,200,0,0.15);  border:1px solid rgba(255,200,0,0.3); }
+    #chat-btn      { bottom:530px; left:10px; background:rgba(0,212,255,0.15);  border:1px solid rgba(0,212,255,0.3); }
+    #her-mute-btn  { bottom:480px; left:10px; background:rgba(52,211,153,0.15); border:1px solid rgba(52,211,153,0.3); }
+    #mic-mute-btn  { bottom:430px; left:10px; background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.3); }
+    #webcam-btn    { bottom:380px; left:10px; background:rgba(255,140,0,0.15);  border:1px solid rgba(255,140,0,0.3); }
+    #dashboard-btn { bottom:330px; left:10px; background:rgba(150,0,255,0.15);  border:1px solid rgba(150,0,255,0.3); }
+    #care-btn { bottom:385px; left:10px; background:rgba(240,168,208,0.18); border:1px solid rgba(240,168,208,0.4); }
 
-    #her-mute-btn.muted { background:rgba(251,113,133,0.2); border-color:rgba(251,113,133,0.42); }
-    #mic-mute-btn.muted { background:rgba(251,113,133,0.2); border-color:rgba(251,113,133,0.42); }
-    #webcam-btn.active  { background:rgba(52,211,153,0.2);  border-color:rgba(52,211,153,0.45); }
+    #her-mute-btn.muted { background:rgba(248,113,113,0.2); border-color:rgba(248,113,113,0.4); }
+    #mic-mute-btn.muted { background:rgba(248,113,113,0.2); border-color:rgba(248,113,113,0.4); }
+    #webcam-btn.active  { background:rgba(52,211,153,0.2);  border-color:rgba(52,211,153,0.4); }
 
-    /* ── Chat panel ── */
     #chat-panel {
       position:fixed; bottom:530px; left:54px; width:260px;
-      background: linear-gradient(160deg, rgba(22,27,46,0.88), rgba(15,19,32,0.93));
-      border: 1px solid rgba(139,124,255,0.25);
+      background:rgba(4,7,26,0.96); border:1px solid rgba(0,212,255,0.2);
       padding:10px; display:none; flex-direction:column; gap:8px;
-      z-index:100; border-radius:18px;
-      backdrop-filter: blur(22px);
-      -webkit-backdrop-filter: blur(22px);
-      box-shadow: 0 14px 44px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05);
+      z-index:100; border-radius:10px; backdrop-filter:blur(20px);
+      box-shadow:0 8px 32px rgba(0,0,0,0.4);
     }
     #chat-panel.open { display:flex; }
     #input-row { display:flex; gap:6px; }
     #user-input {
-      flex:1; background: rgba(139,124,255,0.08);
-      border: 1px solid rgba(139,124,255,0.2); border-radius:11px;
-      color: #f4f5fb; font-family: 'Outfit', system-ui; font-size:12px;
-      padding:8px 11px; outline:none; transition: border-color 0.2s, box-shadow 0.2s;
+      flex:1; background:rgba(0,212,255,0.06);
+      border:1px solid rgba(0,212,255,0.2); border-radius:6px;
+      color:#e0f4ff; font-family:-apple-system,sans-serif; font-size:12px;
+      padding:7px 10px; outline:none; transition:border 0.2s;
     }
-    #user-input:focus { border-color: rgba(167,139,250,0.5); box-shadow: 0 0 0 3px rgba(139,124,255,0.1); }
-    #user-input::placeholder { color: rgba(170,178,199,0.5); }
+    #user-input:focus { border-color:rgba(0,212,255,0.5); }
+    #user-input::placeholder { color:rgba(255,255,255,0.2); }
     #send-btn {
-      padding:8px 13px;
-      background: linear-gradient(135deg, #8b7cff 0%, #c08bf0 45%, #f3a8d0 100%);
-      border: none; border-radius:11px;
-      color: #fff; font-size:11px; font-weight:700; cursor:pointer;
-      font-family: 'Outfit', system-ui;
-      transition: filter 0.18s;
+      padding:7px 12px; background:rgba(0,212,255,0.15);
+      border:1px solid rgba(0,212,255,0.3); border-radius:6px;
+      color:#00d4ff; font-size:11px; font-weight:600; cursor:pointer;
     }
-    #send-btn:hover { filter: brightness(1.1); }
+    #send-btn:hover { background:rgba(0,212,255,0.3); }
 
-    /* ── History panel ── */
+    /* History panel */
     #history-panel {
       position:fixed; bottom:580px; left:54px; width:280px; max-height:340px;
-      background: linear-gradient(160deg, rgba(22,27,46,0.88), rgba(15,19,32,0.93));
-      border: 1px solid rgba(255,200,0,0.2);
-      display:none; flex-direction:column; z-index:100; border-radius:18px;
-      box-shadow: 0 14px 44px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
-      backdrop-filter: blur(22px);
-      -webkit-backdrop-filter: blur(22px);
+      background:rgba(4,7,26,0.97); border:1px solid rgba(255,200,0,0.2);
+      display:none; flex-direction:column; z-index:100; border-radius:10px;
+      box-shadow:0 8px 32px rgba(0,0,0,0.4); backdrop-filter:blur(20px);
       overflow:hidden;
     }
     #history-panel.open { display:flex; }
     #history-header {
-      padding:9px 13px; font-size:10px; font-weight:700;
-      color: rgba(255,200,0,0.85); letter-spacing:0.12em; text-transform:uppercase;
-      border-bottom: 1px solid rgba(255,200,0,0.1);
+      padding:8px 12px; font-size:10px; font-weight:600; color:rgba(255,200,0,0.8);
+      letter-spacing:1px; border-bottom:1px solid rgba(255,200,0,0.1);
       display:flex; justify-content:space-between; align-items:center; flex-shrink:0;
-      font-family: 'Outfit', system-ui;
     }
-    #history-clear { font-size:9px; color:rgba(251,113,133,0.75); cursor:pointer; padding:2px 8px; border:1px solid rgba(251,113,133,0.22); border-radius:6px; transition: background 0.15s; }
-    #history-clear:hover { background: rgba(251,113,133,0.1); }
+    #history-clear { font-size:9px; color:rgba(248,113,113,0.7); cursor:pointer; padding:2px 6px; border:1px solid rgba(248,113,113,0.2); border-radius:4px; }
     #history-list { overflow-y:auto; flex:1; padding:8px; display:flex; flex-direction:column; gap:6px; }
-    #history-list::-webkit-scrollbar { width:3px; }
-    #history-list::-webkit-scrollbar-thumb { background:rgba(167,139,250,0.22); border-radius:3px; }
-    .history-msg { padding:7px 11px; border-radius:11px; font-size:10px; line-height:1.5; max-width:100%; font-family:'Outfit',system-ui; }
-    .history-msg.user  { background:rgba(139,124,255,0.12); border:1px solid rgba(139,124,255,0.18); color:#f4f5fb; align-self:flex-end; text-align:right; }
-    .history-msg.asuka { background:rgba(255,200,0,0.07); border:1px solid rgba(255,200,0,0.12); color:rgba(255,230,150,0.9); align-self:flex-start; }
-    .msg-label { font-size:8px; opacity:0.5; margin-bottom:2px; letter-spacing:0.06em; text-transform:uppercase; }
+    #history-list::-webkit-scrollbar { width:2px; }
+    #history-list::-webkit-scrollbar-thumb { background:rgba(255,200,0,0.2); }
+    .history-msg { padding:6px 10px; border-radius:8px; font-size:10px; line-height:1.4; max-width:100%; }
+    .history-msg.user { background:rgba(0,212,255,0.1); border:1px solid rgba(0,212,255,0.15); color:#e0f4ff; align-self:flex-end; text-align:right; }
+    .history-msg.asuka { background:rgba(255,200,0,0.08); border:1px solid rgba(255,200,0,0.12); color:rgba(255,230,150,0.9); align-self:flex-start; }
+    .msg-label { font-size:8px; opacity:0.5; margin-bottom:2px; letter-spacing:0.5px; }
 
-    /* ── Status bar ── */
+    /* Status bar */
     #status {
       position:fixed; bottom:10px; left:10px;
-      color: #2dd4ff; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size:10px;
-      background: rgba(10,12,22,0.78); padding:4px 11px; border-radius:20px;
+      color:#00d4ff; font-family:-apple-system,monospace; font-size:10px;
+      background:rgba(0,0,0,0.7); padding:4px 10px; border-radius:20px;
       pointer-events:none; z-index:1000;
-      border: 1px solid rgba(45,212,255,0.18);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      border:1px solid rgba(0,212,255,0.15); backdrop-filter:blur(10px);
       max-width:300px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     }
 
-    /* ── Gemini indicator ── */
+    /* Gemini indicator */
     #gemini-indicator {
       position:fixed; bottom:36px; left:10px;
-      font-size:9px; color:rgba(52,211,153,0.65);
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      pointer-events:none; z-index:1000; letter-spacing:0.06em;
+      font-size:9px; color:rgba(52,211,153,0.6);
+      font-family:monospace; pointer-events:none; z-index:1000;
     }
 
-    /* ── Drop overlay ── */
     #drop-overlay {
       position:fixed; inset:0;
-      background: rgba(139,124,255,0.06); border:2px dashed rgba(167,139,250,0.44);
+      background:rgba(0,212,255,0.06); border:2px dashed rgba(0,212,255,0.5);
       display:none; align-items:center; justify-content:center;
-      color: #a78bfa; font-family: 'Outfit', system-ui; font-size:13px;
-      z-index:200; pointer-events:none; border-radius:16px;
+      color:#00d4ff; font-family:-apple-system,sans-serif; font-size:13px;
+      z-index:200; pointer-events:none; border-radius:12px;
     }
     #drop-overlay.active { display:flex; }
 
-    /* ── Confirm bar ── */
     #confirm-bar {
       position:fixed; bottom:300px; left:54px; width:240px;
-      background: linear-gradient(160deg, rgba(22,27,46,0.9), rgba(15,19,32,0.95));
-      border: 1px solid rgba(139,124,255,0.22);
-      padding:13px; display:none; flex-direction:column; gap:10px;
-      z-index:100; border-radius:18px;
-      backdrop-filter: blur(22px);
-      -webkit-backdrop-filter: blur(22px);
-      box-shadow: 0 14px 44px rgba(0,0,0,0.55);
+      background:rgba(4,7,26,0.96); border:1px solid rgba(0,212,255,0.2);
+      padding:12px; display:none; flex-direction:column; gap:10px;
+      z-index:100; border-radius:10px; backdrop-filter:blur(20px);
     }
     #confirm-bar.open { display:flex; }
-    #confirm-text { color: #f4f5fb; font-size:11px; font-family:'Outfit',system-ui; line-height:1.5; }
+    #confirm-text { color:#e0f4ff; font-size:11px; }
     #confirm-btns { display:flex; gap:8px; }
-    .c-yes { flex:1; padding:7px; border-radius:10px; cursor:pointer; font-size:11px; font-weight:700; text-align:center; background:rgba(52,211,153,0.14); border:1px solid rgba(52,211,153,0.3); color:#34d399; font-family:'Outfit',system-ui; transition:background 0.15s; }
-    .c-yes:hover { background: rgba(52,211,153,0.24); }
-    .c-no  { flex:1; padding:7px; border-radius:10px; cursor:pointer; font-size:11px; font-weight:700; text-align:center; background:rgba(251,113,133,0.1); border:1px solid rgba(251,113,133,0.22); color:#fb7185; font-family:'Outfit',system-ui; transition:background 0.15s; }
-    .c-no:hover { background: rgba(251,113,133,0.2); }
-
-    /* ── Care action buttons ── */
-    .care-act {
-      padding:10px; border-radius:13px;
-      border: 1px solid rgba(167,139,250,0.18);
-      background: rgba(22,27,46,0.7);
-      color: #f4f5fb; cursor:pointer; font-size:13px;
-      font-family: 'Outfit', system-ui;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      transition: all 0.18s;
-    }
-    .care-act:hover {
-      background: rgba(139,124,255,0.2);
-      border-color: rgba(167,139,250,0.44);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 18px rgba(139,124,255,0.22);
-    }
-    .care-act:active { transform: translateY(0); }
+    .c-yes { flex:1; padding:6px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:600; text-align:center; background:rgba(52,211,153,0.15); border:1px solid rgba(52,211,153,0.3); color:#34d399; }
+    .c-no  { flex:1; padding:6px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:600; text-align:center; background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.2); color:#f87171; }
 
     video { display:none; }
-
-    @keyframes lupop { 0%{transform:scale(.6);opacity:0} 60%{transform:scale(1.08)} 100%{transform:scale(1);opacity:1} }
-    @keyframes glowpulse { 0%,100%{box-shadow:0 0 40px rgba(139,124,255,0.22),0 0 80px rgba(243,168,208,0.08),0 28px 72px rgba(0,0,0,0.7)} 50%{box-shadow:0 0 60px rgba(139,124,255,0.42),0 0 120px rgba(243,168,208,0.18),0 28px 72px rgba(0,0,0,0.7)} }
   </style>
 </head>
 <body>
@@ -324,9 +268,11 @@
       view: document.getElementById('canvas'),
       autoStart: true, transparent: true, backgroundAlpha: 0, width: 400, height: 700
     })
+    window.pixiApp = pixiApp
     async function loadModel() {
       try {
         model = await Live2DModel.from('./assets/model/huohuo.model3.json')
+        window.model = model
         pixiApp.stage.addChild(model)
         model.x = 280; model.y = 650; model.scale.set(0.07); model.anchor.set(0.5, 1)
         model.motion('idle')
@@ -1516,6 +1462,177 @@ VOICE RESPONSE RULES — CRITICAL:
     window.addEventListener('DOMContentLoaded', () => {
       switchToPipeline('gemini')
     })
+
+    // ═══ PIXEL PET — double-tap Asuka → little pixel buddy ═══
+    // Loads sliced animation strips from ./pixel/<character>/<state>.png
+    // Each strip = frames side-by-side, same height. Falls back to a
+    // code-drawn placeholder if art isn't present yet.
+    function initPixelPet() {
+      const petCanvas = document.getElementById('pixel-pet')
+      const petBubble = document.getElementById('pixel-bubble')
+      if (!petCanvas) return
+      const pctx = petCanvas.getContext('2d')
+      pctx.imageSmoothingEnabled = false
+
+      let pixelMode = false, frame = 0, dir = 1, posX = 20, state = 'idle', stateTimer = 0, animTimer = null
+      let _petDragging=false, _petDragged=false, _pdx=0, _pdy=0
+      // which character — saved between sessions
+      let character = localStorage.getItem('pixelChar') || 'huohuo'
+
+      // states we load + how many frames each strip has (for timing; actual count read from image)
+      const STATES = ['idle','walk','happy','celebrate','dance','sad','sleep','think','exercise']
+      const strips = {}   // strips[char][state] = { img, frames, ready }
+
+      function loadStrip(char, st) {
+        if (!strips[char]) strips[char] = {}
+        if (strips[char][st]) return
+        const img = new Image()
+        const rec = { img, frames: 1, ready: false }
+        img.onload = () => { rec.frames = Math.max(1, Math.round(img.width / img.height)); rec.ready = true }
+        img.onerror = () => { rec.ready = false }
+        try { img.src = `./pixel/${char}/${st}.png` } catch(e) {}
+        strips[char][st] = rec
+      }
+      function loadCharacter(char) { STATES.forEach(st => loadStrip(char, st)) }
+      loadCharacter('huohuo'); loadCharacter('catgirl')
+
+      // map behavior-state → an available art state (fallbacks)
+      function artState(st) {
+        const c = strips[character] || {}
+        if (c[st] && c[st].ready) return st
+        if (st === 'celebrate' && c.happy?.ready) return 'happy'
+        if (st === 'sleep' && c.idle?.ready) return 'idle'
+        if (st === 'think' && c.idle?.ready) return 'idle'
+        if (st === 'exercise' && c.dance?.ready) return 'dance'
+        if (c.idle?.ready) return 'idle'
+        return null
+      }
+
+      function drawPlaceholder(f, st) {
+        pctx.clearRect(0,0,64,64)
+        const bob = st==='sleep'?0:Math.sin(f*0.8)*2, cx=32, cy=38+bob
+        pctx.fillStyle='#3a4668'; pctx.fillRect(cx-9,cy-2,18,18)
+        pctx.fillStyle='#ffe0c0'; pctx.fillRect(cx-10,cy-20,20,18)
+        pctx.fillStyle='#7bc47f'; pctx.fillRect(cx-12,cy-24,24,10); pctx.fillRect(cx-12,cy-24,5,22); pctx.fillRect(cx+7,cy-24,5,22)
+        pctx.fillStyle='#222'
+        if(st==='sleep'){pctx.fillRect(cx-6,cy-11,4,1);pctx.fillRect(cx+2,cy-11,4,1)}else{pctx.fillRect(cx-6,cy-12,3,3);pctx.fillRect(cx+3,cy-12,3,3)}
+        pctx.fillStyle='#2a3350'; const step=st==='walk'?(f%2===0?2:-2):0
+        pctx.fillRect(cx-7,cy+16,5,5+step); pctx.fillRect(cx+2,cy+16,5,5-step)
+        if(st==='sleep'){pctx.fillStyle='#9fe';pctx.font='10px monospace';pctx.fillText('z',cx+12,cy-18)}
+      }
+
+      function render() {
+        const as = artState(state)
+        const rec = as && strips[character] ? strips[character][as] : null
+        if (rec && rec.ready) {
+          pctx.clearRect(0,0,64,64)
+          const fw = rec.img.height                     // square frames
+          const col = frame % rec.frames
+          pctx.save()
+          if (dir < 0) { pctx.translate(64,0); pctx.scale(-1,1) }
+          pctx.drawImage(rec.img, col*fw, 0, fw, rec.img.height, 8, 4, 56, 56)
+          pctx.restore()
+        } else {
+          drawPlaceholder(frame, state)
+        }
+      }
+
+      function setState(s){ state=s; stateTimer=0; if(s==='walk'&&Math.random()<0.5)dir*=-1 }
+      function tick(){
+        frame++; stateTimer++
+        if(_petDragging){ render(); return }  // hold still while being dragged
+        if(state==='walk'){
+          posX+=dir*1.5
+          if(posX<8){posX=8;dir=1}
+          if(posX>Math.max(80, window.innerWidth-140)){posX=Math.max(80, window.innerWidth-140);dir=-1}
+          petCanvas.style.left=posX+'px'
+          if(stateTimer>60&&Math.random()<0.02){ const r=Math.random(); setState(r<0.4?'idle':r<0.7?'sleep':r<0.85?'dance':'exercise') }
+        } else if(state==='idle'){ if(stateTimer>40&&Math.random()<0.04)setState('walk') }
+        else if(state==='sleep'){ if(stateTimer>90&&Math.random()<0.03)setState('walk') }
+        else if(state==='dance'||state==='exercise'){ if(stateTimer>40&&Math.random()<0.05)setState('walk') }
+        else if(state==='happy'||state==='celebrate'){ if(stateTimer>18)setState('walk') }
+        render()
+      }
+      function showBubble(t,ms){ if(!pixelMode)return; petBubble.textContent=t; petBubble.style.left=posX+'px'; petBubble.style.display='block'; clearTimeout(petBubble._t); petBubble._t=setTimeout(()=>petBubble.style.display='none',ms||2500) }
+
+      function enterPixel(){
+        pixelMode=true
+        const cv=document.getElementById('canvas'); if(cv)cv.style.display='none'
+        document.querySelectorAll('.btn').forEach(b=>b.style.display='none')
+        petCanvas.style.display='block'; posX=20; setState('walk')
+        if(animTimer)clearInterval(animTimer); animTimer=setInterval(tick,120)
+        renderCharSwitch()
+        showBubble('hi! 🌸',2000)
+        try{ipcRenderer.send('pixel-mode',true)}catch(e){}
+      }
+      function exitPixel(){
+        pixelMode=false
+        if(animTimer){clearInterval(animTimer);animTimer=null}
+        petCanvas.style.display='none'; petBubble.style.display='none'
+        const sw=document.getElementById('pixel-switch'); if(sw)sw.style.display='none'
+        const cv=document.getElementById('canvas'); if(cv)cv.style.display='block'
+        document.querySelectorAll('.btn').forEach(b=>b.style.display='')
+        try{ipcRenderer.send('pixel-mode',false)}catch(e){}
+        // force Live2D to redraw cleanly (avoids frozen/broken frame on return)
+        try { if(window.pixiApp){ window.pixiApp.renderer.resize(window.innerWidth, window.innerHeight); window.pixiApp.render() } } catch(e){}
+        try { if(window.model && window.model.motion) window.model.motion('idle') } catch(e){}
+      }
+
+      // tiny character-switch button shown in pixel mode
+      function renderCharSwitch(){
+        let sw=document.getElementById('pixel-switch')
+        if(!sw){ sw=document.createElement('div'); sw.id='pixel-switch'
+          sw.style.cssText='position:fixed;bottom:20px;right:20px;z-index:10001;background:rgba(20,18,30,.9);color:#fff;font-size:11px;font-family:system-ui;padding:6px 12px;border-radius:999px;cursor:pointer;user-select:none;'
+          document.body.appendChild(sw)
+          sw.onclick=()=>{ character = character==='huohuo'?'catgirl':'huohuo'; localStorage.setItem('pixelChar',character); setState('celebrate'); renderCharSwitch() }
+        }
+        sw.textContent = character==='huohuo' ? '🔮 HuoHuo' : '🐾 Catgirl'
+        sw.style.display='block'
+      }
+
+      let _lastToggle = 0
+      const toggle = (e)=>{
+        if(noDragIds.includes(e.target?.id)||e.target?.closest?.('#chat-panel'))return
+        const now = Date.now(); if(now - _lastToggle < 400) return; _lastToggle = now
+        pixelMode?exitPixel():enterPixel()
+      }
+      document.addEventListener('dblclick', toggle)
+      petCanvas.addEventListener('dblclick',(e)=>{ e.stopPropagation(); exitPixel() })
+      petCanvas.addEventListener('click',()=>{ if(_petDragged)return; setState('happy'); showBubble(['hehe~','♪','watching the charts!','gm 🌸'][Math.floor(Math.random()*4)],2000) })
+
+      // ── Drag the pixel pet (moves the whole window so you can place her anywhere) ──
+      petCanvas.addEventListener('mousedown',(e)=>{
+        _petDragging=true; _petDragged=false; _pdx=e.screenX; _pdy=e.screenY
+        e.preventDefault(); e.stopPropagation()
+      })
+      document.addEventListener('mousemove',(e)=>{
+        if(!_petDragging)return
+        const dx=e.screenX-_pdx, dy=e.screenY-_pdy
+        if(Math.abs(dx)>2||Math.abs(dy)>2)_petDragged=true
+        try{ipcRenderer.send('move-waifu',{dx,dy})}catch(err){}
+        _pdx=e.screenX; _pdy=e.screenY
+      })
+      document.addEventListener('mouseup',()=>{ if(_petDragging){_petDragging=false; setTimeout(()=>_petDragged=false,50)} })
+
+      ipcRenderer.on('asuka-react',(e,data)=>{
+        if(!pixelMode)return
+        const ev=data?.event||data
+        if(ev==='trade_win'){setState('celebrate');showBubble('we won! 🎉',3000)}
+        else if(ev==='trade_loss'){setState('sad');showBubble('aw… next one 💪',3000)}
+        else if(ev==='trade_open'){showBubble('trade opened 👀',2500)}
+        else if(ev==='swarm_thinking'){setState('think');showBubble('scanning… 🔍',2500)}
+      })
+      window._pixelSay=(txt)=>showBubble(txt,3000)
+    }
+    // run after DOM is ready so the pixel-pet canvas element exists
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPixelPet)
+    else initPixelPet()
+
   </script>
+
+  <!-- ── Pixel Pet (idle alter-ego, double-tap to toggle) ── -->
+  <canvas id="pixel-pet" width="64" height="64" style="display:none;position:fixed;bottom:20px;left:20px;width:128px;height:128px;image-rendering:pixelated;image-rendering:crisp-edges;cursor:pointer;z-index:9999;"></canvas>
+  <div id="pixel-bubble" style="display:none;position:fixed;bottom:150px;left:20px;background:rgba(20,18,30,0.92);color:#fff;font-size:11px;font-family:system-ui,sans-serif;padding:6px 10px;border-radius:10px;z-index:10000;white-space:nowrap;pointer-events:none;"></div>
+
 </body>
 </html>
