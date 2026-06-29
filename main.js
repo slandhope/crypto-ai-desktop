@@ -3693,7 +3693,8 @@ let mainWindow, dashboardWindow;
 
 function createWaifuWindow() {
   mainWindow = new BrowserWindow({
-    width: 400, height: 750, transparent: true, frame: false, alwaysOnTop: true,
+    width: 400, height: 750, transparent: true, frame: false, alwaysOnTop: true, resizable: true,
+    hasShadow: false,
     webPreferences: { nodeIntegration: true, contextIsolation: false, webSecurity: false, allowRunningInsecureContent: true }
   });
   mainWindow.loadFile('waifu.html');
@@ -3742,9 +3743,27 @@ function createDashboardWindow() {
 
 // Pixel pet mode — resize the floating window so the little buddy can wander
 let _preWaifuBounds = null;
+// FULL mode = small draggable box. PIXEL mode = fullscreen roam + click-through.
+let _waifuBoxBounds = null;
 ipcMain.on('pixel-mode', (e, on) => {
-  // Keep the window the same size — resizing breaks Live2D positioning on exit.
-  // The pixel pet wanders within the existing window. (No-op kept for future use.)
+  try {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const { screen } = require('electron');
+    if (on) {
+      _waifuBoxBounds = mainWindow.getBounds();                 // remember the box
+      const disp = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+      const wa = disp.workArea;
+      mainWindow.setBounds({ x: wa.x, y: wa.y, width: wa.width, height: wa.height });
+      mainWindow.setIgnoreMouseEvents(true, { forward: true }); // roam: click-through except on her
+    } else {
+      mainWindow.setIgnoreMouseEvents(false);                   // box: fully interactive
+      if (_waifuBoxBounds) { mainWindow.setBounds(_waifuBoxBounds); _waifuBoxBounds = null; }
+    }
+  } catch(err) {}
+});
+// In pixel mode, capture the mouse only when the cursor is over the pet (else click-through)
+ipcMain.on('pixel-hit', (e, over) => {
+  try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setIgnoreMouseEvents(!over, { forward: true }); } catch(err) {}
 });
 
 ipcMain.on('move-waifu', (e, { dx, dy }) => {

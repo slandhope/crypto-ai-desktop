@@ -1473,14 +1473,17 @@ VOICE RESPONSE RULES — CRITICAL:
       if (!petCanvas) return
       const pctx = petCanvas.getContext('2d')
       pctx.imageSmoothingEnabled = false
+      const CV = 128            // canvas internal resolution (matches 128px art)
+      const PAD = 8             // padding inside the canvas
 
-      let pixelMode = false, frame = 0, dir = 1, posX = 20, state = 'idle', stateTimer = 0, animTimer = null
+      let pixelMode = false, frame = 0, dir = 1, posX = 20, posY = 0, vy = 0, state = 'idle', stateTimer = 0, animTimer = null
       let _petDragging=false, _petDragged=false, _pdx=0, _pdy=0
+      let targetX = null, climbSide='left'
       // which character — saved between sessions
       let character = localStorage.getItem('pixelChar') || 'huohuo'
 
       // states we load + how many frames each strip has (for timing; actual count read from image)
-      const STATES = ['idle','walk','happy','celebrate','dance','sad','sleep','think','exercise']
+      const STATES = ['idle','walk','happy','celebrate','dance','sad','sleep','think','exercise','held','sing','sit','climb']
       const strips = {}   // strips[char][state] = { img, frames, ready }
 
       function loadStrip(char, st) {
@@ -1499,6 +1502,11 @@ VOICE RESPONSE RULES — CRITICAL:
       // map behavior-state → an available art state (fallbacks)
       function artState(st) {
         const c = strips[character] || {}
+        if (st === 'climb' || st === 'hang') { if (c.climb?.ready) return 'climb'; if (c.exercise?.ready) return 'exercise'; if (c.walk?.ready) return 'walk' }
+        if (st === 'drop') { if (c.sad?.ready) return 'sad'; if (c.idle?.ready) return 'idle' }
+        if (st === 'sit') { if (c.sit?.ready) return 'sit'; if (c.sleep?.ready) return 'sleep'; if (c.idle?.ready) return 'idle' }
+        if (st === 'sing') { if (c.sing?.ready) return 'sing'; if (c.happy?.ready) return 'happy'; if (c.idle?.ready) return 'idle' }
+        if (st === 'tilt') { if (c.think?.ready) return 'think'; if (c.idle?.ready) return 'idle' }
         if (c[st] && c[st].ready) return st
         if (st === 'celebrate' && c.happy?.ready) return 'happy'
         if (st === 'sleep' && c.idle?.ready) return 'idle'
@@ -1509,8 +1517,8 @@ VOICE RESPONSE RULES — CRITICAL:
       }
 
       function drawPlaceholder(f, st) {
-        pctx.clearRect(0,0,64,64)
-        const bob = st==='sleep'?0:Math.sin(f*0.8)*2, cx=32, cy=38+bob
+        pctx.clearRect(0,0,CV,CV)
+        const bob = st==='sleep'?0:Math.sin(f*0.8)*2, cx=CV/2, cy=CV*0.6+bob
         pctx.fillStyle='#3a4668'; pctx.fillRect(cx-9,cy-2,18,18)
         pctx.fillStyle='#ffe0c0'; pctx.fillRect(cx-10,cy-20,20,18)
         pctx.fillStyle='#7bc47f'; pctx.fillRect(cx-12,cy-24,24,10); pctx.fillRect(cx-12,cy-24,5,22); pctx.fillRect(cx+7,cy-24,5,22)
@@ -1522,45 +1530,104 @@ VOICE RESPONSE RULES — CRITICAL:
       }
 
       function render() {
+        // held → show a wobbling dangle (use 'sad'/'shocked'-ish frames + a tilt)
+        if (_petDragging) {
+          const c = strips[character] || {}
+          const rec2 = (c.held && c.held.ready) ? c.held : (c.sad && c.sad.ready ? c.sad : (c.idle && c.idle.ready ? c.idle : null))
+          pctx.clearRect(0,0,CV,CV)
+          _wobble += 0.3
+          const tilt = Math.sin(_wobble) * 0.14   // gentle swing while dangling
+          pctx.save(); pctx.translate(CV/2,CV/2); pctx.rotate(tilt); pctx.translate(-CV/2,-CV/2)
+          if (rec2 && rec2.ready) { const fw=rec2.img.height, col=frame%rec2.frames; pctx.drawImage(rec2.img, col*fw,0,fw,rec2.img.height, 12,8,CV-24,CV-16) }
+          else { drawPlaceholder(frame, 'idle') }
+          pctx.restore()
+          return
+        }
         const as = artState(state)
         const rec = as && strips[character] ? strips[character][as] : null
         if (rec && rec.ready) {
-          pctx.clearRect(0,0,64,64)
+          pctx.clearRect(0,0,CV,CV)
           const fw = rec.img.height                     // square frames
           const col = frame % rec.frames
           pctx.save()
+          if (state === 'tilt') { const t=Math.sin(frame*0.25)*0.22; pctx.translate(CV/2,CV/2); pctx.rotate(t); pctx.translate(-CV/2,-CV/2) } // head tilt wobble
           if (dir < 0) { pctx.translate(64,0); pctx.scale(-1,1) }
-          pctx.drawImage(rec.img, col*fw, 0, fw, rec.img.height, 8, 4, 56, 56)
+          pctx.drawImage(rec.img, col*fw, 0, fw, rec.img.height, 12, 8, CV-24, CV-16)
           pctx.restore()
         } else {
           drawPlaceholder(frame, state)
         }
       }
 
-      function setState(s){ state=s; stateTimer=0; if(s==='walk'&&Math.random()<0.5)dir*=-1 }
+      function setState(s){ state=s; stateTimer=0; if(s==='walk'&&Math.random()<0.5)dir*=-1; if(s==='sing')showBubble('♪ la la~ 🎵',2500); if(s==='sit')showBubble('*sits* 😌',2000) }
+      // floating musical notes while singing
+      function spawnNote(){
+        if(!pixelMode)return
+        const n=document.createElement('div'); n.textContent=['♪','♫','🎵','♩'][Math.floor(Math.random()*4)]
+        n.style.cssText='position:fixed;z-index:10001;font-size:18px;color:#9fe;pointer-events:none;transition:all 1.6s ease-out;left:'+(posX+50+Math.random()*20)+'px;top:'+(posY+10)+'px;opacity:1;'
+        document.body.appendChild(n)
+        requestAnimationFrame(()=>{ n.style.top=(posY-60)+'px'; n.style.opacity='0' })
+        setTimeout(()=>n.remove(),1600)
+      }
       function tick(){
         frame++; stateTimer++
-        if(_petDragging){ render(); return }  // hold still while being dragged
+        if(_petDragging){ render(); return }  // held → render() shows the dangle wobble
+        const floorY = window.innerHeight - 150
+        const maxX = Math.max(20, window.innerWidth - 130)
         if(state==='walk'){
-          posX+=dir*1.5
-          if(posX<8){posX=8;dir=1}
-          if(posX>Math.max(80, window.innerWidth-140)){posX=Math.max(80, window.innerWidth-140);dir=-1}
-          petCanvas.style.left=posX+'px'
-          if(stateTimer>60&&Math.random()<0.02){ const r=Math.random(); setState(r<0.4?'idle':r<0.7?'sleep':r<0.85?'dance':'exercise') }
-        } else if(state==='idle'){ if(stateTimer>40&&Math.random()<0.04)setState('walk') }
-        else if(state==='sleep'){ if(stateTimer>90&&Math.random()<0.03)setState('walk') }
-        else if(state==='dance'||state==='exercise'){ if(stateTimer>40&&Math.random()<0.05)setState('walk') }
-        else if(state==='happy'||state==='celebrate'){ if(stateTimer>18)setState('walk') }
+          posX += dir*4
+          if(posX<8){ posX=8; if(Math.random()<0.5){ setState('climb'); climbSide='left' } else dir=1 }
+          if(posX>maxX){ posX=maxX; if(Math.random()<0.5){ setState('climb'); climbSide='right' } else dir=-1 }
+          if(stateTimer%3===0 && Math.random()<0.25) posY += (Math.random()<0.5?-1:1)*20
+          posY = Math.max(20, Math.min(floorY, posY))
+          if(stateTimer>30&&Math.random()<0.05){ const r=Math.random(); setState(r<0.2?'idle':r<0.35?'sleep':r<0.5?'dance':r<0.62?'exercise':r<0.74?'sit':r<0.87?'sing':'tilt') }
+        }
+        else if(state==='sit'){ if(stateTimer>50&&Math.random()<0.05)setState('walk') }
+        else if(state==='sing'){
+          if(stateTimer%6===0) spawnNote()
+          if(stateTimer>55&&Math.random()<0.05)setState('walk')
+        }
+        else if(state==='tilt'){ if(stateTimer>30&&Math.random()<0.07)setState('walk') }
+        else if(state==='climb'){
+          // climb UP the wall she hit
+          posX = climbSide==='left' ? 4 : maxX
+          posY -= 4
+          if(posY <= 24){ posY=24; setState('hang'); showBubble(['wheee~','up here! 🙌','peekaboo','😼'][Math.floor(Math.random()*4)],2200) }
+          petCanvas.style.left=posX+'px'; petCanvas.style.top=posY+'px'; render(); return
+        }
+        else if(state==='hang'){
+          // hang at the top a bit, then slide/drop back down
+          posX = climbSide==='left' ? 4 : maxX
+          if(stateTimer>40 && Math.random()<0.06){ setState('drop') }
+          petCanvas.style.left=posX+'px'; petCanvas.style.top=posY+'px'; render(); return
+        }
+        else if(state==='drop'){
+          // fall back to the floor, then resume roaming
+          posY += 12
+          if(posY>=floorY){ posY=floorY; dir = climbSide==='left'?1:-1; setState('walk') }
+          petCanvas.style.left=posX+'px'; petCanvas.style.top=posY+'px'; render(); return
+        }
+        else if(state==='idle'){ if(stateTimer>25&&Math.random()<0.06)setState('walk') }
+        else if(state==='sleep'){ if(stateTimer>70&&Math.random()<0.04)setState('walk') }
+        else if(state==='dance'||state==='exercise'){ if(stateTimer>45&&Math.random()<0.04)setState('walk') }
+        else if(state==='happy'||state==='celebrate'){ if(stateTimer>20)setState('walk') }
+        else if(state==='think'){ if(stateTimer>30)setState('walk') }
+        petCanvas.style.left=posX+'px'; petCanvas.style.top=posY+'px'
         render()
       }
       function showBubble(t,ms){ if(!pixelMode)return; petBubble.textContent=t; petBubble.style.left=posX+'px'; petBubble.style.display='block'; clearTimeout(petBubble._t); petBubble._t=setTimeout(()=>petBubble.style.display='none',ms||2500) }
 
       function enterPixel(){
         pixelMode=true
-        const cv=document.getElementById('canvas'); if(cv)cv.style.display='none'
+        const cv=document.getElementById('canvas'); if(cv){ cv.style.opacity='0'; cv.style.pointerEvents='none' }
         document.querySelectorAll('.btn').forEach(b=>b.style.display='none')
-        petCanvas.style.display='block'; posX=20; setState('walk')
-        if(animTimer)clearInterval(animTimer); animTimer=setInterval(tick,120)
+        document.body.style.background='transparent'
+        // free-roam: position absolutely anywhere on the fullscreen overlay
+        petCanvas.style.position='fixed'; petCanvas.style.display='block'
+        posX = Math.min(window.innerWidth-130, 80); posY = window.innerHeight - 150
+        petCanvas.style.left=posX+'px'; petCanvas.style.top=posY+'px'; petCanvas.style.bottom='auto'
+        setState('walk')
+        if(animTimer)clearInterval(animTimer); animTimer=setInterval(tick,90)
         renderCharSwitch()
         showBubble('hi! 🌸',2000)
         try{ipcRenderer.send('pixel-mode',true)}catch(e){}
@@ -1570,12 +1637,11 @@ VOICE RESPONSE RULES — CRITICAL:
         if(animTimer){clearInterval(animTimer);animTimer=null}
         petCanvas.style.display='none'; petBubble.style.display='none'
         const sw=document.getElementById('pixel-switch'); if(sw)sw.style.display='none'
-        const cv=document.getElementById('canvas'); if(cv)cv.style.display='block'
+        const cv=document.getElementById('canvas'); if(cv){ cv.style.opacity='1'; cv.style.pointerEvents='' }
         document.querySelectorAll('.btn').forEach(b=>b.style.display='')
+        document.body.style.background=''
+        petCanvas.style.bottom='20px'; petCanvas.style.top='auto'
         try{ipcRenderer.send('pixel-mode',false)}catch(e){}
-        // force Live2D to redraw cleanly (avoids frozen/broken frame on return)
-        try { if(window.pixiApp){ window.pixiApp.renderer.resize(window.innerWidth, window.innerHeight); window.pixiApp.render() } } catch(e){}
-        try { if(window.model && window.model.motion) window.model.motion('idle') } catch(e){}
       }
 
       // tiny character-switch button shown in pixel mode
@@ -1598,21 +1664,63 @@ VOICE RESPONSE RULES — CRITICAL:
       }
       document.addEventListener('dblclick', toggle)
       petCanvas.addEventListener('dblclick',(e)=>{ e.stopPropagation(); exitPixel() })
-      petCanvas.addEventListener('click',()=>{ if(_petDragged)return; setState('happy'); showBubble(['hehe~','♪','watching the charts!','gm 🌸'][Math.floor(Math.random()*4)],2000) })
+      // Tap the pet → cycle through fun actions (exercise, dance, celebrate…)
+      const TAP_ACTIONS = ['exercise','dance','celebrate','happy','think','sleep']
+      let _tapIdx = 0
+      petCanvas.addEventListener('click',()=>{
+        if(_petDragged)return
+        const act = TAP_ACTIONS[_tapIdx % TAP_ACTIONS.length]; _tapIdx++
+        setState(act)
+        showBubble({exercise:'💪 workout!',dance:'♪ dancing~',celebrate:'🎉 yay!',happy:'hehe 🌸',think:'hmm… 🤔',sleep:'sleepy… 💤'}[act]||'🌸',2000)
+      })
 
-      // ── Drag the pixel pet (moves the whole window so you can place her anywhere) ──
+      // ── Click-through: only capture the mouse when it's actually over the pet ──
+      // (so the fullscreen overlay lets you use everything else normally)
+      let _wasOver = false
+      function petRect(){ return { l:posX, t:posY, r:posX+130, b:posY+130 } }
+      document.addEventListener('mousemove',(e)=>{
+        if(!pixelMode) return  // box mode is a normal interactive window; only pixel mode needs hit-tracking
+        const R=petRect()
+        const over = e.clientX>=R.l && e.clientX<=R.r && e.clientY>=R.t && e.clientY<=R.b
+        const sw=document.getElementById('pixel-switch')
+        const overSwitch = sw && sw.style.display!=='none' && (()=>{const b=sw.getBoundingClientRect();return e.clientX>=b.left&&e.clientX<=b.right&&e.clientY>=b.top&&e.clientY<=b.bottom})()
+        const active = over || overSwitch || _petDragging
+        if(active!==_wasOver){ _wasOver=active; try{ipcRenderer.send('pixel-hit',active)}catch(err){} }
+      })
+
+      // ── Pick her up like a kitten: she follows the cursor within the overlay, wobbles, grumbles ──
+      const GRUMPY = ['put me down! 😣','hey! 😾','let go~','nooo 💢','eep!','leave me alone!','hmph! 😤']
+      let _wobble = 0
       petCanvas.addEventListener('mousedown',(e)=>{
-        _petDragging=true; _petDragged=false; _pdx=e.screenX; _pdy=e.screenY
+        if(!pixelMode) return
+        _petDragging=true; _petDragged=false
+        showBubble(GRUMPY[Math.floor(Math.random()*GRUMPY.length)], 1800)
         e.preventDefault(); e.stopPropagation()
       })
       document.addEventListener('mousemove',(e)=>{
-        if(!_petDragging)return
-        const dx=e.screenX-_pdx, dy=e.screenY-_pdy
-        if(Math.abs(dx)>2||Math.abs(dy)>2)_petDragged=true
-        try{ipcRenderer.send('move-waifu',{dx,dy})}catch(err){}
-        _pdx=e.screenX; _pdy=e.screenY
+        if(!_petDragging) return
+        _petDragged=true
+        // she dangles from the cursor (held by the scruff) — center her on the pointer, slightly below
+        posX = e.clientX - 65
+        posY = e.clientY - 40
+        posX = Math.max(0, Math.min(window.innerWidth-130, posX))
+        posY = Math.max(0, Math.min(window.innerHeight-130, posY))
+        petCanvas.style.left=posX+'px'; petCanvas.style.top=posY+'px'
+        // occasional grumble while held
+        if(Math.random()<0.02) showBubble(GRUMPY[Math.floor(Math.random()*GRUMPY.length)], 1500)
       })
-      document.addEventListener('mouseup',()=>{ if(_petDragging){_petDragging=false; setTimeout(()=>_petDragged=false,50)} })
+      document.addEventListener('mouseup',()=>{
+        if(!_petDragging) return
+        _petDragging=false
+        // drop & land: fall to the floor, then resume roaming
+        const floorY = window.innerHeight - 150
+        let dropTimer = setInterval(()=>{
+          posY += 18
+          if(posY >= floorY){ posY = floorY; clearInterval(dropTimer); setState('idle'); showBubble('hmph! 😤', 1500) }
+          petCanvas.style.top = posY + 'px'
+        }, 30)
+        setTimeout(()=>_petDragged=false, 50)
+      })
 
       ipcRenderer.on('asuka-react',(e,data)=>{
         if(!pixelMode)return
@@ -1631,7 +1739,7 @@ VOICE RESPONSE RULES — CRITICAL:
   </script>
 
   <!-- ── Pixel Pet (idle alter-ego, double-tap to toggle) ── -->
-  <canvas id="pixel-pet" width="64" height="64" style="display:none;position:fixed;bottom:20px;left:20px;width:128px;height:128px;image-rendering:pixelated;image-rendering:crisp-edges;cursor:pointer;z-index:9999;"></canvas>
+  <canvas id="pixel-pet" width="128" height="128" style="display:none;position:fixed;bottom:20px;left:20px;width:140px;height:140px;image-rendering:pixelated;image-rendering:crisp-edges;cursor:pointer;z-index:9999;"></canvas>
   <div id="pixel-bubble" style="display:none;position:fixed;bottom:150px;left:20px;background:rgba(20,18,30,0.92);color:#fff;font-size:11px;font-family:system-ui,sans-serif;padding:6px 10px;border-radius:10px;z-index:10000;white-space:nowrap;pointer-events:none;"></div>
 
 </body>
