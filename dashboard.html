@@ -2829,6 +2829,7 @@
   <div style="max-width:680px;margin:0 auto;width:100%;">
     <div style="font-family:'Fraunces',serif;font-size:24px;font-weight:500;margin-bottom:4px;">Advisor Calls</div>
     <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">Follow a human advisor. Get notified, or let Asuka trade their calls for you.</div>
+    <button id="global-rules-btn" style="font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:9px;padding:7px 14px;margin-bottom:12px;">⚙️ My Default Trade Rules</button>
     <div style="font-size:11px;color:var(--text3);background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-bottom:18px;">⚠️ These are the advisor's calls, not Asuka's AI. Trading them is your choice and your risk. Not financial advice.</div>
 
     <!-- Advisors you follow -->
@@ -3321,7 +3322,8 @@
       <button class="tg-add-btn" id="s-mode-reset" style="width:100%;margin-top:8px;font-size:11px;background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.3);">🔄 Reset & show mode picker (testing)</button>
     </div>
 
-
+    <div class="s-section">
+      <div class="s-title">Data Sources</div>
       <div class="s-row"><div class="s-label">CoinGecko</div><input class="s-input" id="s-coingecko" placeholder="Optional" /></div>
       <div class="s-row"><div class="s-label">Moralis</div><input class="s-input" id="s-moralis" placeholder="For wallet tracking" /></div>
       <div class="s-row"><div class="s-label">YouTube</div><input class="s-input" id="s-youtube" placeholder="For music playback" /></div>
@@ -5768,6 +5770,7 @@ ipcRenderer.on('swarm-live', (e, data) => {
 
 
 // ── 📣 Advisor Calls tab ───────────────────────────────────────────────
+document.getElementById('global-rules-btn')?.addEventListener('click', () => openRulesPanel(null, null))
 function timeAgo(ts) {
   const s = Math.floor((Date.now()-ts)/1000)
   if (s<60) return 'just now'
@@ -5827,6 +5830,7 @@ async function renderAdvisors() {
         <div style="display:flex;gap:8px;">
           <button class="adv-trades-btn" data-adv="${a.id}" style="flex:1;padding:8px;border-radius:9px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text);">📈 Current Trades${a.openCalls?` (${a.openCalls})`:''}</button>
           <button class="adv-history-btn" data-adv="${a.id}" style="flex:1;padding:8px;border-radius:9px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text2);">🕓 History</button>
+          <button class="adv-rules-btn" data-adv="${a.id}" data-name="${a.name}" style="flex:1;padding:8px;border-radius:9px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text2);">⚙️ My Rules</button>
         </div>
         <div class="adv-trades-panel" id="adv-trades-${a.id}" style="display:none;margin-top:10px;"></div>
       </div>
@@ -5835,6 +5839,7 @@ async function renderAdvisors() {
   // wire trades + history buttons
   el.querySelectorAll('.adv-trades-btn').forEach(b => b.onclick = () => toggleAdvisorTrades(b.dataset.adv, false))
   el.querySelectorAll('.adv-history-btn').forEach(b => b.onclick = () => toggleAdvisorTrades(b.dataset.adv, true))
+  el.querySelectorAll('.adv-rules-btn').forEach(b => b.onclick = () => openRulesPanel(b.dataset.adv, b.dataset.name))
   // wire mode buttons
   el.querySelectorAll('.adv-mode').forEach(b => b.onclick = async () => {
     await ipcRenderer.invoke('set-advisor-mode', { advisorId: b.dataset.adv, mode: b.dataset.mode }).catch(()=>{})
@@ -5949,24 +5954,117 @@ async function renderAdvisorTrades(advisorId, history) {
         <div style="flex:1;background:var(--bg2);border-radius:7px;padding:6px;text-align:center;"><div style="font-size:8px;color:var(--text3);">TARGET</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--green);">${t.target ?? '—'}</div></div>
         <div style="flex:1;background:var(--bg2);border-radius:7px;padding:6px;text-align:center;"><div style="font-size:8px;color:var(--text3);">STOP</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--red);">${t.stopLoss ?? '—'}</div></div>
       </div>
-      ${live ? `<div style="display:flex;gap:6px;">
-        <button class="ut-edit" data-id="${t.id}" data-act="sl" style="flex:1;padding:7px;border-radius:8px;font-size:10px;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--text2);">✏️ SL</button>
-        <button class="ut-edit" data-id="${t.id}" data-act="tp" style="flex:1;padding:7px;border-radius:8px;font-size:10px;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--text2);">✏️ TP</button>
-        <button class="ut-edit" data-id="${t.id}" data-act="close" style="flex:1;padding:7px;border-radius:8px;font-size:10px;cursor:pointer;border:1px solid var(--red);background:rgba(255,90,95,.12);color:var(--red);">🔴 Close</button>
-      </div>` : `<div style="font-size:9px;color:var(--text3);margin-top:6px;">${t.closeTime?new Date(t.closeTime).toLocaleString():''}</div>`}
+      ${live ? `<button class="ut-manage" data-id="${t.id}" style="width:100%;padding:9px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--text);">⚙️ Manage Trade</button>` : `<div style="font-size:9px;color:var(--text3);margin-top:6px;">${t.closeTime?new Date(t.closeTime).toLocaleString():''}</div>`}
     </div>`
   }).join('')
-  // wire user trade edits
-  panel.querySelectorAll('.ut-edit').forEach(b => b.onclick = async () => {
-    const id = b.dataset.id, act = b.dataset.act
-    if (act === 'close') {
-      if (!confirm('Close this trade?')) return
-      await ipcRenderer.invoke('user-edit-trade', { tradeId:id, action:'close' }).catch(()=>{})
-    } else {
-      const v = prompt(`New ${act.toUpperCase()} value:`)
-      if (v==null||v==='') return
-      await ipcRenderer.invoke('user-edit-trade', { tradeId:id, action:act, value:v }).catch(()=>{})
+  // tap a trade → open the full control panel
+  panel.querySelectorAll('.ut-manage').forEach(b => b.onclick = () => openTradePanel(b.dataset.id, advisorId, trades.find(x=>String(x.id)===b.dataset.id)))
+}
+
+// ── Pre-trade rules panel (global default OR per-advisor override) ──
+async function openRulesPanel(advisorId, advisorName) {
+  const all = await ipcRenderer.invoke('get-trade-rules').catch(()=>({global:{},perAdvisor:{}}))
+  const isGlobal = !advisorId
+  const r = isGlobal ? (all.global||{}) : ((all.perAdvisor&&all.perAdvisor[advisorId])||{})
+  const g = all.global || {}
+  let modal = document.getElementById('rules-panel')
+  if (!modal) { modal = document.createElement('div'); modal.id='rules-panel'; document.body.appendChild(modal) }
+  modal.style.cssText='position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;'
+  const ph = (k,d)=> isGlobal ? (g[k]??d) : (g[k]!==undefined&&g[k]!==''?`global: ${g[k]}`:d)  // show global as placeholder hint
+  const val = (k)=> (r[k]??'')
+  modal.innerHTML = `<div style="background:var(--bg);border:1px solid var(--border);border-radius:18px;padding:22px;width:380px;max-width:92vw;max-height:88vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <div style="font-size:16px;font-weight:700;">⚙️ ${isGlobal?'Default Rules (all advisors)':'Rules · '+advisorName}</div>
+      <div id="rp-x" style="cursor:pointer;color:var(--text3);font-size:20px;">×</div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:16px;">${isGlobal?'Applies to every advisor unless they have their own rules.':'Overrides your global defaults for this advisor. Leave blank to use global.'}</div>
+
+    <label style="font-size:12px;color:var(--text2);">💵 $ size per trade</label>
+    <input id="rp-size" type="number" value="${val('sizeUsd')}" placeholder="${ph('sizeUsd','50')}" class="s-input" style="margin:5px 0 14px;">
+
+    <label style="font-size:12px;color:var(--text2);">⚡ Max leverage cap (0 = no cap)</label>
+    <input id="rp-lev" type="number" value="${val('maxLeverage')}" placeholder="${ph('maxLeverage','0')}" class="s-input" style="margin:5px 0 14px;">
+
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:8px;cursor:pointer;">
+      <input id="rp-usemy" type="checkbox" ${r.useMySlTp?'checked':''}> Use MY stop/target % (ignore advisor's)
+    </label>
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <div style="flex:1;"><label style="font-size:11px;color:var(--text3);">Stop %</label><input id="rp-sl" type="number" value="${val('slPct')}" placeholder="${ph('slPct','5')}" class="s-input" style="margin-top:4px;"></div>
+      <div style="flex:1;"><label style="font-size:11px;color:var(--text3);">Target %</label><input id="rp-tp" type="number" value="${val('tpPct')}" placeholder="${ph('tpPct','10')}" class="s-input" style="margin-top:4px;"></div>
+    </div>
+
+    <label style="font-size:12px;color:var(--text2);">📅 Daily max $ (0 = unlimited)</label>
+    <input id="rp-dmax" type="number" value="${val('dailyMaxUsd')}" placeholder="${ph('dailyMaxUsd','0')}" class="s-input" style="margin:5px 0 14px;">
+
+    <label style="font-size:12px;color:var(--text2);">📅 Daily max # trades (0 = unlimited)</label>
+    <input id="rp-dtrades" type="number" value="${val('dailyMaxTrades')}" placeholder="${ph('dailyMaxTrades','0')}" class="s-input" style="margin:5px 0 14px;">
+
+    <label style="font-size:12px;color:var(--text2);">🛡️ Auto-breakeven at +% profit (0 = off)</label>
+    <input id="rp-be" type="number" value="${val('autoBreakevenPct')}" placeholder="${ph('autoBreakevenPct','0')}" class="s-input" style="margin:5px 0 16px;">
+
+    <button id="rp-save" style="width:100%;padding:12px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:var(--accent);color:#000;">Save Rules</button>
+  </div>`
+  const close = ()=>modal.remove()
+  modal.onclick=(e)=>{ if(e.target===modal) close() }
+  modal.querySelector('#rp-x').onclick=close
+  modal.querySelector('#rp-save').onclick=async ()=>{
+    const num=(id)=>{ const v=document.getElementById(id).value; return v===''?null:Number(v) }
+    const rules={
+      sizeUsd:num('rp-size'), maxLeverage:num('rp-lev'),
+      useMySlTp:document.getElementById('rp-usemy').checked,
+      slPct:num('rp-sl'), tpPct:num('rp-tp'),
+      dailyMaxUsd:num('rp-dmax'), dailyMaxTrades:num('rp-dtrades'),
+      autoBreakevenPct:num('rp-be')
     }
+    await ipcRenderer.invoke('set-trade-rules',{ scope:isGlobal?'global':'advisor', advisorId, rules }).catch(()=>{})
+    close()
+  }
+}
+
+// ── Full per-trade control panel (SL/TP/breakeven/partial/add/note/close) ──
+function openTradePanel(tradeId, advisorId, t) {
+  if (!t) return
+  let modal = document.getElementById('trade-panel')
+  if (!modal) { modal = document.createElement('div'); modal.id = 'trade-panel'; document.body.appendChild(modal) }
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;'
+  const dirC = t.direction==='long'?'var(--green)':'var(--red)'
+  modal.innerHTML = `<div style="background:var(--bg);border:1px solid var(--border);border-radius:18px;padding:20px;width:360px;max-width:92vw;max-height:88vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div style="font-size:16px;font-weight:700;"><span style="color:${dirC};">${(t.direction||'').toUpperCase()}</span> ${t.coin} ${t.leverage>1?`<span style="font-size:11px;color:var(--text3);">${t.leverage}x</span>`:''}</div>
+      <div id="tp-close-x" style="cursor:pointer;color:var(--text3);font-size:20px;">×</div>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:16px;">
+      <div style="flex:1;background:var(--bg3);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:8px;color:var(--text3);">ENTRY</div><div style="font-family:monospace;font-size:13px;">${t.entry??'mkt'}</div></div>
+      <div style="flex:1;background:var(--bg3);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:8px;color:var(--text3);">NOW</div><div style="font-family:monospace;font-size:13px;color:var(--accent);">${t.currentPrice??'—'}</div></div>
+      <div style="flex:1;background:var(--bg3);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:8px;color:var(--text3);">P&L</div><div style="font-family:monospace;font-size:13px;color:${(t.pnlUsd||0)>=0?'var(--green)':'var(--red)'};">${(t.pnlUsd||0)>=0?'+':''}$${Math.abs(t.pnlUsd||0).toFixed(2)}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <button class="tp-act" data-act="sl" style="padding:11px;border-radius:9px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text);">✏️ Move Stop (${t.stopLoss??'—'})</button>
+      <button class="tp-act" data-act="tp" style="padding:11px;border-radius:9px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text);">✏️ Move Target (${t.target??'—'})</button>
+      <button class="tp-act" data-act="breakeven" style="padding:11px;border-radius:9px;font-size:12px;cursor:pointer;border:1px solid var(--gold);background:rgba(251,191,36,.12);color:var(--gold);">🛡️ Breakeven</button>
+      <button class="tp-act" data-act="partial" style="padding:11px;border-radius:9px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text);">✂️ Partial Close</button>
+      <button class="tp-act" data-act="add" style="padding:11px;border-radius:9px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text);">➕ Add to Position</button>
+      <button class="tp-act" data-act="note" style="padding:11px;border-radius:9px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text);">📝 Note</button>
+    </div>
+    ${t.userNote?`<div style="font-size:11px;color:var(--text2);margin-top:10px;background:var(--bg3);border-radius:8px;padding:8px;">📝 ${t.userNote}</div>`:''}
+    <button class="tp-act" data-act="close" style="width:100%;margin-top:14px;padding:12px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--red);background:rgba(255,90,95,.14);color:var(--red);">🔴 Close Trade</button>
+  </div>`
+  const closeModal = () => modal.remove()
+  modal.onclick = (e) => { if (e.target === modal) closeModal() }
+  modal.querySelector('#tp-close-x').onclick = closeModal
+  modal.querySelectorAll('.tp-act').forEach(b => b.onclick = async () => {
+    const act = b.dataset.act
+    let value = null
+    if (act === 'close') { if (!confirm('Close the whole trade?')) return }
+    else if (act === 'breakeven') { /* no input */ }
+    else if (act === 'sl') { value = prompt('New stop-loss price:', t.stopLoss??''); if (value==null||value==='') return }
+    else if (act === 'tp') { value = prompt('New target price:', t.target??''); if (value==null||value==='') return }
+    else if (act === 'partial') { value = prompt('Close what % of the position? (e.g. 50)', '50'); if (value==null||value==='') return }
+    else if (act === 'add') { value = prompt('Add how much $ to the position?', '50'); if (value==null||value==='') return }
+    else if (act === 'note') { value = prompt('Your note on this trade:', t.userNote||''); if (value==null) return }
+    const res = await ipcRenderer.invoke('user-edit-trade', { tradeId, action:act, value }).catch(()=>({success:false}))
+    if (act === 'partial' && res?.realized!=null) alert(`Closed ${value}% — locked $${res.realized}. Rest stays open.`)
+    closeModal()
     renderAdvisorTrades(advisorId, false)
   })
 }

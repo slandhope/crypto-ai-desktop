@@ -10573,6 +10573,17 @@ async function checkPaperTrades() {
       if (trade.mfe === undefined || pnlPct > trade.mfe) { trade.mfe = parseFloat(pnlPct.toFixed(2)); trade._dirty = true; }
       if (trade.mae === undefined || pnlPct < trade.mae) { trade.mae = parseFloat(pnlPct.toFixed(2)); trade._dirty = true; }
 
+      // ── AUTO-BREAKEVEN: once the trade is up by the user's % , move SL to entry ──
+      if (trade.autoBreakevenPct && !trade._breakevenDone && pnlPct >= trade.autoBreakevenPct) {
+        const pd3 = loadPaperTrades();
+        const t3 = pd3.trades.find(tr => tr.id === trade.id);
+        if (t3) {
+          t3.stopLoss = t3.entry; t3._breakevenDone = true; savePaperTrades(pd3);
+          sendTelegramNotification(`🛡️ ${trade.coin}: up ${trade.autoBreakevenPct}% — stop moved to breakeven (entry $${trade.entry}). Risk-free now.`).catch(()=>{});
+          console.log(`🛡️ Auto-breakeven: ${trade.coin} SL → entry at +${trade.autoBreakevenPct}%`);
+        }
+      }
+
       // Profit notifications at milestones
       const profitMilestones = [5, 10, 25, 50, 100];
       const lastProfitNotified = trade.lastProfitNotify || 0;
@@ -13818,30 +13829,53 @@ async function ingestAdvisorCall(advisorId, parsed, imageUrl) {
 
   // Auto-trade ONLY if the user set this advisor to auto
   if (adv.followMode === 'auto' && parsed.coin && parsed.direction) {
-    const size = adv.riskUsd || 50;
-    // ── ENFORCE Max $/day — reset the counter each new day ──
+    // ── Apply the USER's pre-trade rules (per-advisor overrides global) ──
+    const rules = effectiveRules(advisorId);
+    const size = rules.sizeUsd || adv.riskUsd || 50;        // user's $ size per trade
+
     const d2 = loadAdvisors();
     const a2 = d2.advisors.find(x => x.id === advisorId);
-    if (Date.now() - (a2._spendDay || 0) > 864e5) { a2.spentToday = 0; a2._spendDay = Date.now(); }
-    const cap = a2.maxPerDay || Infinity;
-    if ((a2.spentToday || 0) + size > cap) {
-      console.log(`🛑 ${adv.name} auto-trade skipped — daily cap $${cap} reached (spent $${a2.spentToday||0})`);
-      sendTelegramNotification(`🛑 ${adv.name}: ${parsed.direction?.toUpperCase()} ${parsed.coin} NOT auto-traded — your daily cap ($${cap}) is reached. Trade it manually if you want.`).catch(()=>{});
-      saveAdvisors(d2);
-      return;
+    if (Date.now() - (a2._spendDay || 0) > 864e5) { a2.spentToday = 0; a2._tradesToday = 0; a2._spendDay = Date.now(); }
+
+    // ── DAILY LIMITS: $ cap (rule or advisor field) AND # of trades ──
+    const usdCap = rules.dailyMaxUsd || a2.maxPerDay || Infinity;
+    if ((a2.spentToday || 0) + size > usdCap) {
+      console.log(`🛑 ${adv.name} auto-trade skipped — daily $ cap $${usdCap} reached`);
+      sendTelegramNotification(`🛑 ${adv.name}: ${parsed.direction?.toUpperCase()} ${parsed.coin} NOT auto-traded — your daily $ cap ($${usdCap}) is reached.`).catch(()=>{});
+      saveAdvisors(d2); return;
     }
+    if (rules.dailyMaxTrades && (a2._tradesToday || 0) >= rules.dailyMaxTrades) {
+      console.log(`🛑 ${adv.name} auto-trade skipped — daily trade count (${rules.dailyMaxTrades}) reached`);
+      sendTelegramNotification(`🛑 ${adv.name}: not auto-traded — your daily trade limit (${rules.dailyMaxTrades}) is reached.`).catch(()=>{});
+      saveAdvisors(d2); return;
+    }
+
+    // ── LEVERAGE CAP: never exceed the user's max ──
+    let leverage = parsed.leverage || 1;
+    if (rules.maxLeverage && leverage > rules.maxLeverage) leverage = rules.maxLeverage;
+
+    // ── SL/TP: use the user's own % if they chose to override the advisor's ──
+    let target = parsed.tp, stopLoss = parsed.sl;
+    if (rules.useMySlTp && parsed.entry) {
+      const e = Number(parsed.entry);
+      if (parsed.direction === 'long') { stopLoss = +(e * (1 - rules.slPct/100)).toFixed(8); target = +(e * (1 + rules.tpPct/100)).toFixed(8); }
+      else { stopLoss = +(e * (1 + rules.slPct/100)).toFixed(8); target = +(e * (1 - rules.tpPct/100)).toFixed(8); }
+    }
+
     const signal = {
       coin: parsed.coin, direction: parsed.direction,
-      entry: parsed.entry, target: parsed.tp, stopLoss: parsed.sl,
+      entry: parsed.entry, target, stopLoss, leverage,
       confidence: 70, caller: adv.name,
       groupName: `📣 Advisor: ${adv.name}`,
       messageId: call.id, timestamp: Date.now(),
-      size, advisorId, isAdvisorTrade: true, advisorCallId: call.id
+      size, advisorId, isAdvisorTrade: true, advisorCallId: call.id,
+      autoBreakevenPct: rules.autoBreakevenPct || 0   // armed; monitor moves SL→entry at this profit %
     };
     try { openPaperTrade(signal); } catch(e) {}
-    a2.spentToday = (a2.spentToday || 0) + size;  // count it against the daily cap
+    a2.spentToday = (a2.spentToday || 0) + size;
+    a2._tradesToday = (a2._tradesToday || 0) + 1;
     saveAdvisors(d2);
-    console.log(`⚡ Auto-traded ${adv.name}'s call: ${parsed.direction} ${parsed.coin} ($${size}) · today $${a2.spentToday}/$${cap}`);
+    console.log(`⚡ Auto-traded ${adv.name}: ${parsed.direction} ${parsed.coin} ($${size}, ${leverage}x)${rules.useMySlTp?' [my SL/TP]':''} · today $${a2.spentToday}/${usdCap}`);
   }
 }
 
@@ -14150,7 +14184,61 @@ ipcMain.handle('user-edit-trade', async (e, { tradeId, action, value }) => {
   }
   if (action === 'sl') { t.stopLoss = parseFloat(value); savePaperTrades(pd); return { success:true }; }
   if (action === 'tp') { t.target = parseFloat(value); savePaperTrades(pd); return { success:true }; }
+  if (action === 'breakeven') { t.stopLoss = t.entry; savePaperTrades(pd); return { success:true, sl:t.entry }; }
+  if (action === 'note') { t.userNote = String(value||'').slice(0,300); savePaperTrades(pd); return { success:true }; }
+  if (action === 'add') {
+    const addUsd = parseFloat(value);
+    if (!isNaN(addUsd) && addUsd > 0) { t.size = (t.size||0) + addUsd; savePaperTrades(pd); }
+    return { success:true, size:t.size };
+  }
+  if (action === 'partial') {
+    // close a % of the position now, lock that profit, keep the rest open
+    const pct = Math.min(100, Math.max(1, parseFloat(value)||50));
+    const px = parseFloat(String(await getCryptoPrice(t.coin.toLowerCase()).catch(()=>t.entry)).replace(/[^0-9.]/g,'')) || t.entry;
+    if (pct >= 100) { await closePaperTrade(tradeId, px, 'Closed by you'); return { success:true, closed:true }; }
+    const closedSize = (t.size||0) * pct/100;
+    const lev = t.leverage || 1;
+    const diff = t.direction === 'long' ? (px - t.entry) : (t.entry - px);
+    const realized = t.entry ? (closedSize * diff / t.entry * lev) : 0;
+    t.size = (t.size||0) - closedSize;            // shrink remaining position
+    t.realizedPartial = (t.realizedPartial||0) + realized;
+    savePaperTrades(pd);
+    return { success:true, remaining:t.size, realized:+realized.toFixed(2) };
+  }
   return { success:false };
+});
+
+// ── User pre-trade rules: global default + per-advisor overrides ──
+const TRADE_RULES_FILE = path.join(app.getPath('userData'), 'trade-rules.json');
+function loadTradeRules() {
+  try { return JSON.parse(fs.readFileSync(TRADE_RULES_FILE, 'utf8')); }
+  catch { return { global: { sizeUsd: 50, maxLeverage: 0, useMySlTp: false, slPct: 5, tpPct: 10, dailyMaxUsd: 0, dailyMaxTrades: 0, autoBreakevenPct: 0 }, perAdvisor: {} }; }
+}
+function saveTradeRules(r) { try { fs.writeFileSync(TRADE_RULES_FILE, JSON.stringify(r, null, 2)); } catch(e) {} }
+// resolve effective rules for an advisor (per-advisor overrides global)
+function effectiveRules(advisorId) {
+  const r = loadTradeRules();
+  const g = r.global || {};
+  const a = (r.perAdvisor && r.perAdvisor[advisorId]) || {};
+  const pick = (k, d) => (a[k] !== undefined && a[k] !== null && a[k] !== '') ? a[k] : (g[k] !== undefined && g[k] !== null && g[k] !== '' ? g[k] : d);
+  return {
+    sizeUsd: Number(pick('sizeUsd', 50)) || 50,
+    maxLeverage: Number(pick('maxLeverage', 0)) || 0,      // 0 = no cap
+    useMySlTp: !!pick('useMySlTp', false),
+    slPct: Number(pick('slPct', 5)) || 5,
+    tpPct: Number(pick('tpPct', 10)) || 10,
+    dailyMaxUsd: Number(pick('dailyMaxUsd', 0)) || 0,       // 0 = unlimited
+    dailyMaxTrades: Number(pick('dailyMaxTrades', 0)) || 0, // 0 = unlimited
+    autoBreakevenPct: Number(pick('autoBreakevenPct', 0)) || 0 // 0 = off
+  };
+}
+ipcMain.handle('get-trade-rules', () => loadTradeRules());
+ipcMain.handle('set-trade-rules', (e, { scope, advisorId, rules }) => {
+  const r = loadTradeRules();
+  if (scope === 'global') r.global = { ...(r.global||{}), ...rules };
+  else { r.perAdvisor = r.perAdvisor || {}; r.perAdvisor[advisorId] = { ...(r.perAdvisor[advisorId]||{}), ...rules }; }
+  saveTradeRules(r);
+  return { success: true };
 });
 
 ipcMain.handle('get-advisor-stats', () => {
