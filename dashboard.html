@@ -2906,56 +2906,19 @@
   <!-- ══ STUDY TAB ══ -->
   <div class="others-tab-content active" id="others-study">
 
-    <!-- Books section -->
     <div class="tg-section" style="margin-bottom:10px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:10px;">📚 Textbooks</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Upload textbooks — Asuka reads any page on command</div>
-
-      <!-- Drop zone -->
-      <div id="book-drop-zone" style="border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;cursor:pointer;margin-bottom:10px;transition:.2s;">
-        <div style="font-size:32px;margin-bottom:6px;">📄</div>
-        <div style="font-size:12px;font-weight:600;">Drop PDF here or tap to upload</div>
-        <div style="font-size:10px;color:var(--text2);margin-top:4px;">Japanese textbook, manga, study guides...</div>
-      </div>
-      <input type="file" id="book-file-input" accept=".pdf" style="display:none;">
-
-      <div style="display:flex;gap:6px;margin-bottom:8px;">
-        <input class="tg-input" id="book-name-input" placeholder="Book name e.g. Genki 1" style="margin:0;flex:1;">
-        <select id="book-subject" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;font-size:12px;">
-          <option value="japanese">🇯🇵 Japanese</option>
-          <option value="general">📖 General</option>
-          <option value="math">📐 Math</option>
-          <option value="science">🔬 Science</option>
-          <option value="history">📜 History</option>
-        </select>
-      </div>
-
-      <div id="book-index-status" style="display:none;padding:8px;background:var(--bg3);border-radius:8px;margin-bottom:8px;font-size:12px;"></div>
-
-      <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;">YOUR BOOKS</div>
-      <div id="study-progress-line" style="display:none;font-size:11px;color:var(--accent);margin-bottom:8px;padding:8px;background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.2);border-radius:8px;"></div>
-
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">📚 Study with Asuka</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">Upload a document and Asuka teaches it to you on the whiteboard, beat by beat.</div>
+      <button id="open-classroom-btn" style="width:100%;padding:12px;border:none;border-radius:12px;background:var(--accent);color:#001;font-weight:700;font-size:14px;cursor:pointer;">＋ New Lesson — Upload & Teach</button>
     </div>
 
-    <!-- Voice study commands -->
     <div class="tg-section">
-      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🎙️ Study Voice Commands</div>
-      <div style="display:flex;flex-direction:column;gap:6px;">
-        ${[
-          ['"Page 161"', 'Reads and explains page 161'],
-          ['"Lesson 2"', 'Explains lesson 2 content'],
-          ['"Explain lesson 2 section 1-1"', 'Specific section'],
-          ['"Read this page"', 'Explains current page'],
-          ['"Search grammar"', 'Finds grammar sections'],
-          ['"What books do you have?"', 'Lists your books'],
-          ['"Translate this sentence"', 'Translates any text'],
-          ['"Quiz me on lesson 3"', 'Creates a quiz'],
-        ].map(([cmd, desc]) => `
-          <div style="padding:8px;background:var(--bg3);border-radius:8px;">
-            <div style="font-size:11px;font-weight:600;color:var(--accent);">${cmd}</div>
-            <div style="font-size:10px;color:var(--text2);">${desc}</div>
-          </div>`).join('')}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:700;">📖 My Library</div>
+        <div id="lib-count-badge" style="font-size:10px;color:var(--text3);"></div>
       </div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">Textbooks & lessons Asuka has learned. Tap to replay, 🗑 to remove.</div>
+      <div id="study-library-list"><div style="color:var(--text3);font-size:12px;text-align:center;padding:20px;">Loading…</div></div>
     </div>
   </div>
 
@@ -5636,7 +5599,7 @@ document.querySelectorAll('[data-others-tab]').forEach(tab => {
     const tabEl = document.getElementById('others-' + this.dataset.othersTab)
     if (tabEl) tabEl.classList.add('active')
     // Load content for tab
-    if (this.dataset.othersTab === 'study') loadBooks()
+    if (this.dataset.othersTab === 'study') loadStudyLibrary()
     if (this.dataset.othersTab === 'memory') loadMemories()
     if (this.dataset.othersTab === 'intel') loadIntel()
   })
@@ -5650,6 +5613,26 @@ document.querySelectorAll('.others-tab-content').forEach((el, i) => {
 
 // ── ✨ Intelligence tab (brain stats + live swarm + what she knows) ─────────
 async function loadIntel() { loadBrainStats(); loadWhatSheKnows(); loadRules(); loadReplays() }
+
+// ── Study Library (Others → Study) ──
+document.getElementById('open-classroom-btn')?.addEventListener('click', () => ipcRenderer.invoke('open-classroom').catch(()=>{}))
+async function loadStudyLibrary() {
+  const el = document.getElementById('study-library-list')
+  if (!el) return
+  const lib = await ipcRenderer.invoke('get-lesson-library').catch(()=>({lessons:[]}))
+  const badge = document.getElementById('lib-count-badge')
+  if (badge) badge.textContent = `${lib.lessons.length} saved`
+  if (!lib.lessons.length) { el.innerHTML = '<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px;">No lessons yet. Tap "New Lesson" to upload a document.</div>'; return }
+  el.innerHTML = lib.lessons.map(l => `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:7px;">
+    <div style="cursor:pointer;flex:1;" class="sl-open" data-id="${l.id}">
+      <div style="font-weight:600;font-size:13px;">${l.topic}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px;">${l.beatCount} beats · ${(l.source||[]).join(', ')} · ${new Date(l.ts).toLocaleDateString()}</div>
+    </div>
+    <span class="sl-rm" data-id="${l.id}" style="cursor:pointer;color:var(--red);font-size:14px;padding-left:10px;">🗑</span>
+  </div>`).join('')
+  el.querySelectorAll('.sl-open').forEach(x => x.onclick = () => ipcRenderer.invoke('open-lesson', { id: x.dataset.id }).catch(()=>{}))
+  el.querySelectorAll('.sl-rm').forEach(x => x.onclick = async (ev) => { ev.stopPropagation(); await ipcRenderer.invoke('remove-lesson', { id: x.dataset.id }).catch(()=>{}); loadStudyLibrary() })
+}
 
 // ── Your Rules ──
 async function loadRules() {

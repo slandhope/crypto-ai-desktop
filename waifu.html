@@ -22,6 +22,7 @@
     #mic-mute-btn  { bottom:430px; left:10px; background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.3); }
     #webcam-btn    { bottom:380px; left:10px; background:rgba(255,140,0,0.15);  border:1px solid rgba(255,140,0,0.3); }
     #dashboard-btn { bottom:330px; left:10px; background:rgba(150,0,255,0.15);  border:1px solid rgba(150,0,255,0.3); }
+    #study-btn     { bottom:280px; left:10px; background:rgba(124,196,255,0.18); border:1px solid rgba(124,196,255,0.4); }
     #care-btn { bottom:385px; left:10px; background:rgba(240,168,208,0.18); border:1px solid rgba(240,168,208,0.4); }
 
     #her-mute-btn.muted { background:rgba(248,113,113,0.2); border-color:rgba(248,113,113,0.4); }
@@ -128,6 +129,7 @@
   <div id="mic-mute-btn" class="btn" title="Mute your mic">🎤</div>
   <div id="webcam-btn"   class="btn" title="Toggle camera">📷</div>
   <div id="dashboard-btn" class="btn" title="Dashboard">📊</div>
+  <div id="study-btn" class="btn" title="Study with Asuka">📚</div>
   <div id="care-btn" class="btn" title="Care & Shop">🎀</div>
 
   <div id="levelup-pop" style="display:none;position:fixed;inset:0;z-index:10001;background:rgba(10,12,22,0.85);backdrop-filter:blur(8px);align-items:center;justify-content:center;flex-direction:column;font-family:system-ui;pointer-events:none;">
@@ -295,7 +297,7 @@
 
     // ── Drag window ────────────────────────────────────────────────────────
     let isDragging = false, dragX, dragY
-    const noDragIds = ['history-btn','chat-btn','her-mute-btn','mic-mute-btn','user-input','send-btn','webcam-btn','dashboard-btn','care-btn','confirm-yes','confirm-no','history-clear']
+    const noDragIds = ['history-btn','chat-btn','her-mute-btn','mic-mute-btn','user-input','send-btn','webcam-btn','dashboard-btn','study-btn','care-btn','confirm-yes','confirm-no','history-clear']
     document.addEventListener('mousedown', e => {
       if (noDragIds.includes(e.target.id) || e.target.closest('#chat-panel') || e.target.closest('#confirm-bar') || e.target.closest('#history-panel')) return
       isDragging = true; dragX = e.screenX; dragY = e.screenY; e.preventDefault()
@@ -1442,6 +1444,18 @@ VOICE RESPONSE RULES — CRITICAL:
 
     chatBtn.addEventListener('click', () => chatPanel.classList.toggle('open'))
     dashBtn.addEventListener('click', () => ipcRenderer.send('open-dashboard'))
+    document.getElementById('study-btn')?.addEventListener('click', () => ipcRenderer.invoke('open-classroom').catch(()=>{}))
+    // whiteboard note: mirror what Asuka is teaching in the classroom, right on the waifu window
+    ipcRenderer.on('classroom-beat', (e, b) => {
+      const note = document.getElementById('wb-note')
+      if (!note) return
+      if (b && (b.board || b.boardTitle)) {
+        document.getElementById('wb-note-title').textContent = b.boardTitle || 'Whiteboard'
+        document.getElementById('wb-note-body').innerHTML = String(b.board||'').replace(/\*\*(.+?)\*\*/g,'<b style="color:#fbbf24">$1</b>')
+        note.style.display = 'block'
+      }
+    })
+    document.getElementById('wb-note-close')?.addEventListener('click', () => { document.getElementById('wb-note').style.display='none' })
 
     sendBtn.addEventListener('click', async () => {
       const msg = userInput.value.trim(); if (!msg) return
@@ -1483,7 +1497,7 @@ VOICE RESPONSE RULES — CRITICAL:
       let character = localStorage.getItem('pixelChar') || 'huohuo'
 
       // states we load + how many frames each strip has (for timing; actual count read from image)
-      const STATES = ['idle','walk','happy','celebrate','dance','sad','sleep','think','exercise','held','sing','sit','climb']
+      const STATES = ['idle','walk','happy','celebrate','dance','sad','sleep','think','exercise','held','sing','sit','climb','read','stretch','yawn','petcat']
       const strips = {}   // strips[char][state] = { img, frames, ready }
 
       function loadStrip(char, st) {
@@ -1507,6 +1521,10 @@ VOICE RESPONSE RULES — CRITICAL:
         if (st === 'sit') { if (c.sit?.ready) return 'sit'; if (c.sleep?.ready) return 'sleep'; if (c.idle?.ready) return 'idle' }
         if (st === 'sing') { if (c.sing?.ready) return 'sing'; if (c.happy?.ready) return 'happy'; if (c.idle?.ready) return 'idle' }
         if (st === 'tilt') { if (c.think?.ready) return 'think'; if (c.idle?.ready) return 'idle' }
+        if (st === 'read') { if (c.read?.ready) return 'read'; if (c.sit?.ready) return 'sit'; if (c.idle?.ready) return 'idle' }
+        if (st === 'stretch') { if (c.stretch?.ready) return 'stretch'; if (c.exercise?.ready) return 'exercise'; if (c.idle?.ready) return 'idle' }
+        if (st === 'yawn') { if (c.yawn?.ready) return 'yawn'; if (c.sleep?.ready) return 'sleep'; if (c.idle?.ready) return 'idle' }
+        if (st === 'petcat') { if (c.petcat?.ready) return 'petcat'; if (c.happy?.ready) return 'happy'; if (c.idle?.ready) return 'idle' }
         if (c[st] && c[st].ready) return st
         if (st === 'celebrate' && c.happy?.ready) return 'happy'
         if (st === 'sleep' && c.idle?.ready) return 'idle'
@@ -1559,7 +1577,9 @@ VOICE RESPONSE RULES — CRITICAL:
         }
       }
 
-      function setState(s){ state=s; stateTimer=0; if(s==='walk'&&Math.random()<0.5)dir*=-1; if(s==='sing')showBubble('♪ la la~ 🎵',2500); if(s==='sit')showBubble('*sits* 😌',2000) }
+      function setState(s){ state=s; stateTimer=0; if(s==='walk'&&Math.random()<0.5)dir*=-1; if(s==='sing')showBubble('♪ la la~ 🎵',2500); if(s==='sit')showBubble('*sits* 😌',2000)
+        if(s==='read')showBubble('reading… 📖',2500); if(s==='stretch')showBubble('mmf~ stretch! ✨',2000)
+        if(s==='yawn')showBubble('*yawn* 😴',2000); if(s==='petcat')showBubble('kitty! 🐱💕',2500) }
       // floating musical notes while singing
       function spawnNote(){
         if(!pixelMode)return
@@ -1580,7 +1600,10 @@ VOICE RESPONSE RULES — CRITICAL:
           if(posX>maxX){ posX=maxX; if(Math.random()<0.5){ setState('climb'); climbSide='right' } else dir=-1 }
           if(stateTimer%3===0 && Math.random()<0.25) posY += (Math.random()<0.5?-1:1)*20
           posY = Math.max(20, Math.min(floorY, posY))
-          if(stateTimer>30&&Math.random()<0.05){ const r=Math.random(); setState(r<0.2?'idle':r<0.35?'sleep':r<0.5?'dance':r<0.62?'exercise':r<0.74?'sit':r<0.87?'sing':'tilt') }
+          if(stateTimer>30&&Math.random()<0.05){
+            const acts=['idle','sleep','dance','exercise','sit','sing','tilt','read','stretch','yawn','petcat']
+            setState(acts[Math.floor(Math.random()*acts.length)])
+          }
         }
         else if(state==='sit'){ if(stateTimer>50&&Math.random()<0.05)setState('walk') }
         else if(state==='sing'){
@@ -1588,6 +1611,10 @@ VOICE RESPONSE RULES — CRITICAL:
           if(stateTimer>55&&Math.random()<0.05)setState('walk')
         }
         else if(state==='tilt'){ if(stateTimer>30&&Math.random()<0.07)setState('walk') }
+        else if(state==='read'){ if(stateTimer>80&&Math.random()<0.04)setState('walk') }
+        else if(state==='stretch'){ if(stateTimer>30&&Math.random()<0.07)setState('walk') }
+        else if(state==='yawn'){ if(stateTimer>25&&Math.random()<0.08)setState('sleep') }
+        else if(state==='petcat'){ if(stateTimer>70&&Math.random()<0.04)setState('walk') }
         else if(state==='climb'){
           // climb UP the wall she hit
           posX = climbSide==='left' ? 4 : maxX
@@ -1730,6 +1757,22 @@ VOICE RESPONSE RULES — CRITICAL:
         else if(ev==='trade_open'){showBubble('trade opened 👀',2500)}
         else if(ev==='swarm_thinking'){setState('think');showBubble('scanning… 🔍',2500)}
       })
+
+      // ── React to user activity: idle long → she sleeps; you come back → she perks up ──
+      let _lastActivity = Date.now(), _wasIdle = false
+      function noteActivity(){ _lastActivity = Date.now() }
+      window.addEventListener('mousemove', noteActivity)
+      window.addEventListener('keydown', noteActivity)
+      setInterval(()=>{
+        if(!pixelMode) return
+        const idleMs = Date.now() - _lastActivity
+        if(idleMs > 60000 && !_wasIdle){           // 1 min idle → she gets sleepy
+          _wasIdle = true; setState('sleep'); showBubble('zzz… 💤', 3000)
+        } else if(idleMs < 3000 && _wasIdle){       // you're back → she perks up
+          _wasIdle = false; setState('celebrate'); showBubble('you\'re back! 🌸', 2500)
+        }
+      }, 4000)
+
       window._pixelSay=(txt)=>showBubble(txt,3000)
     }
     // run after DOM is ready so the pixel-pet canvas element exists
@@ -1737,6 +1780,13 @@ VOICE RESPONSE RULES — CRITICAL:
     else initPixelPet()
 
   </script>
+
+  <!-- ── Study whiteboard note (shows what Asuka is teaching, like the images) ── -->
+  <div id="wb-note" style="display:none;position:fixed;top:14px;left:14px;right:14px;background:rgba(20,26,38,.96);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px 14px;z-index:9997;box-shadow:0 8px 30px rgba(0,0,0,.4);">
+    <div id="wb-note-title" style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#9fe;opacity:.8;margin-bottom:5px;font-family:monospace;">Whiteboard</div>
+    <div id="wb-note-body" style="font-size:12px;line-height:1.5;color:#eafff5;font-family:monospace;white-space:pre-wrap;max-height:120px;overflow-y:auto;"></div>
+    <div id="wb-note-close" style="position:absolute;top:8px;right:10px;cursor:pointer;color:#889;font-size:14px;">×</div>
+  </div>
 
   <!-- ── Pixel Pet (idle alter-ego, double-tap to toggle) ── -->
   <canvas id="pixel-pet" width="128" height="128" style="display:none;position:fixed;bottom:20px;left:20px;width:140px;height:140px;image-rendering:pixelated;image-rendering:crisp-edges;cursor:pointer;z-index:9999;"></canvas>

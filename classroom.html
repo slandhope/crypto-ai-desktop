@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Study with Asuka</title>
+<script src="./assets/live2dcubismcore.min.js"></script>
+<script src="./node_modules/pixi.js/dist/browser/pixi.min.js"></script>
+<script src="./node_modules/pixi-live2d-display/dist/cubism4.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --bg:#0d1018; --bg2:#141a26; --bg3:#1b2333; --border:rgba(255,255,255,.09);
+    --text:#eef2f8; --text2:#aab3c5; --text3:#6b7488; --accent:#7cc4ff; --pink:#f3a8d0;
+    --green:#4ade80; --gold:#fbbf24;
+  }
+  html,body { height:100%; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); overflow:hidden; }
+  .hidden { display:none !important; }
+
+  /* window drag bar */
+  #titlebar { height:34px; -webkit-app-region:drag; display:flex; align-items:center; justify-content:center; color:var(--text3); font-size:12px; position:fixed; top:0; left:0; right:0; z-index:50; }
+  #close-x { position:fixed; top:8px; right:12px; -webkit-app-region:no-drag; width:26px; height:26px; border-radius:50%; background:rgba(255,90,95,.15); color:#ff5a5f; border:none; cursor:pointer; font-size:15px; z-index:51; }
+
+  /* ── SETUP / UPLOAD SCREEN ── */
+  #setup { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:24px; background:radial-gradient(1200px 600px at 50% -10%, rgba(124,196,255,.08), transparent); }
+  .card { width:520px; max-width:94vw; background:var(--bg2); border:1px solid var(--border); border-radius:22px; padding:28px; box-shadow:0 20px 60px rgba(0,0,0,.4); }
+  .card h1 { font-size:24px; font-weight:600; letter-spacing:-.3px; margin-bottom:4px; }
+  .card .sub { color:var(--text2); font-size:13px; margin-bottom:22px; }
+  .drop { border:2px dashed var(--pink); border-radius:16px; padding:34px 20px; text-align:center; cursor:pointer; transition:all .2s; background:rgba(243,168,208,.05); }
+  .drop:hover { background:rgba(243,168,208,.1); }
+  .drop .big { font-size:15px; font-weight:600; margin-bottom:4px; }
+  .drop .small { font-size:11px; color:var(--text3); }
+  .toggles { display:flex; gap:12px; margin:18px 0; }
+  .toggle { flex:1; background:var(--bg3); border:1px solid var(--border); border-radius:12px; padding:12px; cursor:pointer; display:flex; align-items:center; gap:10px; font-size:12px; transition:all .2s; }
+  .toggle.on { border-color:var(--accent); background:rgba(124,196,255,.1); }
+  .toggle .dot { width:34px; height:20px; border-radius:20px; background:#33405a; position:relative; flex-shrink:0; transition:all .2s; }
+  .toggle.on .dot { background:var(--accent); }
+  .toggle .dot::after { content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; transition:all .2s; }
+  .toggle.on .dot::after { left:16px; }
+  #file-list { margin:12px 0; display:flex; flex-direction:column; gap:6px; }
+  .file-chip { display:flex; align-items:center; justify-content:space-between; background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:8px 12px; font-size:12px; }
+  .file-chip .rm { cursor:pointer; color:#ff5a5f; font-size:14px; }
+  .btn-primary { width:100%; padding:14px; border:none; border-radius:14px; background:var(--accent); color:#001; font-size:15px; font-weight:700; cursor:pointer; transition:opacity .2s; }
+  .btn-primary:disabled { opacity:.4; cursor:not-allowed; }
+  .btn-ghost { width:100%; padding:11px; margin-top:8px; border:1px solid var(--border); border-radius:12px; background:transparent; color:var(--text2); font-size:12px; cursor:pointer; }
+
+  /* ── TEACHING SCENE ── */
+  #scene { position:absolute; inset:0; display:flex; flex-direction:column; background:linear-gradient(180deg,#10151f 0%,#0b0e15 100%); }
+  #scene.hidden { display:none; }
+  #stage { flex:1; position:relative; overflow:hidden; }
+  #classroom-bg { position:absolute; inset:0; background:linear-gradient(160deg,#1a2436,#0f1622); }
+  #board { position:absolute; top:6%; left:6%; right:6%; height:52%; background:#14342b; border:8px solid #6b4b2f; border-radius:8px; box-shadow:inset 0 0 40px rgba(0,0,0,.5); padding:22px 26px; overflow-y:auto; }
+  #board-title { color:#9fe; font-size:13px; letter-spacing:2px; text-transform:uppercase; opacity:.7; margin-bottom:12px; font-family:'Courier New',monospace; }
+  #board-content { color:#eafff5; font-size:19px; line-height:1.7; font-family:'Courier New',monospace; white-space:pre-wrap; }
+  #board-content .hl { color:var(--gold); font-weight:700; }
+  #canvas-wrap { position:absolute; bottom:0; right:4%; width:300px; height:62%; pointer-events:none; }
+  #live2d { width:100%; height:100%; }
+
+  /* dialogue box */
+  #dialogue { flex-shrink:0; min-height:150px; background:rgba(10,13,20,.94); border-top:1px solid var(--border); padding:18px 26px 20px; position:relative; }
+  #speaker { display:inline-block; background:var(--accent); color:#001; font-weight:700; font-size:13px; padding:3px 14px; border-radius:12px 12px 0 0; position:absolute; top:-24px; left:26px; }
+  #line { font-size:17px; line-height:1.6; color:var(--text); min-height:52px; }
+  #line .hl { color:var(--accent); font-weight:600; }
+  #controls { display:flex; gap:8px; margin-top:14px; align-items:center; }
+  .ctrl { padding:8px 16px; border-radius:20px; border:1px solid var(--border); background:var(--bg3); color:var(--text2); font-size:12px; font-weight:500; cursor:pointer; display:flex; align-items:center; gap:5px; transition:all .15s; }
+  .ctrl:hover { background:var(--bg2); color:var(--text); }
+  .ctrl.active { background:var(--accent); color:#001; border-color:var(--accent); }
+  #tap-hint { margin-left:auto; color:var(--text3); font-size:11px; }
+  #progress-bar { position:absolute; top:0; left:0; height:3px; background:var(--accent); transition:width .3s; }
+
+  /* Ask input */
+  #ask-bar { display:none; gap:8px; margin-top:10px; }
+  #ask-bar.show { display:flex; }
+  #ask-input { flex:1; background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:10px 14px; color:var(--text); font-size:13px; outline:none; }
+  #ask-send { padding:10px 18px; border:none; border-radius:10px; background:var(--pink); color:#001; font-weight:700; cursor:pointer; }
+
+  /* Log overlay */
+  #log-overlay { position:absolute; inset:0; background:rgba(8,10,16,.96); z-index:40; padding:40px; overflow-y:auto; display:none; }
+  #log-overlay.show { display:block; }
+  #log-overlay h2 { font-size:18px; margin-bottom:16px; }
+  .log-item { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:10px; }
+  .log-item .n { color:var(--text3); font-size:11px; margin-bottom:4px; }
+  .log-item .t { font-size:14px; line-height:1.5; }
+
+  #loading { position:absolute; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:16px; background:var(--bg); z-index:60; }
+  #loading.show { display:flex; }
+  .spinner { width:44px; height:44px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 1s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  #loading .msg { color:var(--text2); font-size:13px; }
+</style>
+</head>
+<body>
+  <div id="titlebar">📚 Study with Asuka</div>
+  <button id="close-x">×</button>
+
+  <!-- SETUP / UPLOAD -->
+  <div id="setup">
+    <div class="card">
+      <h1>Study with Asuka 🌸</h1>
+      <div class="sub">Upload something you want to learn — she'll teach it to you on the board, step by step.</div>
+
+      <div class="drop" id="drop">
+        <div class="big">📄 Upload document</div>
+        <div class="small">PDF · TXT · DOCX · MD — up to 5 files</div>
+        <input type="file" id="file-input" multiple accept=".pdf,.txt,.docx,.md" class="hidden">
+      </div>
+      <div id="file-list"></div>
+
+      <div class="toggles">
+        <div class="toggle on" id="tg-board"><span class="dot"></span><div><b>Whiteboard</b><br><span style="color:var(--text3)">Formulas & notes</span></div></div>
+        <div class="toggle" id="tg-voice"><span class="dot"></span><div><b>Voice</b><br><span style="color:var(--text3)">Read aloud</span></div></div>
+      </div>
+
+      <button class="btn-primary" id="start-btn" disabled>Start the lesson</button>
+      <button class="btn-ghost" id="library-btn">📚 My Library — manage textbooks</button>
+    </div>
+  </div>
+
+  <!-- LIBRARY -->
+  <div id="library" class="hidden" style="position:absolute;inset:0;padding:24px;overflow-y:auto;background:var(--bg);">
+    <div style="max-width:620px;margin:0 auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <h1 style="font-size:22px;font-weight:600;">📚 My Library</h1>
+        <button class="btn-ghost" id="lib-back" style="width:auto;padding:8px 16px;margin:0;">← Back</button>
+      </div>
+      <div style="color:var(--text2);font-size:13px;margin-bottom:20px;" id="lib-count">Your saved lessons & textbooks.</div>
+      <div id="lib-list"></div>
+    </div>
+  </div>
+
+  <!-- CHAPTER PICKER (after extracting a big doc) -->
+  <div id="chapters" class="hidden" style="position:absolute;inset:0;padding:24px;overflow-y:auto;background:var(--bg);">
+    <div style="max-width:620px;margin:0 auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <h1 style="font-size:22px;font-weight:600;">📖 <span id="ch-doc-name">Document</span></h1>
+        <button class="btn-ghost" id="ch-back" style="width:auto;padding:8px 16px;margin:0;">← Back</button>
+      </div>
+      <div style="color:var(--text2);font-size:13px;margin-bottom:18px;" id="ch-info">Pick a chapter to study — Asuka will teach just that part.</div>
+      <button class="btn-primary" id="ch-whole" style="margin-bottom:14px;">📚 Teach the whole thing</button>
+      <div id="ch-list"></div>
+    </div>
+  </div>
+
+  <!-- TEACHING SCENE -->
+  <div id="scene" class="hidden">
+    <div id="progress-bar" style="width:0%"></div>
+    <div id="stage">
+      <div id="classroom-bg"></div>
+      <div id="board">
+        <div id="board-title">Whiteboard</div>
+        <div id="board-content"></div>
+      </div>
+      <div id="canvas-wrap"><canvas id="live2d"></canvas></div>
+      <div id="log-overlay">
+        <h2>📖 Lesson Log</h2>
+        <div id="log-list"></div>
+      </div>
+    </div>
+    <div id="dialogue">
+      <span id="speaker">Asuka</span>
+      <div id="line">…</div>
+      <div id="controls">
+        <button class="ctrl" id="c-back">◀ Back</button>
+        <button class="ctrl" id="c-auto">▶ Auto</button>
+        <button class="ctrl" id="c-log">🕓 Log</button>
+        <button class="ctrl" id="c-hide">👁 Hide</button>
+        <button class="ctrl" id="c-ask">✋ Ask</button>
+        <span id="tap-hint">tap anywhere to continue →</span>
+      </div>
+      <div id="ask-bar">
+        <input id="ask-input" placeholder="Ask Asuka a question about this…">
+        <button id="ask-send">Ask</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="loading">
+    <div class="spinner"></div>
+    <div class="msg">Reading your document…</div>
+  </div>
+
+<script>
+const { ipcRenderer } = require('electron');
+
+// ── State ──
+let files = [];
+let beats = [];           // the lesson: [{say, board, boardTitle}]
+let idx = 0;
+let autoTimer = null;
+let currentTopic = '';
+let extractedDoc = null;  // { name, fullText, chapters:[{title, text}] }
+
+// ── SETUP screen ──
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('file-input');
+const fileList = document.getElementById('file-list');
+const startBtn = document.getElementById('start-btn');
+
+drop.onclick = () => fileInput.click();
+drop.ondragover = (e) => { e.preventDefault(); drop.style.background = 'rgba(243,168,208,.15)'; };
+drop.ondragleave = () => { drop.style.background = ''; };
+drop.ondrop = (e) => { e.preventDefault(); drop.style.background=''; addFiles(e.dataTransfer.files); };
+fileInput.onchange = () => addFiles(fileInput.files);
+
+function addFiles(fl) {
+  for (const f of fl) { if (files.length < 5) files.push(f); }
+  renderFiles();
+}
+function renderFiles() {
+  fileList.innerHTML = files.map((f,i) => `<div class="file-chip"><span>📄 ${f.name}</span><span class="rm" data-i="${i}">×</span></div>`).join('');
+  fileList.querySelectorAll('.rm').forEach(x => x.onclick = () => { files.splice(+x.dataset.i,1); renderFiles(); });
+  startBtn.disabled = files.length === 0;
+}
+
+document.getElementById('tg-board').onclick = (e) => e.currentTarget.classList.toggle('on');
+document.getElementById('tg-voice').onclick = (e) => e.currentTarget.classList.toggle('on');
+const voiceOn = () => document.getElementById('tg-voice').classList.contains('on');
+
+document.getElementById('close-x').onclick = () => ipcRenderer.invoke('close-classroom').catch(()=>{});
+document.getElementById('library-btn').onclick = openLibrary;
+document.getElementById('lib-back').onclick = () => { document.getElementById('library').classList.add('hidden'); document.getElementById('setup').classList.remove('hidden'); };
+ipcRenderer.on('show-library', openLibrary);
+ipcRenderer.on('play-lesson', (e, les) => {
+  if (les && les.beats?.length) { beats = les.beats; currentTopic = les.topic; document.getElementById('setup')?.classList.add('hidden'); document.getElementById('library')?.classList.add('hidden'); startScene(); }
+});
+
+async function openLibrary() {
+  const lib = await ipcRenderer.invoke('get-lesson-library').catch(()=>({lessons:[]}));
+  document.getElementById('setup').classList.add('hidden');
+  document.getElementById('library').classList.remove('hidden');
+  const list = document.getElementById('lib-list');
+  document.getElementById('lib-count').textContent = `${lib.lessons.length} saved lesson${lib.lessons.length===1?'':'s'} — tap to replay, or remove.`;
+  if (!lib.lessons.length) { list.innerHTML = '<div style="color:var(--text3);text-align:center;padding:40px;">No lessons yet. Upload a document to start!</div>'; return; }
+  list.innerHTML = lib.lessons.map(l => `<div class="file-chip" style="padding:14px 16px;margin-bottom:8px;">
+    <div style="cursor:pointer;flex:1;" class="lib-open" data-id="${l.id}">
+      <div style="font-weight:600;font-size:14px;">${l.topic}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px;">${l.beatCount} beats · ${l.source.join(', ')} · ${new Date(l.ts).toLocaleDateString()}</div>
+    </div>
+    <span class="rm lib-rm" data-id="${l.id}">🗑</span>
+  </div>`).join('');
+  list.querySelectorAll('.lib-open').forEach(el => el.onclick = () => {
+    const l = lib.lessons.find(x=>x.id===el.dataset.id);
+    if (l && l.beats?.length) { beats=l.beats; currentTopic=l.topic; document.getElementById('library').classList.add('hidden'); startScene(); }
+  });
+  list.querySelectorAll('.lib-rm').forEach(el => el.onclick = async (ev) => {
+    ev.stopPropagation();
+    await ipcRenderer.invoke('remove-lesson', { id: el.dataset.id }).catch(()=>{});
+    openLibrary();
+  });
+}
+
+// ── START: extract text locally → show chapters → teach ──
+startBtn.onclick = async () => {
+  document.getElementById('loading').classList.add('show');
+  document.querySelector('#loading .msg').textContent = 'Reading your document…';
+  try {
+    const f = files[0];
+    const buf = await f.arrayBuffer();
+    const b64 = arrayBufferToBase64(buf);
+    const ex = await ipcRenderer.invoke('extract-doc', { name: f.name, type: f.type, b64 });
+    if (!ex || ex.error || !ex.fullText || ex.fullText.trim().length < 40) throw new Error(ex?.error || 'no text');
+    extractedDoc = ex;
+    document.getElementById('loading').classList.remove('show');
+    if ((ex.structure && ex.structure.length > 1) || (ex.chapters && ex.chapters.length > 1)) showChapters(ex);
+    else teachText(ex.name, ex.fullText, ex.name);
+  } catch(e) {
+    const scanned = String(e.message).includes('no text');
+    document.querySelector('#loading .msg').textContent = scanned
+      ? 'This looks like a scanned PDF (images, no readable text). Try a text-based PDF.'
+      : 'Hmm, I could not read that. Try another file?';
+    setTimeout(()=>{ document.getElementById('loading').classList.remove('show'); }, 2600);
+  }
+};
+
+function showChapters(ex) {
+  document.getElementById('setup').classList.add('hidden');
+  document.getElementById('chapters').classList.remove('hidden');
+  document.getElementById('ch-doc-name').textContent = ex.name;
+  const struct = ex.structure && ex.structure.length ? ex.structure : (ex.chapters||[]).map(c=>({...c, lessons:[]}));
+  const nLessons = struct.reduce((a,c)=>a+(c.lessons?.length||0),0);
+  document.getElementById('ch-info').textContent = `${struct.length} chapters${nLessons?` · ${nLessons} lessons`:''} · ~${Math.round(ex.fullText.length/1000)}k chars. Pick a chapter or lesson.`;
+  const list = document.getElementById('ch-list');
+  list.innerHTML = struct.map((c,ci) => {
+    const hasLessons = c.lessons && c.lessons.length;
+    return `<div style="margin-bottom:8px;">
+      <div class="ch-row" data-ci="${ci}" style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:11px;padding:13px 15px;cursor:pointer;">
+        <div style="font-weight:600;font-size:13px;">${hasLessons?'▸ ':''}${c.title||('Chapter '+(ci+1))}</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          ${hasLessons?`<span style="font-size:10px;color:var(--text3);">${c.lessons.length} lessons</span>`:''}
+          <span class="ch-teach" data-ci="${ci}" style="color:var(--accent);font-size:11px;padding:3px 8px;border:1px solid var(--accent);border-radius:8px;">Teach ▶</span>
+        </div>
+      </div>
+      <div class="ch-lessons" id="ch-lessons-${ci}" style="display:none;padding:6px 0 0 14px;">
+        ${hasLessons ? c.lessons.map((l,li)=>`<div class="lesson-row" data-ci="${ci}" data-li="${li}" style="display:flex;justify-content:space-between;align-items:center;background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:10px 13px;margin-bottom:5px;cursor:pointer;">
+          <span style="font-size:12px;">${l.title||('Lesson '+(li+1))}</span><span style="color:var(--accent);font-size:11px;">▶</span></div>`).join('') : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // expand/collapse chapter
+  list.querySelectorAll('.ch-row').forEach(row => row.onclick = (e) => {
+    if (e.target.closest('.ch-teach')) return;   // teach button handled separately
+    const sub = document.getElementById('ch-lessons-'+row.dataset.ci);
+    if (sub) sub.style.display = sub.style.display==='none' ? 'block' : 'none';
+  });
+  // teach a whole chapter
+  list.querySelectorAll('.ch-teach').forEach(b => b.onclick = (e) => {
+    e.stopPropagation(); const c = struct[+b.dataset.ci];
+    teachText(`${ex.name} — ${c.title}`, c.text, ex.name);
+  });
+  // teach a single lesson
+  list.querySelectorAll('.lesson-row').forEach(r => r.onclick = (e) => {
+    e.stopPropagation(); const l = struct[+r.dataset.ci].lessons[+r.dataset.li];
+    teachText(`${struct[+r.dataset.ci].title} — ${l.title}`, l.text, ex.name);
+  });
+}
+document.getElementById('ch-back').onclick = () => { document.getElementById('chapters').classList.add('hidden'); document.getElementById('setup').classList.remove('hidden'); };
+document.getElementById('ch-whole').onclick = () => { if (extractedDoc) teachText(extractedDoc.name, extractedDoc.fullText, extractedDoc.name); };
+
+async function teachText(topic, text, source) {
+  document.getElementById('chapters').classList.add('hidden');
+  document.getElementById('loading').classList.add('show');
+  document.querySelector('#loading .msg').textContent = 'Asuka is preparing your lesson…';
+  try {
+    const res = await ipcRenderer.invoke('build-lesson-from-text', { topic, text });
+    if (!res || !res.beats || !res.beats.length) throw new Error('no lesson');
+    beats = res.beats; currentTopic = res.topic || topic;
+    ipcRenderer.invoke('save-lesson-log', { topic: currentTopic, beats, source: [source] }).catch(()=>{});
+    startScene();
+  } catch(e) {
+    document.querySelector('#loading .msg').textContent = 'Could not build the lesson. Try a smaller section?';
+    setTimeout(()=>{ document.getElementById('loading').classList.remove('show'); }, 2600);
+  }
+}
+
+function arrayBufferToBase64(buf) {
+  let binary=''; const bytes=new Uint8Array(buf);
+  for (let i=0;i<bytes.length;i++) binary+=String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+// ── SCENE ──
+function startScene() {
+  document.getElementById('loading').classList.remove('show');
+  document.getElementById('setup').classList.add('hidden');
+  document.getElementById('scene').classList.remove('hidden');
+  initLive2D();
+  idx = 0; renderBeat();
+}
+
+function renderBeat() {
+  const b = beats[idx];
+  if (!b) return finishLesson();
+  document.getElementById('line').innerHTML = highlight(b.say || '');
+  const board = document.getElementById('board');
+  const boardOn = document.getElementById('tg-board').classList.contains('on');
+  if (boardOn && (b.board || b.boardTitle)) {
+    board.style.display='block';
+    document.getElementById('board-title').textContent = b.boardTitle || currentTopic;
+    document.getElementById('board-content').innerHTML = highlight(b.board || '');
+  } else { board.style.display = boardOn ? 'block' : 'none'; }
+  document.getElementById('progress-bar').style.width = ((idx+1)/beats.length*100) + '%';
+  if (voiceOn() && b.say) ipcRenderer.invoke('classroom-speak', { text: b.say }).catch(()=>{});
+  // send a beat to the waifu whiteboard too (logs peek into waifu window)
+  ipcRenderer.invoke('classroom-beat', { topic: currentTopic, say: b.say, board: b.board, boardTitle: b.boardTitle, i: idx, total: beats.length }).catch(()=>{});
+}
+function highlight(t){ return String(t).replace(/\*\*(.+?)\*\*/g,'<span class="hl">$1</span>'); }
+
+function next(){ if (idx < beats.length-1){ idx++; renderBeat(); } else finishLesson(); }
+function prev(){ if (idx>0){ idx--; renderBeat(); } }
+function finishLesson(){
+  document.getElementById('line').innerHTML = "That's the whole lesson! 🌸 Want to go over anything again? Tap <b>Back</b>, or <b>Ask</b> me a question.";
+  document.getElementById('progress-bar').style.width='100%';
+  ipcRenderer.invoke('lesson-finished', { topic: currentTopic }).catch(()=>{});
+}
+
+// tap stage to advance (not on controls/board scroll)
+document.getElementById('stage').onclick = (e) => {
+  if (e.target.closest('#log-overlay')) return;
+  next();
+};
+
+document.getElementById('c-back').onclick = (e)=>{ e.stopPropagation(); prev(); };
+document.getElementById('c-auto').onclick = (e)=>{ e.stopPropagation(); toggleAuto(e.currentTarget); };
+document.getElementById('c-log').onclick = (e)=>{ e.stopPropagation(); toggleLog(); };
+document.getElementById('c-hide').onclick = (e)=>{ e.stopPropagation(); toggleHide(); };
+document.getElementById('c-ask').onclick = (e)=>{ e.stopPropagation(); toggleAsk(); };
+
+function toggleAuto(btn){
+  if (autoTimer){ clearInterval(autoTimer); autoTimer=null; btn.classList.remove('active'); btn.textContent='▶ Auto'; }
+  else { btn.classList.add('active'); btn.textContent='⏸ Auto'; autoTimer=setInterval(()=>{ if(idx>=beats.length-1){clearInterval(autoTimer);autoTimer=null;btn.classList.remove('active');btn.textContent='▶ Auto';} else next(); }, 4200); }
+}
+function toggleLog(){
+  const o=document.getElementById('log-overlay'); o.classList.toggle('show');
+  if (o.classList.contains('show')){
+    document.getElementById('log-list').innerHTML = beats.slice(0,idx+1).map((b,i)=>`<div class="log-item"><div class="n">Beat ${i+1}</div><div class="t">${highlight(b.say||'')}</div></div>`).join('');
+  }
+}
+let hidden=false;
+function toggleHide(){ hidden=!hidden; document.getElementById('dialogue').style.opacity = hidden?'0':'1'; document.getElementById('board').style.opacity = hidden?'0':'1'; }
+function toggleAsk(){ document.getElementById('ask-bar').classList.toggle('show'); document.getElementById('ask-input').focus(); }
+
+document.getElementById('ask-send').onclick = askQuestion;
+document.getElementById('ask-input').onkeydown = (e)=>{ if(e.key==='Enter') askQuestion(); };
+async function askQuestion(){
+  const q = document.getElementById('ask-input').value.trim();
+  if (!q) return;
+  document.getElementById('ask-input').value='';
+  document.getElementById('line').innerHTML = '💭 thinking…';
+  const ctx = beats.slice(Math.max(0,idx-2), idx+1).map(b=>b.say).join(' ');
+  const res = await ipcRenderer.invoke('classroom-ask', { question:q, topic:currentTopic, context:ctx }).catch(()=>null);
+  document.getElementById('line').innerHTML = highlight(res?.answer || "Hmm, ask me that again?");
+}
+
+// ── Live2D Asuka (2D model, not a static image) ──
+async function initLive2D(){
+  try {
+    const { Live2DModel } = PIXI.live2d;
+    const app = new PIXI.Application({ view: document.getElementById('live2d'), autoStart:true, transparent:true, backgroundAlpha:0, width:300, height:460 });
+    const model = await Live2DModel.from('./assets/model/huohuo.model3.json');
+    app.stage.addChild(model);
+    model.anchor.set(0.5, 1);
+    model.x = 150; model.y = 460; model.scale.set(0.055);
+  } catch(e) { /* model optional; scene still works */ }
+}
+</script>
+</body>
+</html>

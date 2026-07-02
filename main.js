@@ -9988,6 +9988,232 @@ function openLessonWindow() {
 }
 ipcMain.handle('close-lesson', () => { if (lessonWindow && !lessonWindow.isDestroyed()) lessonWindow.close(); return { ok: true }; });
 
+// ═══════════════════════════════════════════════════════════════════
+//  CLASSROOM — upload a doc → Asuka teaches it beat-by-beat (Live2D)
+// ═══════════════════════════════════════════════════════════════════
+const LESSON_LOG_FILE = path.join(app.getPath('userData'), 'lesson-library.json');
+function loadLessonLibrary() { try { return JSON.parse(fs.readFileSync(LESSON_LOG_FILE,'utf8')); } catch { return { lessons: [] }; } }
+function saveLessonLibrary(d) { try { fs.writeFileSync(LESSON_LOG_FILE, JSON.stringify(d,null,2)); } catch(e){} }
+
+let classroomWindow = null;
+function openClassroomWindow() {
+  if (classroomWindow && !classroomWindow.isDestroyed()) { classroomWindow.show(); classroomWindow.focus(); return classroomWindow; }
+  const { screen } = require('electron');
+  const wa = screen.getPrimaryDisplay().workArea;
+  classroomWindow = new BrowserWindow({
+    width: Math.min(1100, wa.width-80), height: Math.min(760, wa.height-80),
+    x: wa.x + 40, y: wa.y + 40,
+    frame: false, resizable: true, backgroundColor: '#0d1018',
+    webPreferences: { nodeIntegration: true, contextIsolation: false, webSecurity: false }
+  });
+  classroomWindow.loadFile('classroom.html');
+  classroomWindow.on('closed', () => {
+    classroomWindow = null;
+    try { if (mainWindow && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus(); } } catch(e){}  // Asuka comes back
+  });
+  return classroomWindow;
+}
+ipcMain.handle('open-classroom', () => {
+  openClassroomWindow();
+  try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide(); } catch(e){}  // Asuka steps into the classroom
+  return { ok:true };
+});
+ipcMain.handle('close-classroom', () => { if (classroomWindow && !classroomWindow.isDestroyed()) classroomWindow.close(); return { ok:true }; });
+
+// Extract text LOCALLY from an uploaded doc (free — no AI). Handles big PDFs.
+ipcMain.handle('extract-doc', async (e, { name, type, b64 }) => {
+  try {
+    const isPdf = /pdf/i.test(type) || /\.pdf$/i.test(name);
+    let fullText = '';
+    if (isPdf) {
+      const pdfjs = require('pdfjs-dist/legacy/build/pdf.js');
+      try { pdfjs.GlobalWorkerOptions.workerSrc = require.resolve('pdfjs-dist/legacy/build/pdf.worker.js'); } catch(e){}
+      const data = Buffer.from(b64, 'base64');
+      const doc = await pdfjs.getDocument({
+        data: new Uint8Array(data),
+        useWorkerFetch: false,
+        isEvalSupported: false,
+        useSystemFonts: false,
+        disableFontFace: true,
+        verbosity: 0
+      }).promise;
+      const pages = [];
+      const maxPages = Math.min(doc.numPages, 1500);
+      for (let p = 1; p <= maxPages; p++) {
+        try {
+          const page = await doc.getPage(p);
+          const tc = await page.getTextContent();
+          pages.push(tc.items.map(it => it.str).join(' '));
+        } catch(pe) { /* skip a bad page, keep going */ }
+      }
+      fullText = pages.join('\n\n');
+    } else {
+      fullText = Buffer.from(b64, 'base64').toString('utf8');
+    }
+    fullText = (fullText || '').replace(/\s+\n/g,'\n').trim();
+    if (fullText.length < 40) return { error: 'no text', fullText:'' };
+
+    // Build a two-level structure (chapters → lessons). AI-detected for accuracy,
+    // with a pattern-match fast path.
+    const structure = await detectStructure(fullText, name);
+    return { name, fullText, structure, chapters: structure.map(c => ({ title: c.title, text: c.text })) };
+  } catch(err) {
+    console.error('extract-doc error:', err.message);
+    return { error: err.message, fullText:'' };
+  }
+});
+
+// Detect chapters → lessons. Returns [{title, text, lessons:[{title, text}]}]
+async function detectStructure(text, name) {
+  // ── Fast path: clear chapter + lesson headings ──
+  const chapRe = /(?:^|\n)\s*((?:chapter|unit|part|第\s*[\d一二三四五六七八九十]+\s*章)\b[^\n]{0,70})/gi;
+  const chapMarks = []; let m;
+  while ((m = chapRe.exec(text)) !== null) chapMarks.push({ idx: m.index, title: m[1].trim() });
+
+  const buildLessons = (chunk, baseIdx) => {
+    const lessonRe = /(?:^|\n)\s*((?:lesson|section|第\s*[\d一二三四五六七八九十]+\s*[課節]|\d+\.\d+)\b[^\n]{0,70})/gi;
+    const lm = []; let x;
+    while ((x = lessonRe.exec(chunk)) !== null) lm.push({ idx: x.index, title: x[1].trim() });
+    const out = [];
+    if (lm.length >= 2) {
+      for (let i=0;i<lm.length;i++){
+        const s = lm[i].idx, e = i+1<lm.length ? lm[i+1].idx : chunk.length;
+        let t = chunk.slice(s,e).trim(); if (t.length>16000) t=t.slice(0,16000);
+        out.push({ title: lm[i].title, text: t });
+      }
+    }
+    return out;
+  };
+
+  if (chapMarks.length >= 2) {
+    const chapters = [];
+    for (let i=0;i<chapMarks.length;i++){
+      const s = chapMarks[i].idx, e = i+1<chapMarks.length ? chapMarks[i+1].idx : text.length;
+      const chunk = text.slice(s,e).trim();
+      const lessons = buildLessons(chunk, s);
+      let ctext = chunk; if (ctext.length>16000) ctext=ctext.slice(0,16000);
+      chapters.push({ title: chapMarks[i].title, text: ctext, lessons });
+    }
+    return chapters;
+  }
+
+  // ── Smart path: ask the AI to read the table of contents ──
+  try {
+    const sample = text.slice(0, 24000);   // beginning usually has TOC/structure
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 1500,
+      system: `You are given the start of a textbook/document. Identify its structure as chapters, each with lessons/sections inside. Use the document's own titles (keep original language, e.g. Japanese). Reply ONLY JSON: {"chapters":[{"title":"...","lessons":[{"title":"..."}]}]}. If there are no clear chapters, return a few logical sections as chapters with empty lessons. Max 20 chapters.`,
+      messages: [{ role:'user', content: sample }]
+    });
+    const parsed = JSON.parse(res.content[0].text.trim().replace(/```json|```/g,'').trim());
+    // map AI titles onto text by finding each title's position; slice text between them
+    const flat = [];
+    (parsed.chapters||[]).forEach(c => { flat.push({ t:c.title, lvl:0 }); (c.lessons||[]).forEach(l => flat.push({ t:l.title, lvl:1 })); });
+    const positioned = flat.map(f => ({ ...f, idx: findLoose(text, f.t) })).filter(f => f.idx >= 0).sort((a,b)=>a.idx-b.idx);
+    if (positioned.length >= 2) {
+      const chapters = []; let cur = null;
+      for (let i=0;i<positioned.length;i++){
+        const s = positioned[i].idx, e = i+1<positioned.length ? positioned[i+1].idx : text.length;
+        let seg = text.slice(s,e).trim(); if (seg.length>16000) seg=seg.slice(0,16000);
+        if (positioned[i].lvl === 0) { cur = { title: positioned[i].t, text: seg, lessons: [] }; chapters.push(cur); }
+        else if (cur) cur.lessons.push({ title: positioned[i].t, text: seg });
+        else { cur = { title: positioned[i].t, text: seg, lessons: [] }; chapters.push(cur); }
+      }
+      if (chapters.length) return chapters;
+    }
+  } catch(e) { console.error('structure AI error:', e.message); }
+
+  // ── Fallback: size chunks ──
+  const SIZE = 12000; const chapters = [];
+  if (text.length <= SIZE) return [{ title:'Full document', text, lessons:[] }];
+  for (let i=0,n=1;i<text.length;i+=SIZE,n++) chapters.push({ title:`Section ${n}`, text:text.slice(i,i+SIZE), lessons:[] });
+  return chapters;
+}
+// find a title in text loosely (ignore spacing/case)
+function findLoose(text, title) {
+  if (!title) return -1;
+  const clean = title.replace(/\s+/g,'').slice(0,20);
+  const hay = text.replace(/\s+/g,'');
+  const pos = hay.toLowerCase().indexOf(clean.toLowerCase());
+  if (pos < 0) return -1;
+  // map compressed pos back to approx real pos
+  let real=0, seen=0;
+  for (let i=0;i<text.length && seen<pos;i++){ if(!/\s/.test(text[i])) seen++; real=i; }
+  return real;
+}
+
+// Build a beat-by-beat lesson from EXTRACTED TEXT (small → cheap)
+ipcMain.handle('build-lesson-from-text', async (e, { topic, text }) => {
+  try {
+    const clipped = String(text||'').slice(0, 18000);   // keep cost bounded
+    const sys = `You are Asuka, a warm, upbeat anime study companion who teaches on a whiteboard. Turn the given text into a clean, complete lesson broken into short "beats". Each beat = one thing you say (conversational, 1-2 sentences, friendly) PLUS optional whiteboard content (key formula, term, or bullet — short, board-friendly). Teach it properly, in logical order, 12-30 beats. Wrap key terms in **double asterisks**. Reply ONLY JSON: {"topic":"short title","beats":[{"say":"...","boardTitle":"...","board":"..."}]}. board/boardTitle optional per beat.`;
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 4000,
+      system: sys,
+      messages: [{ role:'user', content: `Topic: ${topic}\n\nTEXT TO TEACH:\n${clipped}` }]
+    });
+    let out = res.content[0].text.trim().replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(out);
+    return { topic: parsed.topic || topic, beats: parsed.beats || [] };
+  } catch(err) {
+    console.error('build-lesson-from-text error:', err.message);
+    return { beats: [] };
+  }
+});
+
+// Ask a question mid-lesson
+ipcMain.handle('classroom-ask', async (e, { question, topic, context }) => {
+  try {
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 400,
+      system: `You are Asuka, a warm anime study companion. Answer the student's question briefly and clearly (2-4 sentences), in character, based on the lesson topic "${topic}". Use **bold** for key terms.`,
+      messages: [{ role:'user', content: `Lesson context: ${context}\n\nStudent asks: ${question}` }]
+    });
+    return { answer: res.content[0].text.trim() };
+  } catch(err) { return { answer: "Ask me that again in a sec?" }; }
+});
+
+// Save a lesson to the library log
+ipcMain.handle('save-lesson-log', (e, { topic, beats, source }) => {
+  const lib = loadLessonLibrary();
+  lib.lessons.unshift({ id: 'les_'+Date.now(), topic, source: source||[], beatCount: (beats||[]).length, beats: beats||[], ts: Date.now() });
+  if (lib.lessons.length > 100) lib.lessons = lib.lessons.slice(0,100);
+  saveLessonLibrary(lib);
+  return { ok:true };
+});
+ipcMain.handle('get-lesson-library', () => loadLessonLibrary());
+ipcMain.handle('remove-lesson', (e, { id }) => {
+  const lib = loadLessonLibrary(); lib.lessons = lib.lessons.filter(l => l.id !== id); saveLessonLibrary(lib); return { ok:true };
+});
+ipcMain.handle('lesson-finished', (e, { topic }) => {
+  try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('asuka-react', { event:'lesson_done' }); } catch(e){}
+  return { ok:true };
+});
+
+// Speak a line (reuse existing TTS if present)
+ipcMain.handle('classroom-speak', async (e, { text }) => {
+  try { if (typeof speakText === 'function') await speakText(text); } catch(e){}
+  return { ok:true };
+});
+
+// Push the current beat to the waifu whiteboard (logs peek into the waifu window)
+ipcMain.handle('classroom-beat', (e, beat) => {
+  try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('classroom-beat', beat); } catch(e){}
+  return { ok:true };
+});
+ipcMain.handle('open-library', () => { openClassroomWindow(); if (classroomWindow) classroomWindow.webContents.send('show-library'); return { ok:true }; });
+ipcMain.handle('open-lesson', (e, { id }) => {
+  const lib = loadLessonLibrary();
+  const les = lib.lessons.find(l => l.id === id);
+  openClassroomWindow();
+  if (classroomWindow && les) {
+    const send = () => classroomWindow.webContents.send('play-lesson', les);
+    if (classroomWindow.webContents.isLoading()) classroomWindow.webContents.once('did-finish-load', send);
+    else setTimeout(send, 400);
+  }
+  return { ok:true };
+});
+
 // Generate a full interactive lesson: explanation + mixed exercises
 async function generateLesson(goal, topic) {
   const prof = getProfile(goal) || { level: 'beginner', summary: 'new learner' };
