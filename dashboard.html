@@ -7,21 +7,21 @@
 <style>
   :root {
     /* Twilight system — dashboard is the "machine" surface (cyan-leaning) */
-    --bg:       #0a0c16;
-    --bg1:      #0f1320;
-    --bg2:      #161b2e;
-    --bg3:      #1f2640;
-    --border:   rgba(255,255,255,0.07);
+    --bg:       #0a0a0c;
+    --bg1:      #101013;
+    --bg2:      #16161a;
+    --bg3:      #1e1e24;
+    --border:   rgba(255,255,255,0.08);
     --border2:  rgba(255,255,255,0.04);
-    --accent:   #2dd4ff;
-    --accent2:  #0ea5e9;
-    --green:    #34d399;
-    --red:      #fb7185;
-    --gold:     #ffce5c;
-    --text:     #f4f5fb;
-    --text2:    #aab2c7;
-    --text3:    #6b7392;
-    --glow:     rgba(45,212,255,0.18);
+    --accent:   #0a84ff;
+    --accent2:  #0066cc;
+    --green:    #30d158;
+    --red:      #ff453a;
+    --gold:     #ffd60a;
+    --text:     #f5f5f7;
+    --text2:    #a0a0a8;
+    --text3:    #6a6a72;
+    --glow:     rgba(10,132,255,0.15);
     --radius:   14px;
     --radius-sm:9px;
     /* Asuka accent (her gradient) available on the dashboard too */
@@ -1395,6 +1395,42 @@
   ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
 @keyframes fadeIn { to { opacity: 1; } }
 </style>
+<style>
+/* ══ PREMIUM POLISH ══ */
+* { -webkit-font-smoothing:antialiased; }
+h1,h2,h3,.col-header,#port-label { letter-spacing:-.2px; }
+#port-value { font-variant-numeric:tabular-nums; letter-spacing:-1px; }
+.p-price,.p-chg { font-variant-numeric:tabular-nums; }
+button { transition:all .18s cubic-bezier(.2,.8,.2,1); }
+button:active { transform:scale(.965); }
+.tg-section,.s-section { box-shadow:inset 0 1px 0 rgba(255,255,255,.045), 0 10px 30px rgba(0,0,0,.28); border-radius:var(--radius); }
+.tg-section:hover { box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 14px 38px rgba(0,0,0,.34); }
+input:focus,textarea:focus,select:focus { border-color:var(--accent) !important; box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+::-webkit-scrollbar { width:9px; height:9px; }
+::-webkit-scrollbar-thumb { background:rgba(255,255,255,.12); border-radius:9px; border:2px solid transparent; background-clip:content-box; }
+::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,.22); background-clip:content-box; }
+::-webkit-scrollbar-track { background:transparent; }
+.skeleton { background:linear-gradient(90deg,var(--bg3) 25%,rgba(255,255,255,.06) 50%,var(--bg3) 75%); background-size:200% 100%; animation:shimmer 1.4s infinite; border-radius:8px; }
+@keyframes shimmer { to { background-position:-200% 0; } }
+.theme-chip { padding:9px 14px; border-radius:10px; border:1px solid var(--border); background:var(--bg3); color:var(--text); cursor:pointer; font-size:12px; font-family:inherit; }
+.theme-chip.active { border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+#cmdk { position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,.5); backdrop-filter:blur(6px); display:none; align-items:flex-start; justify-content:center; padding-top:14vh; }
+#cmdk.show { display:flex; }
+#cmdk-box { width:520px; max-width:92vw; background:color-mix(in srgb, var(--bg2) 88%, transparent); backdrop-filter:blur(24px); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.5); }
+#cmdk-in { width:100%; background:transparent; border:none; outline:none; color:var(--text); font-size:16px; padding:16px 18px; font-family:inherit; border-bottom:1px solid var(--border2); box-shadow:none !important; }
+#cmdk-list { max-height:320px; overflow-y:auto; padding:6px; }
+.cmdk-item { padding:11px 13px; border-radius:10px; font-size:13px; color:var(--text2); cursor:pointer; display:flex; justify-content:space-between; }
+.cmdk-item.sel,.cmdk-item:hover { background:color-mix(in srgb, var(--accent) 14%, transparent); color:var(--text); }
+#onboard { position:fixed; inset:0; z-index:10001; background:rgba(0,0,0,.62); backdrop-filter:blur(8px); display:none; align-items:center; justify-content:center; }
+#onboard.show { display:flex; }
+#onboard-card { width:460px; max-width:90vw; background:var(--bg2); border:1px solid var(--border); border-radius:20px; padding:32px; text-align:center; box-shadow:0 30px 90px rgba(0,0,0,.55); }
+#onboard-card .ob-emoji { font-size:44px; margin-bottom:14px; }
+#onboard-card h2 { font-size:21px; margin-bottom:8px; letter-spacing:-.3px; }
+#onboard-card p { font-size:13px; color:var(--text2); line-height:1.6; margin-bottom:24px; }
+#onboard-dots { display:flex; gap:6px; justify-content:center; margin-bottom:20px; }
+#onboard-dots span { width:6px; height:6px; border-radius:50%; background:var(--border); }
+#onboard-dots span.on { background:var(--accent); }
+</style>
 </head>
 <body>
   <div id="mode-picker" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(8,10,20,0.97);backdrop-filter:blur(12px);align-items:center;justify-content:center;flex-direction:column;font-family:system-ui;">
@@ -1483,6 +1519,7 @@
     <div id="portfolio-hero">
       <div id="port-label">Total Value</div>
       <div id="port-value">$0.00</div>
+      <div id="risk-pill" style="display:none;margin-top:6px;font-size:11px;padding:4px 12px;border-radius:14px;width:fit-content;"></div>
       <div id="port-change" class="pos">+0.00%</div>
       <div style="display:flex;gap:8px;">
         <div id="add-wallet-pill">+ Add Wallet</div>
@@ -1529,6 +1566,14 @@
     <div class="col-header">Tracked Wallets</div>
     <div id="add-track-row">
       <input id="tracked-addr-input" placeholder="Paste wallet address…" />
+      <div style="margin-top:12px;border-top:1px solid var(--border2);padding-top:10px;">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.05em;margin-bottom:6px;">🛡️ TOKEN SAFETY CHECK</div>
+        <div style="display:flex;gap:6px;">
+          <input id="safety-ca" placeholder="Paste token CA…" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:8px 10px;color:var(--text);font-size:11px;outline:none;">
+          <button id="safety-btn" style="padding:8px 12px;border:none;border-radius:9px;background:var(--accent);color:#000;font-weight:700;font-size:11px;cursor:pointer;">Check</button>
+        </div>
+        <div id="safety-result" style="margin-top:8px;"></div>
+      </div>
       <div id="add-track-btn">Track</div>
     </div>
     <div id="tracked-list">
@@ -2830,7 +2875,8 @@
     <div style="font-family:'Fraunces',serif;font-size:24px;font-weight:500;margin-bottom:4px;">Advisor Calls</div>
     <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">Follow a human advisor. Get notified, or let Asuka trade their calls for you.</div>
     <button id="global-rules-btn" style="font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:9px;padding:7px 14px;margin-bottom:12px;">⚙️ My Default Trade Rules</button>
-    <div style="font-size:11px;color:var(--text3);background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-bottom:18px;">⚠️ These are the advisor's calls, not Asuka's AI. Trading them is your choice and your risk. Not financial advice.</div>
+    <div style="font-size:11px;color:var(--text3);background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-bottom:14px;">⚠️ These are the advisor's calls, not Asuka's AI. Trading them is your choice and your risk. Not financial advice.</div>
+    <div id="adv-leaderboard" style="margin-bottom:18px;"></div>
 
     <!-- Advisors you follow -->
     <div id="advisor-list" style="margin-bottom:22px;"></div>
@@ -2852,6 +2898,7 @@
     <button class="trade-tab" data-others-tab="memory">🧠 Memory</button>
     <button class="trade-tab" data-others-tab="intel">✨ Intelligence</button>
     <button class="trade-tab" data-others-tab="life">🌸 Life</button>
+    <button class="trade-tab" data-others-tab="her">💞 Her</button>
   </div>
 
   <!-- ══ INTELLIGENCE TAB ══ -->
@@ -2919,6 +2966,55 @@
       </div>
       <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">Textbooks & lessons Asuka has learned. Tap to replay, 🗑 to remove.</div>
       <div id="study-library-list"><div style="color:var(--text3);font-size:12px;text-align:center;padding:20px;">Loading…</div></div>
+    </div>
+  </div>
+
+  <div class="others-tab-content" id="others-her">
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:700;">💞 Asuka & You</div>
+        <div id="her-tier" style="font-size:12px;color:var(--text2);"></div>
+      </div>
+      <div id="her-xpbar" style="height:6px;background:var(--bg3);border-radius:6px;overflow:hidden;margin-bottom:10px;"><div id="her-xpfill" style="height:100%;width:0%;background:var(--accent);transition:width .4s;"></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--text2);" id="her-stats"></div>
+    </div>
+
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;">About you (she remembers)</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <input class="tg-input" id="her-callme" placeholder="What she calls you" style="margin:0;flex:1;">
+        <input class="tg-input" id="her-bday" type="date" style="margin:0;flex:1;">
+      </div>
+      <input class="tg-input" id="her-dream" placeholder="Your dream / goal (she'll root for it)" style="margin-bottom:8px;">
+      <input class="tg-input" id="her-safeword" placeholder="Safe word — say it to silence her, say it again to wake her" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin:12px 0 8px;">Shape her personality</div>
+      <div style="font-size:11px;color:var(--text2);">Gentle ↔ Teasing</div>
+      <input id="her-teasing" type="range" min="0" max="100" style="width:100%;accent-color:var(--accent);">
+      <div style="font-size:11px;color:var(--text2);">Reserved ↔ Sweet</div>
+      <input id="her-sweet" type="range" min="0" max="100" style="width:100%;accent-color:var(--accent);">
+      <div style="font-size:11px;color:var(--text2);">Quiet ↔ Chatty</div>
+      <input id="her-chatty" type="range" min="0" max="100" style="width:100%;accent-color:var(--accent);margin-bottom:10px;">
+      <button id="her-save" style="width:100%;padding:11px;border:none;border-radius:11px;background:var(--accent);color:#000;font-weight:700;font-size:13px;cursor:pointer;">Save</button>
+    </div>
+
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📔 Her diary</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">She writes an entry every night about her day.</div>
+      <div id="her-diary"></div>
+    </div>
+
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:700;">🎓 Her weekly report card</div>
+        <button id="her-review-now" style="padding:6px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:11px;cursor:pointer;">Review my week now</button>
+      </div>
+      <div id="her-shadow" style="font-size:11px;color:var(--text2);margin-bottom:10px;"></div>
+      <div id="her-reports"></div>
+    </div>
+
+    <div class="tg-section">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📸 Our history</div>
+      <div id="her-moments"></div>
     </div>
   </div>
 
@@ -3055,6 +3151,13 @@
 
   <!-- ══ LIFE TAB ══ -->
   <div class="others-tab-content" id="others-life">
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:700;">🎯 Today's quests</div>
+        <button id="quest-claim" style="display:none;padding:6px 14px;border:none;border-radius:9px;background:var(--accent);color:#000;font-weight:700;font-size:11px;cursor:pointer;">Claim +30 🪙</button>
+      </div>
+      <div id="quest-list" style="font-size:12px;color:var(--text2);">Loading…</div>
+    </div>
 
     <div class="tg-section" style="margin-bottom:10px;">
       <div style="font-size:12px;font-weight:700;margin-bottom:4px;">🪄 Voice Routines</div>
@@ -3291,6 +3394,24 @@
       <div class="s-row"><div class="s-label">Moralis</div><input class="s-input" id="s-moralis" placeholder="For wallet tracking" /></div>
       <div class="s-row"><div class="s-label">YouTube</div><input class="s-input" id="s-youtube" placeholder="For music playback" /></div>
       <div class="s-row"><div class="s-label">Etherscan</div><input class="s-input" id="s-etherscan" placeholder="For gas tracking" /></div>
+      <div class="s-row"><div class="s-label">🔒 App PIN (4-8 digits, blank = off)</div><input class="s-input" id="s-pin" type="password" placeholder="Locks the dashboard" /></div>
+      <div class="s-row"><div class="s-label">🛑 Daily loss limit $ (0 = off)</div><input class="s-input" id="s-losscap" type="number" placeholder="Stop trading after -$X in a day" /></div>
+    </div>
+    <div class="s-section">
+      <div class="s-title">Appearance</div>
+      <div class="s-row"><div class="s-label">Theme</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="theme-chip" data-theme="apple">🔵 Apple Blue</button>
+          <button class="theme-chip" data-theme="mono">⚪ Pure Mono</button>
+          <button class="theme-chip" data-theme="cyan">🩵 Midnight Cyan</button>
+          <button class="theme-chip" data-theme="champagne">🥂 Champagne</button>
+        </div>
+      </div>
+      <div class="s-row"><div class="s-label">Startup</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);cursor:pointer;">
+          <input type="checkbox" id="s-autolaunch" style="accent-color:var(--accent);"> Launch Asuka when the computer starts
+        </label>
+      </div>
     </div>
     <div class="s-section">
       <div class="s-title">Exchange (Read Only)</div>
@@ -3616,6 +3737,7 @@ function renderPrices() {
   if (!watchlist.length) { sec.innerHTML='<div class="empty-state">Add coins above to track prices</div>'; return }
   sec.innerHTML = watchlist.map(coin=>{
     const p=prices[coin]
+    if (p && window.pushHist) { const pv=parseFloat(String(p.price).replace(/,/g,'')); if (isFinite(pv)) window.pushHist(coin, pv) }
     const price = p?'$'+p.price:'—'
     const chg   = p?p.change:null
     const chgStr= chg!==null?(chg>=0?'+':'')+chg.toFixed(2)+'%':'—'
@@ -3624,6 +3746,7 @@ function renderPrices() {
     return `<div class="price-row">
       <div class="p-sym">${coin.toUpperCase()}</div>
       <div class="p-price">${price}</div>
+      <div class="p-spark" style="margin:0 6px;">${window.sparkSVG?window.sparkSVG(coin):''}</div>
       <div class="p-chg ${cls}">${chgStr}</div>
       <div class="p-bell ${bell?'active':''}" data-coin="${coin}">🔔</div>
       <div class="p-del" data-coin="${coin}">✕</div>
@@ -3690,12 +3813,48 @@ function renderTracked() {
       <div class="track-label">${w.label||'Wallet '+(i+1)}</div>
       <div class="track-addr">${w.address}</div>
     </div>
-    <div class="track-pnl" style="color:var(--text2)">—</div>
+    <div class="track-grade" data-idx="${i}" title="Grade this wallet" style="cursor:pointer;font-size:13px;padding:0 4px;">🎓</div>
+    <div class="track-copy ${w.copyMode==='paper'?'on':''}" data-idx="${i}" title="Paper copy-trade their buys" style="cursor:pointer;font-size:12px;padding:2px 7px;border-radius:8px;border:1px solid ${w.copyMode==='paper'?'var(--green)':'var(--border)'};color:${w.copyMode==='paper'?'var(--green)':'var(--text3)'};">📋</div>
     <div class="track-del" data-idx="${i}">✕</div>
   </div>`).join('')
   list.querySelectorAll('.track-row').forEach(r=>{
-    r.addEventListener('click',e=>{ if(e.target.classList.contains('track-del')) return; openWalletDetail(trackedWallets[parseInt(r.dataset.idx)]) })
+    r.addEventListener('click',e=>{ if(e.target.classList.contains('track-del')||e.target.classList.contains('track-grade')||e.target.classList.contains('track-copy')) return; openWalletDetail(trackedWallets[parseInt(r.dataset.idx)]) })
   })
+  // 🎓 GMGN-style wallet grade
+  list.querySelectorAll('.track-grade').forEach(g=>g.addEventListener('click',async e=>{
+    e.stopPropagation()
+    const w = trackedWallets[parseInt(g.dataset.idx)]
+    g.textContent='⏳'
+    const r = await ipcRenderer.invoke('grade-wallet',{ address:w.address, chain:'eth' }).catch(()=>null)
+    g.textContent='🎓'
+    if (!r || r.error) { alert(r?.error || 'Could not grade'); return }
+    const colors={A:'var(--green)',B:'#7cc47f',C:'var(--gold)',D:'#ff9f0a',F:'var(--red)'}
+    let m=document.getElementById('grade-modal'); if(m) m.remove()
+    m=document.createElement('div'); m.id='grade-modal'
+    m.style.cssText='position:fixed;inset:0;z-index:10005;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;'
+    m.innerHTML=`<div style="width:330px;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:22px;text-align:center;">
+      <div style="font-size:44px;font-weight:800;color:${colors[r.grade]||'var(--text)'};">${r.grade}</div>
+      <div style="font-size:12px;color:var(--text3);margin:4px 0 12px;">${w.label||'Wallet'}</div>
+      <div style="display:flex;justify-content:space-around;font-size:12px;margin-bottom:12px;">
+        <div><b style="font-size:15px;">${r.trades}</b><br><span style="color:var(--text3);">trades</span></div>
+        <div><b style="font-size:15px;color:${r.realized>=0?'var(--green)':'var(--red)'};">${r.realized>=0?'+':''}$${r.realized}</b><br><span style="color:var(--text3);">realized</span></div>
+        <div><b style="font-size:15px;">${r.winRate??'—'}%</b><br><span style="color:var(--text3);">win rate</span></div>
+      </div>
+      <div style="font-size:12px;line-height:1.5;color:var(--text2);background:var(--bg3);border-radius:10px;padding:10px;">🌸 ${r.verdict}</div>
+      <button onclick="this.closest('#grade-modal').remove()" style="margin-top:14px;padding:9px 22px;border:none;border-radius:10px;background:var(--accent);color:#000;font-weight:700;cursor:pointer;font-size:12px;">Close</button>
+    </div>`
+    m.onclick=(ev)=>{ if(ev.target===m) m.remove() }
+    document.body.appendChild(m)
+  }))
+  // 📋 paper copy-trade toggle
+  list.querySelectorAll('.track-copy').forEach(cbtn=>cbtn.addEventListener('click',async e=>{
+    e.stopPropagation()
+    const w = trackedWallets[parseInt(cbtn.dataset.idx)]
+    const next = w.copyMode==='paper' ? 'off' : 'paper'
+    w.copyMode = next
+    await ipcRenderer.invoke('set-wallet-copy',{ address:w.address, mode:next }).catch(()=>{})
+    renderTracked()
+  }))
   list.querySelectorAll('.track-del').forEach(d=>d.addEventListener('click',async e=>{
     e.stopPropagation()
     trackedWallets.splice(parseInt(d.dataset.idx),1)
@@ -5600,6 +5759,7 @@ document.querySelectorAll('[data-others-tab]').forEach(tab => {
     if (tabEl) tabEl.classList.add('active')
     // Load content for tab
     if (this.dataset.othersTab === 'study') loadStudyLibrary()
+    if (this.dataset.othersTab === 'her') loadHerTab()
     if (this.dataset.othersTab === 'memory') loadMemories()
     if (this.dataset.othersTab === 'intel') loadIntel()
   })
@@ -5628,9 +5788,11 @@ async function loadStudyLibrary() {
       <div style="font-weight:600;font-size:13px;">${l.topic}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:2px;">${l.beatCount} beats · ${(l.source||[]).join(', ')} · ${new Date(l.ts).toLocaleDateString()}</div>
     </div>
+    <span class="sl-pdf" data-id="${l.id}" style="cursor:pointer;color:var(--text2);font-size:12px;padding-left:10px;">⬇ PDF</span>
     <span class="sl-rm" data-id="${l.id}" style="cursor:pointer;color:var(--red);font-size:14px;padding-left:10px;">🗑</span>
   </div>`).join('')
   el.querySelectorAll('.sl-open').forEach(x => x.onclick = () => ipcRenderer.invoke('open-lesson', { id: x.dataset.id }).catch(()=>{}))
+  el.querySelectorAll('.sl-pdf').forEach(x => x.onclick = async (ev) => { ev.stopPropagation(); x.textContent = '…'; const r = await ipcRenderer.invoke('export-lesson-pdf', { id: x.dataset.id }).catch(()=>null); x.textContent = r?.ok ? '✓ saved' : '⬇ PDF'; setTimeout(()=>x.textContent='⬇ PDF', 2000) })
   el.querySelectorAll('.sl-rm').forEach(x => x.onclick = async (ev) => { ev.stopPropagation(); await ipcRenderer.invoke('remove-lesson', { id: x.dataset.id }).catch(()=>{}); loadStudyLibrary() })
 }
 
@@ -5754,6 +5916,27 @@ ipcRenderer.on('swarm-live', (e, data) => {
 
 // ── 📣 Advisor Calls tab ───────────────────────────────────────────────
 document.getElementById('global-rules-btn')?.addEventListener('click', () => openRulesPanel(null, null))
+
+// ── 🏆 Advisor leaderboard — who's actually good, by executed results ──
+async function renderAdvisorLeaderboard() {
+  const el = document.getElementById('adv-leaderboard')
+  if (!el) return
+  const r = await ipcRenderer.invoke('advisor-leaderboard').catch(()=>({rows:[]}))
+  const rows = (r.rows||[]).filter(x => x.trades > 0 || x.open > 0)
+  if (!rows.length) { el.innerHTML = ''; return }
+  el.innerHTML = `<div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.05em;margin-bottom:8px;">🏆 LEADERBOARD — EXECUTED RESULTS</div>` +
+    rows.map((x,i) => `<div style="display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:10px 14px;margin-bottom:6px;">
+      <div style="font-size:14px;width:26px;">${['🥇','🥈','🥉'][i] || (i+1)+'.'}</div>
+      <div style="flex:1;"><div style="font-size:13px;font-weight:600;">${x.name}</div>
+        <div style="font-size:10px;color:var(--text3);">${x.trades} closed · ${x.open} open · ${x.mode}</div></div>
+      <div style="text-align:right;">
+        <div style="font-family:monospace;font-size:13px;font-weight:700;color:${x.pnl>=0?'var(--green)':'var(--red)'};">${x.pnl>=0?'+':''}$${Math.abs(x.pnl).toFixed(2)}</div>
+        <div style="font-size:10px;color:var(--text3);">${x.winRate===null?'—':x.winRate+'% win'} (${x.wins}W/${x.losses}L)</div>
+      </div>
+    </div>`).join('')
+}
+setInterval(renderAdvisorLeaderboard, 30000)
+setTimeout(renderAdvisorLeaderboard, 1500)
 function timeAgo(ts) {
   const s = Math.floor((Date.now()-ts)/1000)
   if (s<60) return 'just now'
@@ -5796,6 +5979,7 @@ async function renderAdvisors() {
       <div style="display:flex;gap:6px;margin-bottom:10px;">
         ${modeBtn('notify','🔔','Notify')}
         ${modeBtn('auto','⚡','Auto-trade')}
+        ${modeBtn('trial','🕶️','Trial')}
         ${modeBtn('off','🔇','Off')}
       </div>
       <div id="adv-risk-${a.id}" style="display:${a.followMode==='auto'?'block':'none'};">
@@ -5979,11 +6163,16 @@ async function openRulesPanel(advisorId, advisorName) {
     <label style="font-size:12px;color:var(--text2);">📅 Daily max $ (0 = unlimited)</label>
     <input id="rp-dmax" type="number" value="${val('dailyMaxUsd')}" placeholder="${ph('dailyMaxUsd','0')}" class="s-input" style="margin:5px 0 14px;">
 
+    <label style="font-size:12px;color:var(--text2);">🛑 Daily max LOSS $ — halt trading after losing this (0 = off)</label>
+    <input id="rp-dloss" type="number" value="${val('dailyMaxLossUsd')}" placeholder="${ph('dailyMaxLossUsd','0')}" class="s-input" style="margin:5px 0 14px;">
+
     <label style="font-size:12px;color:var(--text2);">📅 Daily max # trades (0 = unlimited)</label>
     <input id="rp-dtrades" type="number" value="${val('dailyMaxTrades')}" placeholder="${ph('dailyMaxTrades','0')}" class="s-input" style="margin:5px 0 14px;">
 
     <label style="font-size:12px;color:var(--text2);">🛡️ Auto-breakeven at +% profit (0 = off)</label>
-    <input id="rp-be" type="number" value="${val('autoBreakevenPct')}" placeholder="${ph('autoBreakevenPct','0')}" class="s-input" style="margin:5px 0 16px;">
+    <input id="rp-be" type="number" value="${val('autoBreakevenPct')}" placeholder="${ph('autoBreakevenPct','0')}" class="s-input" style="margin:5px 0 10px;">
+    <div style="font-size:11px;color:var(--text3);">📉 Trailing stop % (SL follows the high — 0 = off)</div>
+    <input id="rp-trail" type="number" value="${val('trailingPct')}" placeholder="${ph('trailingPct','0')}" class="s-input" style="margin:5px 0 16px;">
 
     <button id="rp-save" style="width:100%;padding:12px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:var(--accent);color:#000;">Save Rules</button>
   </div>`
@@ -5996,8 +6185,9 @@ async function openRulesPanel(advisorId, advisorName) {
       sizeUsd:num('rp-size'), maxLeverage:num('rp-lev'),
       useMySlTp:document.getElementById('rp-usemy').checked,
       slPct:num('rp-sl'), tpPct:num('rp-tp'),
-      dailyMaxUsd:num('rp-dmax'), dailyMaxTrades:num('rp-dtrades'),
-      autoBreakevenPct:num('rp-be')
+      dailyMaxUsd:num('rp-dmax'), dailyMaxTrades:num('rp-dtrades'), dailyMaxLossUsd:num('rp-dloss'),
+      autoBreakevenPct:num('rp-be'),
+      trailingPct:num('rp-trail')
     }
     await ipcRenderer.invoke('set-trade-rules',{ scope:isGlobal?'global':'advisor', advisorId, rules }).catch(()=>{})
     close()
@@ -6025,6 +6215,7 @@ function openTradePanel(tradeId, advisorId, t) {
       <button class="tp-act" data-act="sl" style="padding:11px;border-radius:9px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text);">✏️ Move Stop (${t.stopLoss??'—'})</button>
       <button class="tp-act" data-act="tp" style="padding:11px;border-radius:9px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text);">✏️ Move Target (${t.target??'—'})</button>
       <button class="tp-act" data-act="breakeven" style="padding:11px;border-radius:9px;font-size:12px;cursor:pointer;border:1px solid var(--gold);background:rgba(251,191,36,.12);color:var(--gold);">🛡️ Breakeven</button>
+      <button class="tp-act" data-act="trail" style="padding:11px;border-radius:9px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text);">📉 Trail SL</button>
       <button class="tp-act" data-act="partial" style="padding:11px;border-radius:9px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text);">✂️ Partial Close</button>
       <button class="tp-act" data-act="add" style="padding:11px;border-radius:9px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text);">➕ Add to Position</button>
       <button class="tp-act" data-act="note" style="padding:11px;border-radius:9px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text);">📝 Note</button>
@@ -6045,6 +6236,7 @@ function openTradePanel(tradeId, advisorId, t) {
     else if (act === 'partial') { value = prompt('Close what % of the position? (e.g. 50)', '50'); if (value==null||value==='') return }
     else if (act === 'add') { value = prompt('Add how much $ to the position?', '50'); if (value==null||value==='') return }
     else if (act === 'note') { value = prompt('Your note on this trade:', t.userNote||''); if (value==null) return }
+    else if (act === 'trail') { value = prompt('Trail the stop by what % below the peak? (e.g. 10)', t.trailingPct||'10'); if (value==null||value==='') return }
     const res = await ipcRenderer.invoke('user-edit-trade', { tradeId, action:act, value }).catch(()=>({success:false}))
     if (act === 'partial' && res?.realized!=null) alert(`Closed ${value}% — locked $${res.realized}. Rest stays open.`)
     closeModal()
@@ -8449,7 +8641,8 @@ async function loadPortfolio() {
   }
 
   // Update total value
-  document.getElementById('port-value').textContent = `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (window.countMoney) window.countMoney(document.getElementById('port-value'), totalValue);
+  else document.getElementById('port-value').textContent = `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   document.getElementById('port-value').style.opacity = anyStale ? '0.6' : '1';
   document.getElementById('port-value').title = anyStale ? 'Refreshing — showing last known values' : '';
 
@@ -8845,6 +9038,401 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   })
 })
+</script>
+
+<div id="cmdk"><div id="cmdk-box"><input id="cmdk-in" placeholder="Type a command…"><div id="cmdk-list"></div></div></div>
+<div id="onboard"><div id="onboard-card">
+  <div id="onboard-dots"></div><div class="ob-emoji" id="ob-emoji">🌸</div>
+  <h2 id="ob-title"></h2><p id="ob-text"></p>
+  <div style="display:flex;gap:10px;justify-content:center;">
+    <button id="ob-skip" style="padding:11px 20px;border-radius:11px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-size:13px;">Skip</button>
+    <button id="ob-next" style="padding:11px 26px;border-radius:11px;border:none;background:var(--accent);color:#000;font-weight:700;cursor:pointer;font-size:13px;">Next</button>
+  </div>
+</div></div>
+<script>
+// ══ Premium layer: themes, Cmd+K, onboarding, sparklines, count-up ══
+(function(){
+  // ── Themes ──
+  const THEMES = {
+    apple:     { '--accent':'#0a84ff','--accent2':'#0066cc','--glow':'rgba(10,132,255,.15)','--gold':'#ffd60a' },
+    mono:      { '--accent':'#e5e5e7','--accent2':'#b9b9c0','--glow':'rgba(255,255,255,.10)','--gold':'#e5e5e7' },
+    cyan:      { '--accent':'#2dd4ff','--accent2':'#0ea5e9','--glow':'rgba(45,212,255,.18)','--gold':'#ffce5c' },
+    champagne: { '--accent':'#d8b36e','--accent2':'#b8935a','--glow':'rgba(216,179,110,.14)','--gold':'#d8b36e' }
+  }
+  window.applyTheme = (name) => {
+    const t = THEMES[name]; if (!t) return
+    for (const k in t) document.documentElement.style.setProperty(k, t[k])
+    localStorage.setItem('asuka-theme', name)
+    document.querySelectorAll('.theme-chip').forEach(c => c.classList.toggle('active', c.dataset.theme === name))
+  }
+  applyTheme(localStorage.getItem('asuka-theme') || 'apple')
+  // 🛡️ GMGN-style token safety card
+  document.getElementById('safety-btn')?.addEventListener('click', async () => {
+    const ca = document.getElementById('safety-ca').value.trim()
+    if (!ca) return
+    const out = document.getElementById('safety-result')
+    out.innerHTML = '<div class="skeleton" style="height:60px;"></div>'
+    const ipc = require('electron').ipcRenderer
+    const r = await ipc.invoke('safety-card', { ca, chain: 'eth' }).catch(()=>null)
+    if (!r || r.error) { out.innerHTML = '<div style="font-size:11px;color:var(--text3);">' + (r?.error || 'Check failed') + '</div>'; return }
+    const col = { A:'var(--green)', B:'#7cc47f', C:'var(--gold)', D:'#ff9f0a', F:'var(--red)' }[r.score] || 'var(--text)'
+    out.innerHTML = '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+      '<b style="font-size:20px;color:' + col + ';">' + r.score + '</b>' +
+      '<span style="font-size:10px;color:var(--text3);">' + (r.holderCount ? r.holderCount + ' holders' : '') + '</span></div>' +
+      ((r.flags||[]).length ? r.flags.map(f => '<div style="font-size:11px;margin-bottom:3px;">' + f + '</div>').join('') :
+        '<div style="font-size:11px;color:var(--green);">✅ No red flags — LP ok, not mintable, sane distribution</div>') +
+      '</div>'
+  })
+  try { const ipc = require('electron').ipcRenderer
+    ipc.invoke('get-auto-launch').then(r => { const el = document.getElementById('s-autolaunch'); if (el) el.checked = !!r?.on })
+    document.getElementById('s-autolaunch')?.addEventListener('change', (e) => ipc.invoke('set-auto-launch', { on: e.target.checked })) } catch(e){}
+  document.querySelectorAll('.theme-chip').forEach(c => c.onclick = () => applyTheme(c.dataset.theme))
+
+  // ── Sparkline history + renderer ──
+  window._ph = JSON.parse(localStorage.getItem('price-hist') || '{}')
+  window.pushHist = (coin, v) => { const a = window._ph[coin] = (window._ph[coin] || []); if (a[a.length-1] !== v) { a.push(v); if (a.length > 40) a.shift(); localStorage.setItem('price-hist', JSON.stringify(window._ph)) } }
+  window.sparkSVG = (coin) => {
+    const a = window._ph[coin] || []; if (a.length < 2) return ''
+    const min = Math.min(...a), max = Math.max(...a), rng = (max - min) || 1
+    const pts = a.map((v,i) => ((i/(a.length-1))*54).toFixed(1) + ',' + (16 - ((v-min)/rng)*13 + 1).toFixed(1)).join(' ')
+    const up = a[a.length-1] >= a[0]
+    return '<svg width="54" height="18" style="opacity:.85"><polyline points="' + pts + '" fill="none" stroke="' + (up ? 'var(--green)' : 'var(--red)') + '" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>'
+  }
+
+  // ── Animated money count-up ──
+  window.countMoney = (el, target) => {
+    if (!el) return
+    const start = parseFloat((el.textContent || '0').replace(/[^0-9.\-]/g, '')) || 0
+    if (Math.abs(target - start) < 0.005) { el.textContent = '$' + target.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); return }
+    const t0 = performance.now(), dur = 650
+    const step = (t) => {
+      const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3)
+      el.textContent = '$' + (start + (target - start) * e).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})
+      if (k < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }
+
+  // ── Cmd+K command palette ──
+  const CMDS = [
+    { n:'Go to Dashboard',   run:()=>document.querySelector('.page-tab[data-page="1"]')?.click() },
+    { n:'Go to Telegram',    run:()=>document.querySelector('.page-tab[data-page="2"]')?.click() },
+    { n:'Go to Trading',     run:()=>document.querySelector('.page-tab[data-page="3"]')?.click() },
+    { n:'Go to Calls',       run:()=>document.querySelector('.page-tab[data-page="7"]')?.click() },
+    { n:'Go to Others',      run:()=>document.querySelector('.page-tab[data-page="5"]')?.click() },
+    { n:'Open Settings',     run:()=>document.getElementById('settings-open-btn')?.click() },
+    { n:'📚 Study — new lesson', run:()=>{ try { require('electron').ipcRenderer.invoke('open-classroom') } catch(e){} } },
+    { n:'Theme: Apple Blue',   run:()=>applyTheme('apple') },
+    { n:'Theme: Pure Mono',    run:()=>applyTheme('mono') },
+    { n:'Theme: Midnight Cyan',run:()=>applyTheme('cyan') },
+    { n:'Theme: Champagne',    run:()=>applyTheme('champagne') },
+    { n:'Reload app',        run:()=>location.reload() },
+    { n:'📋 Weekly report card', run:()=>{ try { require('electron').ipcRenderer.invoke('weekly-report') } catch(e){} } },
+    { n:'📸 Analyze chart on screen (⌘⇧A)', run:()=>{ alert('Press Cmd+Shift+A anywhere — Asuka reads the chart on your screen.') } }
+  ]
+  const kEl = document.getElementById('cmdk'), kIn = document.getElementById('cmdk-in'), kList = document.getElementById('cmdk-list')
+  let kSel = 0, kMatches = []
+  function kRender() {
+    const q = kIn.value.toLowerCase()
+    kMatches = CMDS.filter(c => c.n.toLowerCase().includes(q))
+    kSel = Math.min(kSel, Math.max(0, kMatches.length - 1))
+    kList.innerHTML = kMatches.map((c,i) => '<div class="cmdk-item' + (i===kSel?' sel':'') + '" data-i="' + i + '">' + c.n + '</div>').join('') || '<div class="cmdk-item">No matches</div>'
+    kList.querySelectorAll('.cmdk-item[data-i]').forEach(el => el.onclick = () => { kMatches[+el.dataset.i]?.run(); kClose() })
+  }
+  function kOpen(){ kEl.classList.add('show'); kIn.value=''; kSel=0; kRender(); setTimeout(()=>kIn.focus(),30) }
+  function kClose(){ kEl.classList.remove('show') }
+  window.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); kEl.classList.contains('show') ? kClose() : kOpen() }
+    if (!kEl.classList.contains('show')) return
+    if (e.key === 'Escape') kClose()
+    if (e.key === 'ArrowDown') { e.preventDefault(); kSel = Math.min(kSel+1, kMatches.length-1); kRender() }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); kSel = Math.max(kSel-1, 0); kRender() }
+    if (e.key === 'Enter')     { kMatches[kSel]?.run(); kClose() }
+  })
+  kIn.addEventListener('input', () => { kSel = 0; kRender() })
+  kEl.addEventListener('click', (e) => { if (e.target === kEl) kClose() })
+
+  // ── Onboarding (first launch) ──
+  const STEPS = [
+    { e:'🌸', t:'Welcome to ASUKA', x:'Your AI trading companion. She watches the market, teaches you, and keeps you company — all on your desktop.' },
+    { e:'⚖️', t:'The honest part', x:'ASUKA is paper trading — simulated, no real funds move. Nothing here is financial advice; advisor calls are their opinions, not ours. Crypto is volatile and you alone are responsible for your decisions. Tapping Next means you understand.' },
+    { e:'🧠', t:'She trades with a 20-agent brain', x:'Three tiers — daily signals, deep scans, fast scalps. All paper trading: real strategies, zero risk.' },
+    { e:'📣', t:'Follow real advisors', x:'Add advisors in the Calls tab. Get notified — or let Asuka auto-trade their calls under YOUR rules: your size, your leverage cap, your stop.' },
+    { e:'📚', t:'She teaches, too', x:'Upload any textbook in Study and she teaches it on a whiteboard, lesson by lesson. And press ⌘K anytime to fly around the app.' }
+  ]
+  let obI = 0
+  const ob = document.getElementById('onboard')
+  function obRender() {
+    const s = STEPS[obI]
+    document.getElementById('ob-emoji').textContent = s.e
+    document.getElementById('ob-title').textContent = s.t
+    document.getElementById('ob-text').textContent = s.x
+    document.getElementById('onboard-dots').innerHTML = STEPS.map((_,i)=>'<span class="' + (i<=obI?'on':'') + '"></span>').join('')
+    document.getElementById('ob-next').textContent = obI === STEPS.length-1 ? 'Get started' : 'Next'
+  }
+  function obDone(){ ob.classList.remove('show'); localStorage.setItem('asuka-onboarded','1') }
+  document.getElementById('ob-next').onclick = () => { if (obI < STEPS.length-1) { obI++; obRender() } else obDone() }
+  document.getElementById('ob-skip').onclick = obDone
+  if (!localStorage.getItem('asuka-onboarded')) { obRender(); ob.classList.add('show') }
+
+  // ── First meeting: she asks about YOU (once, after onboarding) ──
+  const origDone = obDone
+  function firstMeeting() {
+    ob.classList.add('show')
+    document.getElementById('onboard-dots').innerHTML = ''
+    document.getElementById('ob-emoji').textContent = '🌸'
+    document.getElementById('ob-title').textContent = "Before we start… tell me about you?"
+    document.getElementById('ob-text').innerHTML =
+      '<input id="fm-name" placeholder="Your name" style="width:100%;margin-bottom:8px;padding:11px 14px;border-radius:11px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;outline:none;">' +
+      '<input id="fm-callme" placeholder="What should I call you? (optional)" style="width:100%;margin-bottom:8px;padding:11px 14px;border-radius:11px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;outline:none;">' +
+      '<input id="fm-dream" placeholder="Your dream — what are we working toward?" style="width:100%;padding:11px 14px;border-radius:11px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;outline:none;">'
+    document.getElementById('ob-skip').style.display = 'none'
+    const nx = document.getElementById('ob-next')
+    nx.textContent = "Nice to meet you 💕"
+    nx.onclick = async () => {
+      const name = document.getElementById('fm-name')?.value.trim()
+      const callMe = document.getElementById('fm-callme')?.value.trim()
+      const dream = document.getElementById('fm-dream')?.value.trim()
+      try { await require('electron').ipcRenderer.invoke('companion-set', { name, profile: { callMe: callMe || name, dream } }) } catch(e){}
+      localStorage.setItem('asuka-met','1'); localStorage.setItem('asuka-tos','1'); ob.classList.remove('show')
+    }
+  }
+  // ── Risk pill under the portfolio value ──
+  setInterval(async () => {
+    try {
+      const r = await require('electron').ipcRenderer.invoke('risk-meter')
+      if (!r) return
+      let pill = document.getElementById('risk-pill')
+      if (!pill) { const anchor = document.getElementById('port-change'); if (!anchor) return
+        pill = document.createElement('div'); pill.id = 'risk-pill'
+        pill.style.cssText = 'display:inline-flex;gap:6px;align-items:center;margin-top:8px;padding:4px 12px;border-radius:14px;font-size:11px;border:1px solid var(--border);'
+        anchor.parentNode.insertBefore(pill, anchor.nextSibling) }
+      const col = r.level === 'hot' ? 'var(--red)' : r.level === 'warm' ? '#ff9f0a' : 'var(--green)'
+      pill.style.color = col; pill.style.borderColor = col
+      pill.textContent = r.open ? `risk ${r.level} · $${r.exposure} exposed · ${r.maxLev}x max` : 'risk cool · no open positions'
+    } catch(e){}
+  }, 45000)
+
+  // ── Advisor leaderboard on Calls tab ──
+  async function renderLeaderboard() {
+    const el = document.getElementById('adv-leaderboard'); if (!el) return
+    const rows = await require('electron').ipcRenderer.invoke('advisor-leaderboard').catch(()=>[])
+    if (!rows || rows.length < 2) { el.innerHTML = ''; return }
+    el.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.05em;margin-bottom:8px;">🏆 LEADERBOARD</div>' +
+      rows.map((r,i) => '<div style="display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:9px 13px;margin-bottom:5px;font-size:12px;">' +
+        '<span style="width:18px;color:var(--text3);">' + (i+1) + '</span>' +
+        '<span style="flex:1;font-weight:600;">' + r.name + (r.mode==='trial' ? ' <span style="font-size:10px;color:var(--text3);">🕶️ trial</span>' : '') + '</span>' +
+        '<span style="color:' + ((r.winRate??0) >= 50 ? 'var(--green)' : 'var(--red)') + ';">' + (r.winRate === null ? '—' : r.winRate + '%') + '</span>' +
+        '<span style="width:70px;text-align:right;color:' + (r.pnl >= 0 ? 'var(--green)' : 'var(--red)') + ';">' + (r.pnl >= 0 ? '+' : '') + '$' + r.pnl + '</span>' +
+        '<span style="color:var(--text3);font-size:10px;">' + r.trades + ' trades</span></div>').join('')
+  }
+  document.querySelector('.page-tab[data-page="7"]')?.addEventListener('click', () => setTimeout(renderLeaderboard, 400))
+
+  // ── Shadow stats card on the Intelligence tab ──
+  document.querySelector('[data-others-tab="intel"]')?.addEventListener('click', async () => {
+    setTimeout(async () => {
+      const host = document.getElementById('others-intel'); if (!host) return
+      let card = document.getElementById('shadow-card')
+      if (!card) { card = document.createElement('div'); card.id = 'shadow-card'; card.className = 'tg-section'
+        card.style.marginBottom = '10px'; host.insertBefore(card, host.firstChild) }
+      const s = await require('electron').ipcRenderer.invoke('shadow-stats').catch(()=>null)
+      if (!s) return
+      const better = s.delta >= 0
+      card.innerHTML = '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">🕶️ Your edits vs. hands-off</div>' +
+        (s.trades === 0 ? '<div style="font-size:11px;color:var(--text3);">No edited trades closed yet — once you move stops or partial-close, this shows whether your interventions help or hurt.</div>'
+        : '<div style="font-size:12px;color:var(--text2);line-height:1.6;">Across <b>' + s.trades + '</b> trades you touched: your result <b style="color:' + (s.actual>=0?'var(--green)':'var(--red)') + '">$' + s.actual + '</b> vs untouched <b>$' + s.would + '</b> → your edits ' + (better ? '<b style="color:var(--green)">made you +$' + s.delta + '</b> 🎯' : '<b style="color:var(--red)">cost you $' + Math.abs(s.delta) + '</b> 😬') + '</div>')
+    }, 400)
+  })
+
+  // ── Risk disclaimer (one-time accept, security pass) ──
+  if (!localStorage.getItem('asuka-tos') && localStorage.getItem('asuka-onboarded') && localStorage.getItem('asuka-met')) {
+    ob.classList.add('show')
+    document.getElementById('onboard-dots').innerHTML = ''
+    document.getElementById('ob-emoji').textContent = '⚠️'
+    document.getElementById('ob-title').textContent = 'Before you trade'
+    document.getElementById('ob-text').textContent = 'ASUKA is paper trading — simulated, no real funds move. Nothing here is financial advice. Advisor calls are their opinions, not ours. Crypto is volatile; only ever risk what you can afford to lose.'
+    document.getElementById('ob-skip').style.display = 'none'
+    const nx2 = document.getElementById('ob-next'); nx2.textContent = 'I understand'
+    nx2.onclick = () => { localStorage.setItem('asuka-tos','1'); ob.classList.remove('show') }
+  }
+
+  if (!localStorage.getItem('asuka-met')) {
+    if (localStorage.getItem('asuka-onboarded')) firstMeeting()
+    else { const btn = document.getElementById('ob-next'); const old = btn.onclick
+      btn.onclick = () => { if (obI < STEPS.length-1) { obI++; obRender() } else { localStorage.setItem('asuka-onboarded','1'); firstMeeting() } } }
+  }
+
+  // ── PIN + daily loss limit save (piggybacks the Save Settings button) ──
+  document.getElementById('settings-save-btn')?.addEventListener('click', async () => {
+    const ipc = require('electron').ipcRenderer
+    const pin = document.getElementById('s-pin')?.value.trim()
+    if (pin !== undefined && pin !== '••••') await ipc.invoke('pin-set', { pin }).catch(()=>{})
+    const cap = document.getElementById('s-losscap')?.value
+    if (cap !== undefined && cap !== '') { try { const s = await ipc.invoke('get-settings'); s.dailyLossLimit = Number(cap)||0; await ipc.invoke('save-settings', s) } catch(e){} }
+  })
+
+  // ── Risk meter pill (refreshes with the dashboard) ──
+  async function loadRiskPill() {
+    try {
+      const r = await require('electron').ipcRenderer.invoke('risk-meter')
+      const el = document.getElementById('risk-pill'); if (!el) return
+      if (!r.open) { el.style.display = 'none'; return }
+      const col = r.level === 'hot' ? '#ff453a' : r.level === 'warm' ? '#ff9f0a' : 'var(--green)'
+      el.style.display = 'block'
+      el.style.background = `color-mix(in srgb, ${col} 14%, transparent)`
+      el.style.border = `1px solid color-mix(in srgb, ${col} 40%, transparent)`
+      el.style.color = col
+      el.textContent = `risk ${r.score}/100 · ${r.open} open · ${r.maxLev}x max` + (r.conc >= 50 ? ` · ${r.conc}% in ${r.concCoin}` : '')
+    } catch(e){}
+  }
+  loadRiskPill(); setInterval(loadRiskPill, 30000)
+
+  // ── Advisor leaderboard ──
+  window.loadLeaderboard = async function() {
+    const el = document.getElementById('adv-leaderboard'); if (!el) return
+    const rows = await require('electron').ipcRenderer.invoke('advisor-leaderboard').catch(()=>[])
+    const withTrades = rows.filter(r => r.trades > 0)
+    if (!withTrades.length) { el.innerHTML = ''; return }
+    el.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.05em;margin-bottom:8px;">🏆 LEADERBOARD — REAL RESULTS</div>' +
+      withTrades.map((r,i) => `<div style="display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:10px 14px;margin-bottom:6px;">
+        <span style="font-size:14px;width:22px;">${['🥇','🥈','🥉'][i]||(i+1)+'.'}</span>
+        <span style="flex:1;font-weight:600;font-size:13px;">${r.name} ${r.mode==='trial'?'<span style="font-size:10px;color:var(--text3);">🕶️ trial</span>':''}</span>
+        <span style="font-size:11px;color:var(--text3);">${r.trades} trades${r.open?` · ${r.open} open`:''}</span>
+        <span style="font-size:12px;color:${(r.winRate||0)>=50?'var(--green)':'var(--red)'};">${r.winRate??'—'}%</span>
+        <span style="font-family:monospace;font-size:12px;font-weight:700;color:${r.pnl>=0?'var(--green)':'var(--red)'};">${r.pnl>=0?'+':''}$${Math.abs(r.pnl).toFixed(0)}</span>
+      </div>`).join('')
+  }
+  loadLeaderboard(); setInterval(loadLeaderboard, 60000)
+
+  // ── App PIN lock (on launch, if a PIN is set) ──
+  ;(async () => {
+    try {
+      const st = await require('electron').ipcRenderer.invoke('pin-status')
+      if (!st?.enabled) return
+      const ov = document.createElement('div')
+      ov.style.cssText = 'position:fixed;inset:0;z-index:20000;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;'
+      ov.innerHTML = '<div style="font-size:40px;">🔒</div><div style="font-size:15px;color:var(--text2);">Enter your PIN</div>' +
+        '<input id="pin-in" type="password" maxlength="8" style="width:180px;text-align:center;font-size:22px;letter-spacing:8px;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--bg3);color:var(--text);outline:none;">' +
+        '<div id="pin-err" style="font-size:12px;color:#ff453a;height:16px;"></div>'
+      document.body.appendChild(ov)
+      const inp = ov.querySelector('#pin-in'); inp.focus()
+      inp.addEventListener('input', async () => {
+        if (inp.value.length < 4) return
+        const r = await require('electron').ipcRenderer.invoke('pin-check', { pin: inp.value }).catch(()=>null)
+        if (r?.ok) ov.remove()
+        else if (inp.value.length >= 8) { ov.querySelector('#pin-err').textContent = 'Wrong PIN'; inp.value = '' }
+      })
+    } catch(e){}
+  })()
+
+  // ── 🎯 Daily quests ──
+  window.loadQuests = async function() {
+    const ipc = require('electron').ipcRenderer
+    const q = await ipc.invoke('quests-get').catch(()=>null)
+    const el = document.getElementById('quest-list'); if (!el || !q) return
+    el.innerHTML = q.quests.map(x => `<div style="padding:4px 0;">${x.done ? '✅' : '⬜'} ${x.label}</div>`).join('')
+    const btn = document.getElementById('quest-claim')
+    btn.style.display = (!q.claimed && q.quests.every(x=>x.done)) ? 'inline-block' : 'none'
+    if (q.claimed) el.innerHTML += '<div style="color:var(--green);padding-top:4px;">Claimed today — see you tomorrow 🌸</div>'
+    btn.onclick = async () => { const r = await ipc.invoke('quests-claim').catch(()=>null); if (r?.ok) loadQuests() }
+  }
+  setInterval(() => { if (document.getElementById('others-life')?.classList.contains('active')) loadQuests() }, 20000)
+  setTimeout(loadQuests, 2500)
+
+  // ── 📸 Shareable P&L card ──
+  require('electron').ipcRenderer.on('pnl-card', (e, t) => {
+    const cv = document.createElement('canvas'); cv.width = 640; cv.height = 360
+    const x = cv.getContext('2d')
+    const g = x.createLinearGradient(0,0,640,360)
+    g.addColorStop(0, t.pnl>=0 ? '#0a2a18' : '#2a0a0e'); g.addColorStop(1, '#0a0a0c')
+    x.fillStyle = g; x.fillRect(0,0,640,360)
+    x.strokeStyle = 'rgba(255,255,255,.12)'; x.lineWidth = 2; x.strokeRect(8,8,624,344)
+    x.fillStyle = '#a0a0a8'; x.font = '600 15px -apple-system'; x.fillText('ASUKA · paper trade', 36, 52)
+    x.fillStyle = '#f5f5f7'; x.font = '700 34px -apple-system'
+    x.fillText(`${t.direction} ${t.coin}  ·  ${t.leverage||1}x`, 36, 110)
+    x.fillStyle = t.pnl>=0 ? '#30d158' : '#ff453a'; x.font = '800 74px -apple-system'
+    x.fillText(`${t.pct>=0?'+':''}${t.pct.toFixed(1)}%`, 36, 200)
+    x.font = '700 30px -apple-system'
+    x.fillText(`${t.pnl>=0?'+':''}$${Math.abs(t.pnl).toFixed(2)}`, 36, 246)
+    x.fillStyle = '#6a6a72'; x.font = '500 15px -apple-system'
+    x.fillText(`entry ${t.entry} → exit ${t.exit}`, 36, 290)
+    x.fillText('trained with Asuka 🌸', 36, 328)
+    const url = cv.toDataURL('image/png')
+    let mdl = document.getElementById('pnl-modal'); if (mdl) mdl.remove()
+    mdl = document.createElement('div'); mdl.id = 'pnl-modal'
+    mdl.style.cssText = 'position:fixed;inset:0;z-index:10005;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;'
+    mdl.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:18px;max-width:92vw;">
+      <img src="${url}" style="width:480px;max-width:86vw;border-radius:12px;display:block;margin-bottom:12px;">
+      <div style="display:flex;gap:8px;">
+        <button id="pnl-save" style="flex:1;padding:11px;border:none;border-radius:10px;background:var(--accent);color:#000;font-weight:700;font-size:12px;cursor:pointer;">💾 Save image</button>
+        <button id="pnl-close" style="flex:1;padding:11px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text2);font-size:12px;cursor:pointer;">Close</button>
+      </div></div>`
+    document.body.appendChild(mdl)
+    mdl.onclick = (ev) => { if (ev.target === mdl) mdl.remove() }
+    mdl.querySelector('#pnl-close').onclick = () => mdl.remove()
+    mdl.querySelector('#pnl-save').onclick = () => require('electron').ipcRenderer.invoke('save-image-file', { dataUrl: url, name: `asuka-${t.coin}-win` })
+  })
+
+  // ── 💞 Her tab ──
+  window.loadHerTab = async function() {
+    const ipc = require('electron').ipcRenderer
+    const r = await ipc.invoke('companion-get').catch(()=>null)
+    if (!r) return
+    const c = r.companion
+    document.getElementById('her-tier').textContent = `${r.tier.emoji} ${r.tier.name} · ${r.bondXP} XP`
+    const span = r.nextTier ? (r.nextTier.xp - (r.tier.xp||0)) : 1
+    document.getElementById('her-xpfill').style.width = r.nextTier ? Math.min(100,((r.bondXP - r.tier.xp)/span*100)) + '%' : '100%'
+    const met = c.flags.firstDay
+    document.getElementById('her-stats').innerHTML =
+      `<span>💭 mood: <b>${c.mood?.v||'content'}</b></span>` +
+      `<span>📈 her record: <b>${r.record.right}W / ${r.record.wrong}L</b></span>` +
+      `<span>💕 met: <b>${met}</b></span>` +
+      (r.habits.length ? `<span>👀 she's noticed: <b>${r.habits.join(' · ')}</b></span>` : '')
+    document.getElementById('her-callme').value = c.profile.callMe || ''
+    document.getElementById('her-bday').value = c.profile.birthday || ''
+    document.getElementById('her-dream').value = c.profile.dream || ''
+    document.getElementById('her-safeword').value = c.profile.safeword || ''
+    document.getElementById('her-teasing').value = c.sliders.teasing ?? 45
+    document.getElementById('her-sweet').value = c.sliders.sweetness ?? 60
+    document.getElementById('her-chatty').value = c.sliders.chattiness ?? 55
+    document.getElementById('her-diary').innerHTML = (c.diary||[]).slice(0,14).map(x =>
+      `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 13px;margin-bottom:6px;"><div style="font-size:10px;color:var(--text3);margin-bottom:3px;">${x.date}</div><div style="font-size:12px;line-height:1.5;">${x.entry}</div></div>`).join('')
+      || '<div style="color:var(--text3);font-size:12px;">No entries yet — she writes her first one tonight.</div>'
+    document.getElementById('her-moments').innerHTML = (c.moments||[]).slice(0,20).map(x =>
+      `<div style="display:flex;justify-content:space-between;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 13px;margin-bottom:6px;font-size:12px;"><span>${x.title}</span><span style="color:var(--text3);">${x.detail||''} · ${x.date}</span></div>`).join('')
+      || '<div style="color:var(--text3);font-size:12px;">Your story together starts here — first big win, first lesson, anniversaries.</div>'
+    const sh = await ipc.invoke('get-shadow-stats').catch(()=>null)
+    if (sh?.stats && document.getElementById('her-shadow')) {
+      const s = sh.stats, tot = (s.wouldWin||0)+(s.wouldLose||0)+(s.neutral||0)
+      document.getElementById('her-shadow').innerHTML = tot
+        ? `🕶️ Shadow mode — if you'd let her calls run untouched: <b style="color:var(--green)">${s.wouldWin||0} would-be wins</b> · <b style="color:var(--red)">${s.wouldLose||0} would-be losses</b> · ${s.neutral||0} neutral`
+        : '🕶️ Shadow mode: data builds as trades you touched get simulated.'
+    }
+    const reps = (c.diary||[]).filter(x => (x.entry||'').startsWith('📋 WEEKLY REPORT'))
+    if (document.getElementById('her-reports')) document.getElementById('her-reports').innerHTML = reps.slice(0,8).map(x =>
+      `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 13px;margin-bottom:6px;"><div style="font-size:10px;color:var(--text3);margin-bottom:3px;">${x.date}</div><div style="font-size:12px;line-height:1.5;">${x.entry.replace('📋 WEEKLY REPORT — ','')}</div></div>`).join('')
+      || '<div style="color:var(--text3);font-size:12px;">First report card this Sunday evening — or tap "Review my week now".</div>'
+    // keep report entries out of the main diary list
+    document.getElementById('her-diary').innerHTML = (c.diary||[]).filter(x=>!(x.entry||'').startsWith('📋')).slice(0,14).map(x =>
+      `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 13px;margin-bottom:6px;"><div style="font-size:10px;color:var(--text3);margin-bottom:3px;">${x.date}</div><div style="font-size:12px;line-height:1.5;">${x.entry}</div></div>`).join('')
+      || '<div style="color:var(--text3);font-size:12px;">No entries yet — she writes her first one tonight.</div>'
+    const rvBtn = document.getElementById('her-review-now')
+    if (rvBtn) rvBtn.onclick = async () => { rvBtn.textContent = 'reviewing…'; await ipc.invoke('weekly-report').catch(()=>{}); rvBtn.textContent = 'Review my week now'; loadHerTab() }
+    document.getElementById('her-save').onclick = async () => {
+      await ipc.invoke('companion-set', { profile: {
+          callMe: document.getElementById('her-callme').value.trim(),
+          birthday: document.getElementById('her-bday').value,
+          dream: document.getElementById('her-dream').value.trim(),
+          safeword: document.getElementById('her-safeword').value.trim().toLowerCase() },
+        sliders: {
+          teasing: +document.getElementById('her-teasing').value,
+          sweetness: +document.getElementById('her-sweet').value,
+          chattiness: +document.getElementById('her-chatty').value } }).catch(()=>{})
+      const b = document.getElementById('her-save'); b.textContent = 'Saved 💕'; setTimeout(()=>b.textContent='Save', 1400)
+    }
+  }
+})()
 </script>
 </body>
 </html>

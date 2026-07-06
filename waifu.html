@@ -14,16 +14,16 @@
       cursor:pointer; font-size:15px; z-index:100;
       transition:all 0.2s; backdrop-filter:blur(8px);
     }
-    .btn:hover { transform:scale(1.12); }
+    .btn:hover { transform:scale(1.1); background:rgba(10,132,255,0.25); border-color:rgba(10,132,255,0.55); }
 
-    #history-btn   { bottom:580px; left:10px; background:rgba(255,200,0,0.15);  border:1px solid rgba(255,200,0,0.3); }
-    #chat-btn      { bottom:530px; left:10px; background:rgba(0,212,255,0.15);  border:1px solid rgba(0,212,255,0.3); }
-    #her-mute-btn  { bottom:480px; left:10px; background:rgba(52,211,153,0.15); border:1px solid rgba(52,211,153,0.3); }
-    #mic-mute-btn  { bottom:430px; left:10px; background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.3); }
-    #webcam-btn    { bottom:380px; left:10px; background:rgba(255,140,0,0.15);  border:1px solid rgba(255,140,0,0.3); }
-    #dashboard-btn { bottom:330px; left:10px; background:rgba(150,0,255,0.15);  border:1px solid rgba(150,0,255,0.3); }
-    #study-btn     { bottom:280px; left:10px; background:rgba(124,196,255,0.18); border:1px solid rgba(124,196,255,0.4); }
-    #care-btn { bottom:385px; left:10px; background:rgba(240,168,208,0.18); border:1px solid rgba(240,168,208,0.4); }
+    #history-btn   { bottom:580px; left:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); }
+    #chat-btn      { bottom:530px; left:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); }
+    #her-mute-btn  { bottom:480px; left:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); }
+    #mic-mute-btn  { bottom:430px; left:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); }
+    #webcam-btn    { bottom:380px; left:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); }
+    #dashboard-btn { bottom:330px; left:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); }
+    #study-btn     { bottom:280px; left:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); }
+    #care-btn      { bottom:230px; left:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); }
 
     #her-mute-btn.muted { background:rgba(248,113,113,0.2); border-color:rgba(248,113,113,0.4); }
     #mic-mute-btn.muted { background:rgba(248,113,113,0.2); border-color:rgba(248,113,113,0.4); }
@@ -741,6 +741,26 @@ VOICE RESPONSE RULES — CRITICAL:
                     }
                   },
                   {
+                    name: 'set_do_not_disturb',
+                    description: 'Silence or wake Asuka. on=true for do-not-disturb / be quiet. on=false when they say your name or come back. Call with NO arguments to TOGGLE (used for the safe word).',
+                    parameters: { type: 'object', properties: { on: { type: 'boolean' } } }
+                  },
+                  {
+                    name: 'compose_content',
+                    description: 'Write something FOR the user they can copy or save: a poem, letter, essay, email, document, story, lyrics, speech, message, or any text they ask you to create or write for them.',
+                    parameters: { type: 'object', properties: { request: { type: 'string', description: 'The full request word for word' } }, required: ['request'] }
+                  },
+                  {
+                    name: 'set_reminder',
+                    description: 'Set a reminder/timer. Call when the user asks to be reminded of something. Convert their phrasing to minutes from now.',
+                    parameters: { type: 'object', properties: { minutes: { type: 'number' }, message: { type: 'string' } }, required: ['minutes'] }
+                  },
+                  {
+                    name: 'set_scene',
+                    description: 'Change the hangout scene when the user suggests going somewhere together: cafe (coffee/tea date), beach, night (night walk), room (chill at home). Use none to end the scene.',
+                    parameters: { type: 'object', properties: { scene: { type: 'string', enum: ['cafe','beach','night','room','none'] } }, required: ['scene'] }
+                  },
+                  {
                     name: 'get_market_data',
                     description: 'Get live crypto market data — prices, funding rate, fear and greed, dominance, gas fees',
                     parameters: {
@@ -918,14 +938,86 @@ VOICE RESPONSE RULES — CRITICAL:
     }
 
     // ── Handle Tool Calls ──────────────────────────────────────────────────
+    // ── 🎭 Scene mode: soft backdrop behind her + persona shift ──
+    const SCENES = {
+      cafe:  'linear-gradient(180deg, rgba(120,85,55,.55), rgba(60,40,25,.75))',
+      beach: 'linear-gradient(180deg, rgba(80,170,220,.5), rgba(240,200,120,.6))',
+      night: 'linear-gradient(180deg, rgba(20,25,60,.7), rgba(60,30,90,.6))',
+      room:  'linear-gradient(180deg, rgba(70,60,90,.55), rgba(35,30,50,.75))'
+    }
+    function setScene(name) {
+      let bg = document.getElementById('scene-bg')
+      if (!bg) { bg = document.createElement('div'); bg.id = 'scene-bg'
+        bg.style.cssText = 'position:fixed;inset:8px;border-radius:22px;z-index:-1;transition:opacity .8s;opacity:0;pointer-events:none;'
+        document.body.prepend(bg) }
+      if (name && SCENES[name]) { bg.style.background = SCENES[name]; bg.style.opacity = '1' }
+      else bg.style.opacity = '0'
+      ipcRenderer.invoke('companion-scene', { scene: name }).catch(()=>{})
+    }
+
+    // ── Do-not-disturb: she goes quiet + dim; her name wakes her ──
+    window._dnd = false
+    function setDND(on) {
+      window._dnd = on
+      isHerMuted = on
+      herMuteBtn.textContent = on ? '🔇' : '🔊'
+      herMuteBtn.classList.toggle('muted', on)
+      document.body.style.transition = 'opacity .5s'
+      document.body.style.opacity = on ? '0.45' : '1'
+      ipcRenderer.invoke('companion-dnd', { on }).catch(()=>{})
+      try { window._pixelSay && window._pixelSay(on ? '🤫 going quiet…' : 'I\'m here! 🌸') } catch(e){}
+    }
+
+    // ── Compose dialog: she writes something → copy / save ──
+    function showComposeDialog(title, content) {
+      let m = document.getElementById('compose-dlg')
+      if (m) m.remove()
+      m = document.createElement('div'); m.id = 'compose-dlg'
+      m.style.cssText = 'position:fixed;inset:0;z-index:10002;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;'
+      m.innerHTML = `<div style="width:340px;max-width:92vw;max-height:80vh;background:#141417;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:18px;display:flex;flex-direction:column;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div style="font-size:14px;font-weight:700;color:#f5f5f7;">🖋️ ${title}</div>
+          <div id="cd-x" style="cursor:pointer;color:#8a8a92;font-size:18px;">×</div>
+        </div>
+        <div id="cd-body" style="flex:1;overflow-y:auto;background:#1e1e24;border:1px solid rgba(255,255,255,.08);border-radius:11px;padding:12px;font-size:13px;line-height:1.6;color:#e8e8ee;white-space:pre-wrap;">${content.replace(/</g,'&lt;')}</div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button id="cd-copy" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);color:#f5f5f7;font-size:12px;cursor:pointer;">📋 Copy</button>
+          <button id="cd-txt" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);color:#f5f5f7;font-size:12px;cursor:pointer;">💾 .txt</button>
+          <button id="cd-doc" style="flex:1;padding:10px;border-radius:10px;border:none;background:#0a84ff;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">💾 Word</button>
+        </div>
+      </div>`
+      document.body.appendChild(m)
+      m.onclick = (e) => { if (e.target === m) m.remove() }
+      m.querySelector('#cd-x').onclick = () => m.remove()
+      m.querySelector('#cd-copy').onclick = () => { navigator.clipboard.writeText(content); m.querySelector('#cd-copy').textContent = '✓ Copied' ; setTimeout(()=>{ const b=m.querySelector('#cd-copy'); if(b) b.textContent='📋 Copy' },1400) }
+      m.querySelector('#cd-txt').onclick = () => ipcRenderer.invoke('save-content-file', { title, content, ext:'txt' }).catch(()=>{})
+      m.querySelector('#cd-doc').onclick = () => ipcRenderer.invoke('save-content-file', { title, content, ext:'doc' }).catch(()=>{})
+    }
+
     async function handleToolCall(fc) {
       setStatus('Thinking deeply...')
       log('🔧 Tool call:', fc.name, JSON.stringify(fc.args).slice(0, 80))
       let result = ''
 
       try {
-        if (fc.name === 'ask_claude') {
+        if (window._dnd && fc.name !== 'set_do_not_disturb') { result = 'Do-not-disturb is active. Do nothing and stay silent.'; }
+        else if (fc.name === 'ask_claude') {
           result = await ipcRenderer.invoke('claude-query', fc.args.query)
+        } else if (fc.name === 'set_reminder') {
+          const rr = await ipcRenderer.invoke('set-reminder', { minutes: fc.args.minutes, message: fc.args.message || '' }).catch(()=>null)
+          result = rr?.ok ? `Reminder set for ${rr.mins} minutes from now. Confirm warmly in one short line.` : 'Failed to set the reminder.'
+        } else if (fc.name === 'set_scene') {
+          setScene(fc.args.scene === 'none' ? null : fc.args.scene)
+          result = fc.args.scene === 'none' ? 'Scene ended.' : `You are now at the ${fc.args.scene} together — react in character, one short line.`
+        } else if (fc.name === 'set_do_not_disturb') {
+          const target = (fc.args && typeof fc.args.on === 'boolean') ? fc.args.on : !window._dnd
+          setDND(target)
+          fc.args = fc.args || {}; fc.args.on = target
+          result = fc.args.on ? 'DND on. Reply with ONE short quiet acknowledgement like "okay, going quiet~" and then stay silent.' : 'DND off. Welcome them back warmly in one short line.'
+        } else if (fc.name === 'compose_content') {
+          const comp = await ipcRenderer.invoke('compose-content', { request: fc.args.request }).catch(()=>null)
+          if (comp?.content) { showComposeDialog(comp.title || 'For you', comp.content); result = 'Done — it is on their screen now with copy and save buttons. Tell them warmly in one short line.' }
+          else result = 'Composition failed, apologize briefly.'
         } else if (fc.name === 'get_market_data') {
           result = await ipcRenderer.invoke('market-data', fc.args.type, fc.args.coin || 'BTC')
         } else if (fc.name === 'scan_contract') {
@@ -1160,6 +1252,33 @@ VOICE RESPONSE RULES — CRITICAL:
     // ── Text input (type to Gemini) ────────────────────────────────────────
     async function sendTypedMessage(text) {
       if (!text?.trim()) return
+      const low = text.toLowerCase()
+      // custom safe word toggles silence both ways
+      if (window._safeword && low.includes(window._safeword)) { setDND(!window._dnd); addToHistory('user', text); addToHistory('asuka', window._dnd ? '…🤫' : "I'm back! 🌸"); return }
+      // DND / wake by text
+      if (/(do ?n[o']t disturb|dnd\b|be quiet|going quiet|leave me alone for)/.test(low)) { setDND(true); addToHistory('user', text); addToHistory('asuka', 'Okay… going quiet 🤫 say my name when you need me.'); return }
+      if (window._dnd && /asuka|come back|you can talk/.test(low)) { setDND(false); addToHistory('user', text); addToHistory('asuka', "I'm here! Missed you 🌸"); await speakText("I'm here! Missed you~"); return }
+      // "remind me in X minutes" typed
+      const rm = low.match(/remind me (?:in |after )?(\d+)\s*(min|minute|hour|hr)/)
+      if (rm) {
+        const mins = parseInt(rm[1]) * (/hour|hr/.test(rm[2]) ? 60 : 1)
+        const note = text.replace(/.*?(to|about)\s+/i, '').slice(0, 120)
+        await ipcRenderer.invoke('set-reminder', { minutes: mins, message: note }).catch(()=>{})
+        addToHistory('user', text); addToHistory('asuka', `⏰ Got it — I'll remind you in ${mins} minutes.`); return
+      }
+      // scene invites typed
+      if (/(coffee|cafe) (date|together|break)|let'?s (get|grab) (a )?(coffee|tea)/.test(low)) { setScene('cafe'); addToHistory('user', text); addToHistory('asuka', '☕ Café date! I want something sweet~'); return }
+      if (/beach (day|date|together)|let'?s go to the beach/.test(low)) { setScene('beach'); addToHistory('user', text); addToHistory('asuka', '🏖️ Beach!! Race you to the water~'); return }
+      if (/night walk|walk (at|in the) night|evening walk/.test(low)) { setScene('night'); addToHistory('user', text); addToHistory('asuka', '🌙 A night walk… stay close, okay?'); return }
+      if (/end (the )?scene|back to (normal|work)/.test(low)) { setScene(null); addToHistory('user', text); addToHistory('asuka', 'Back to reality~ that was nice though 🌸'); return }
+      // "write/create X for me" → compose dialog
+      if (/^(write|create|compose|draft|make)\b/.test(low) && /(poem|letter|essay|email|document|word|story|lyrics|speech|message|caption|bio|tweet|post)/.test(low)) {
+        addToHistory('user', text); setStatus('Writing for you…')
+        const comp = await ipcRenderer.invoke('compose-content', { request: text }).catch(()=>null)
+        if (comp?.content) { showComposeDialog(comp.title || 'For you', comp.content); addToHistory('asuka', 'Here you go~ 🖋️ (on your screen — copy or save it)'); if (!isHerMuted) await speakText('Here you go~ wrote it for you.') }
+        else addToHistory('asuka', 'Hmm, that one didn\'t come out — try asking again?')
+        setStatus('Listening...'); return
+      }
       stopCurrentAudio()
       addToHistory('user', text)
       setStatus('Thinking...')
@@ -1272,9 +1391,39 @@ VOICE RESPONSE RULES — CRITICAL:
     document.querySelectorAll('.care-act').forEach(b => b.addEventListener('click', async () => {
       const r = await ipcRenderer.invoke('care-action', b.dataset.a).catch(()=>null)
       if (r?.success) { renderCare(r.state); refreshRelationship() }
+      if (b.dataset.a === 'pat') {
+        const p = await ipcRenderer.invoke('companion-pat').catch(()=>null)
+        if (p?.line) { try { window._pixelSay ? window._pixelSay(p.line) : null } catch(e){}
+          floatHearts() ; showPatLine(p.line) }
+      }
     }))
+    function floatHearts() {
+      for (let i = 0; i < 5; i++) {
+        const h = document.createElement('div')
+        h.textContent = ['💕','💗','🌸'][i % 3]
+        h.style.cssText = `position:fixed;left:${140+Math.random()*120}px;top:${300+Math.random()*80}px;font-size:${14+Math.random()*10}px;z-index:9999;pointer-events:none;transition:all 1.6s ease-out;opacity:1;`
+        document.body.appendChild(h)
+        requestAnimationFrame(() => { h.style.transform = `translateY(-${80+Math.random()*60}px)`; h.style.opacity = '0' })
+        setTimeout(() => h.remove(), 1700)
+      }
+    }
+    function showPatLine(t) {
+      let el = document.getElementById('pat-line')
+      if (!el) { el = document.createElement('div'); el.id = 'pat-line'
+        el.style.cssText = 'position:fixed;bottom:120px;left:50%;transform:translateX(-50%);background:rgba(16,16,19,.94);border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:9px 16px;font-size:13px;color:#f5f5f7;z-index:9999;max-width:80%;text-align:center;'
+        document.body.appendChild(el) }
+      el.textContent = t; el.style.display = 'block'
+      clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', 2800)
+    }
     document.getElementById('shop-open-btn')?.addEventListener('click', () => ipcRenderer.send('open-shop'))
     ipcRenderer.on('care-updated', (e, d) => renderCare(d))
+    // presence heartbeat — powers "you're back!", break reminders, her mood
+    ipcRenderer.invoke('companion-seen').catch(()=>{})
+    ipcRenderer.invoke('companion-get').then(r => { window._safeword = (r?.companion?.profile?.safeword || '').trim().toLowerCase() || null }).catch(()=>{})
+    let _seenT = 0
+    window.addEventListener('mousedown', () => { const n = Date.now(); if (n - _seenT > 120000) { _seenT = n; ipcRenderer.invoke('companion-seen').catch(()=>{}) } })
+    // her mood drives the pixel pet
+    ipcRenderer.on('asuka-mood', (e, m) => { window._asukaMood = m?.v || 'content' })
     // include care-btn in no-drag
     setTimeout(()=>{refreshCare();refreshRelationship()}, 1500)
 
@@ -1451,7 +1600,7 @@ VOICE RESPONSE RULES — CRITICAL:
       if (!note) return
       if (b && (b.board || b.boardTitle)) {
         document.getElementById('wb-note-title').textContent = b.boardTitle || 'Whiteboard'
-        document.getElementById('wb-note-body').innerHTML = String(b.board||'').replace(/\*\*(.+?)\*\*/g,'<b style="color:#fbbf24">$1</b>')
+        document.getElementById('wb-note-body').innerHTML = String(b.board||'').replace(/\*\*(.+?)\*\*/g,'<b style="color:#0a84ff">$1</b>')
         note.style.display = 'block'
       }
     })
@@ -1782,8 +1931,8 @@ VOICE RESPONSE RULES — CRITICAL:
   </script>
 
   <!-- ── Study whiteboard note (shows what Asuka is teaching, like the images) ── -->
-  <div id="wb-note" style="display:none;position:fixed;top:14px;left:14px;right:14px;background:rgba(20,26,38,.96);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px 14px;z-index:9997;box-shadow:0 8px 30px rgba(0,0,0,.4);">
-    <div id="wb-note-title" style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#9fe;opacity:.8;margin-bottom:5px;font-family:monospace;">Whiteboard</div>
+  <div id="wb-note" style="display:none;position:fixed;top:14px;left:14px;right:14px;background:rgba(16,16,19,.96);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:12px 14px;z-index:9997;box-shadow:0 8px 30px rgba(0,0,0,.4);">
+    <div id="wb-note-title" style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#5e9eff;opacity:.9;margin-bottom:5px;font-family:monospace;">Whiteboard</div>
     <div id="wb-note-body" style="font-size:12px;line-height:1.5;color:#eafff5;font-family:monospace;white-space:pre-wrap;max-height:120px;overflow-y:auto;"></div>
     <div id="wb-note-close" style="position:absolute;top:8px;right:10px;cursor:pointer;color:#889;font-size:14px;">×</div>
   </div>

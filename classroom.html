@@ -7,12 +7,13 @@
 <script src="./assets/live2dcubismcore.min.js"></script>
 <script src="./node_modules/pixi.js/dist/browser/pixi.min.js"></script>
 <script src="./node_modules/pixi-live2d-display/dist/cubism4.min.js"></script>
+<script src="./node_modules/pdfjs-dist/legacy/build/pdf.js"></script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   :root {
-    --bg:#0d1018; --bg2:#141a26; --bg3:#1b2333; --border:rgba(255,255,255,.09);
-    --text:#eef2f8; --text2:#aab3c5; --text3:#6b7488; --accent:#7cc4ff; --pink:#f3a8d0;
-    --green:#4ade80; --gold:#fbbf24;
+    --bg:#0a0a0c; --bg2:#141417; --bg3:#1e1e24; --border:rgba(255,255,255,.08);
+    --text:#f5f5f7; --text2:#a0a0a8; --text3:#6a6a72; --accent:#0a84ff; --pink:#5e9eff;
+    --green:#30d158; --gold:#ffd60a;
   }
   html,body { height:100%; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); overflow:hidden; }
   .hidden { display:none !important; }
@@ -22,7 +23,7 @@
   #close-x { position:fixed; top:8px; right:12px; -webkit-app-region:no-drag; width:26px; height:26px; border-radius:50%; background:rgba(255,90,95,.15); color:#ff5a5f; border:none; cursor:pointer; font-size:15px; z-index:51; }
 
   /* ── SETUP / UPLOAD SCREEN ── */
-  #setup { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:24px; background:radial-gradient(1200px 600px at 50% -10%, rgba(124,196,255,.08), transparent); }
+  #setup { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:24px; background:radial-gradient(1200px 600px at 50% -10%, rgba(10,132,255,.06), transparent); }
   .card { width:520px; max-width:94vw; background:var(--bg2); border:1px solid var(--border); border-radius:22px; padding:28px; box-shadow:0 20px 60px rgba(0,0,0,.4); }
   .card h1 { font-size:24px; font-weight:600; letter-spacing:-.3px; margin-bottom:4px; }
   .card .sub { color:var(--text2); font-size:13px; margin-bottom:22px; }
@@ -48,7 +49,7 @@
   #scene { position:absolute; inset:0; display:flex; flex-direction:column; background:linear-gradient(180deg,#10151f 0%,#0b0e15 100%); }
   #scene.hidden { display:none; }
   #stage { flex:1; position:relative; overflow:hidden; }
-  #classroom-bg { position:absolute; inset:0; background:linear-gradient(160deg,#1a2436,#0f1622); }
+  #classroom-bg { position:absolute; inset:0; background:linear-gradient(160deg,#141417,#0a0a0c); }
   #board { position:absolute; top:6%; left:6%; right:6%; height:52%; background:#14342b; border:8px solid #6b4b2f; border-radius:8px; box-shadow:inset 0 0 40px rgba(0,0,0,.5); padding:22px 26px; overflow-y:auto; }
   #board-title { color:#9fe; font-size:13px; letter-spacing:2px; text-transform:uppercase; opacity:.7; margin-bottom:12px; font-family:'Courier New',monospace; }
   #board-content { color:#eafff5; font-size:19px; line-height:1.7; font-family:'Courier New',monospace; white-space:pre-wrap; }
@@ -98,6 +99,7 @@
     <div class="card">
       <h1>Study with Asuka 🌸</h1>
       <div class="sub">Upload something you want to learn — she'll teach it to you on the board, step by step.</div>
+      <div id="streak-badge" style="display:none;margin-bottom:14px;padding:6px 14px;border-radius:20px;background:rgba(255,159,10,.14);border:1px solid rgba(255,159,10,.35);color:#ff9f0a;font-size:12px;font-weight:600;"></div>
 
       <div class="drop" id="drop">
         <div class="big">📄 Upload document</div>
@@ -112,7 +114,19 @@
       </div>
 
       <button class="btn-primary" id="start-btn" disabled>Start the lesson</button>
+      <div style="display:flex;align-items:center;gap:8px;margin:14px 0 8px;"><div style="flex:1;height:1px;background:var(--border);"></div><span style="font-size:10px;color:var(--text3);">OR — NO FILE NEEDED</span><div style="flex:1;height:1px;background:var(--border);"></div></div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <input id="topic-inp" placeholder="Teach me… (any topic — e.g. Japanese particles, RSI)" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:11px;padding:11px 14px;color:var(--text);font-size:13px;outline:none;">
+        <button id="topic-btn" style="padding:11px 16px;border:none;border-radius:11px;background:var(--accent);color:#000;font-weight:700;font-size:12px;cursor:pointer;">Teach me</button>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button id="photo-btn" style="flex:1;padding:10px;border-radius:11px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px;cursor:pointer;">📷 Solve a photo</button>
+        <button id="check-btn" style="flex:1;padding:10px;border-radius:11px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px;cursor:pointer;">✅ Check my work</button>
+        <button id="tutor-toggle" style="flex:1;padding:10px;border-radius:11px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px;cursor:pointer;">🎓 Tutor: off</button>
+      </div>
+      <input type="file" id="photo-file" accept="image/*" style="display:none;">
       <button class="btn-ghost" id="library-btn">📚 My Library — manage textbooks</button>
+      <button class="btn-ghost" id="cards-btn" style="display:none;">🃏 Review flashcards — <span id="cards-due">0</span> due</button>
     </div>
   </div>
 
@@ -138,6 +152,20 @@
       <div style="color:var(--text2);font-size:13px;margin-bottom:18px;" id="ch-info">Pick a chapter to study — Asuka will teach just that part.</div>
       <button class="btn-primary" id="ch-whole" style="margin-bottom:14px;">📚 Teach the whole thing</button>
       <div id="ch-list"></div>
+    </div>
+  </div>
+
+  <!-- OCR PANEL (scanned books) -->
+  <div id="ocr-panel" class="hidden" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg);">
+    <div class="card">
+      <h1>📷 Scanned book detected</h1>
+      <div class="sub" id="ocr-info">The pages are images, so Asuka needs to read them once with OCR. The text is saved forever — you only pay once per book.</div>
+      <div style="display:flex;gap:10px;margin-bottom:14px;">
+        <div style="flex:1;"><label style="font-size:11px;color:var(--text3);">From page</label><input id="ocr-from" type="number" value="1" min="1" class="s-inp" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;margin-top:4px;"></div>
+        <div style="flex:1;"><label style="font-size:11px;color:var(--text3);">To page</label><input id="ocr-to" type="number" value="50" min="1" class="s-inp" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;margin-top:4px;"></div>
+      </div>
+      <button class="btn-primary" id="ocr-start">Read these pages</button>
+      <button class="btn-ghost" id="ocr-cancel">Cancel</button>
     </div>
   </div>
 
@@ -220,6 +248,78 @@ document.getElementById('close-x').onclick = () => ipcRenderer.invoke('close-cla
 document.getElementById('library-btn').onclick = openLibrary;
 document.getElementById('lib-back').onclick = () => { document.getElementById('library').classList.add('hidden'); document.getElementById('setup').classList.remove('hidden'); };
 ipcRenderer.on('show-library', openLibrary);
+
+// ── Thetawise steals: teach-me-X, photo-solve, tutor mode, check-my-work ──
+let tutorStyle = localStorage.getItem('tutor-style') || 'direct';
+function refreshTutorBtn(){ const b=document.getElementById('tutor-toggle'); if(b){ b.textContent = tutorStyle==='tutor' ? '🎓 Tutor: ON' : '🎓 Tutor: off'; b.style.borderColor = tutorStyle==='tutor' ? 'var(--accent)' : 'var(--border)'; } }
+refreshTutorBtn();
+document.getElementById('tutor-toggle').onclick = () => { tutorStyle = tutorStyle==='tutor' ? 'direct' : 'tutor'; localStorage.setItem('tutor-style', tutorStyle); refreshTutorBtn(); };
+
+document.getElementById('topic-btn').onclick = async () => {
+  const t = document.getElementById('topic-inp').value.trim();
+  if (!t) return;
+  document.getElementById('loading').classList.add('show');
+  document.querySelector('#loading .msg').textContent = 'Preparing your lesson…';
+  const r = await ipcRenderer.invoke('build-lesson-from-text', { topic: t, text: '', style: tutorStyle }).catch(()=>null);
+  document.getElementById('loading').classList.remove('show');
+  if (r?.beats?.length) startTeaching(r.topic || t, r.beats, 'topic');
+  else { alert('Could not build that lesson — try rephrasing?'); }
+};
+document.getElementById('topic-inp').addEventListener('keydown', e => { if (e.key==='Enter') document.getElementById('topic-btn').click(); });
+
+document.getElementById('photo-btn').onclick = () => document.getElementById('photo-file').click();
+document.getElementById('photo-file').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  document.getElementById('loading').classList.add('show');
+  document.querySelector('#loading .msg').textContent = 'Reading your photo…';
+  const b64 = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result.split(',')[1]); r.onerror=rej; r.readAsDataURL(f); });
+  const r = await ipcRenderer.invoke('solve-photo', { b64, media: f.type || 'image/png' }).catch(()=>null);
+  document.getElementById('loading').classList.remove('show');
+  if (r?.beats?.length) startTeaching('📷 Your problem', r.beats, 'photo');
+  else alert(r?.error || 'Could not read that photo — try a clearer shot?');
+  e.target.value = '';
+});
+
+document.getElementById('check-btn').onclick = async () => {
+  const t = prompt('Paste your work / answers — she will find the mistakes:');
+  if (!t?.trim()) return;
+  document.getElementById('loading').classList.add('show');
+  document.querySelector('#loading .msg').textContent = 'Checking your work…';
+  const r = await ipcRenderer.invoke('check-work', { text: t }).catch(()=>null);
+  document.getElementById('loading').classList.remove('show');
+  if (!r) return;
+  const beats = [{ say: r.overall || 'Checked it!', boardTitle: 'Your work', board: (r.issues||[]).length ? '**'+(r.issues.length)+' thing(s) to fix**' : '**All correct!** 🎉' },
+    ...(r.issues||[]).map((x,i)=>({ say: `Issue ${i+1}: ${x.wrong}`, boardTitle: x.where || ('Issue '+(i+1)), board: `❌ ${x.wrong}\n✅ **${x.fix}**` }))];
+  startTeaching('✅ Work check', beats, 'check');
+};
+async function refreshDueBadge() {
+  const r = await ipcRenderer.invoke('cards-due').catch(()=>null);
+  const b = document.getElementById('cards-btn');
+  if (b && r) { document.getElementById('cards-due').textContent = r.due; b.style.display = r.total ? 'block' : 'none'; }
+}
+refreshDueBadge();
+document.getElementById('cards-btn').onclick = reviewCards;
+async function reviewCards() {
+  const r = await ipcRenderer.invoke('cards-next').catch(()=>null);
+  document.getElementById('setup').classList.add('hidden');
+  document.getElementById('scene').classList.remove('hidden');
+  initLive2D();
+  if (!r || r.i < 0) { document.getElementById('line').innerHTML = 'All caught up — nothing due right now! 🌸 Come back tomorrow.'; return; }
+  const card = r.card, idx2 = r.i;
+  document.getElementById('board-title').textContent = card.topic || 'Flashcard';
+  document.getElementById('board-content').innerHTML = card.q;
+  document.getElementById('line').innerHTML = 'What\'s the answer? <button id="fc-show" style="margin-left:8px;padding:7px 16px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px;cursor:pointer;">Show answer</button>';
+  document.getElementById('fc-show').onclick = (e) => {
+    e.stopPropagation();
+    document.getElementById('board-content').innerHTML = card.q + '\n\n— ' + card.a;
+    document.getElementById('line').innerHTML = 'Did you know it? ' +
+      '<button id="fc-again" style="margin:0 6px;padding:7px 16px;border-radius:9px;border:1px solid var(--red);background:rgba(255,69,58,.12);color:var(--red);font-size:12px;cursor:pointer;">Again</button>' +
+      '<button id="fc-good" style="padding:7px 16px;border-radius:9px;border:1px solid var(--green);background:rgba(48,209,88,.12);color:var(--green);font-size:12px;cursor:pointer;">Got it</button>';
+    document.getElementById('fc-again').onclick = async (ev) => { ev.stopPropagation(); await ipcRenderer.invoke('cards-grade', { i: idx2, good: false }).catch(()=>{}); reviewCards(); };
+    document.getElementById('fc-good').onclick  = async (ev) => { ev.stopPropagation(); await ipcRenderer.invoke('cards-grade', { i: idx2, good: true  }).catch(()=>{}); reviewCards(); };
+  };
+}
+ipcRenderer.invoke('study-streak').then(r => { if (r?.streak) showStreak(r.streak) }).catch(()=>{});
 ipcRenderer.on('play-lesson', (e, les) => {
   if (les && les.beats?.length) { beats = les.beats; currentTopic = les.topic; document.getElementById('setup')?.classList.add('hidden'); document.getElementById('library')?.classList.add('hidden'); startScene(); }
 });
@@ -265,12 +365,85 @@ startBtn.onclick = async () => {
     else teachText(ex.name, ex.fullText, ex.name);
   } catch(e) {
     const scanned = String(e.message).includes('no text');
-    document.querySelector('#loading .msg').textContent = scanned
-      ? 'This looks like a scanned PDF (images, no readable text). Try a text-based PDF.'
-      : 'Hmm, I could not read that. Try another file?';
+    document.getElementById('loading').classList.remove('show');
+    if (scanned && /\.pdf$/i.test(files[0].name)) { startOcrFlow(files[0]); return; }
+    document.getElementById('loading').classList.add('show');
+    document.querySelector('#loading .msg').textContent = 'Hmm, I could not read that. Try another file?';
     setTimeout(()=>{ document.getElementById('loading').classList.remove('show'); }, 2600);
   }
 };
+
+// ── Scanned-book OCR flow: render pages → Google Vision → cache → teach ──
+let _ocrFile = null, _ocrPdf = null;
+async function startOcrFlow(f) {
+  _ocrFile = f;
+  const cacheKey = `${f.name}:${f.size}`;
+  // cached from a previous OCR? go straight to chapters
+  const cached = await ipcRenderer.invoke('ocr-cache-get', { key: cacheKey }).catch(()=>null);
+  if (cached?.text) { return structureAndShow(f.name, cached.text); }
+  try {
+    const buf = await f.arrayBuffer();
+    pdfjsLib.GlobalWorkerOptions.workerSrc = './node_modules/pdfjs-dist/legacy/build/pdf.worker.js';
+    _ocrPdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+    document.getElementById('setup').classList.add('hidden');
+    document.getElementById('ocr-panel').classList.remove('hidden');
+    document.getElementById('ocr-info').textContent = `${_ocrPdf.numPages} pages of images. Asuka reads them once with OCR and remembers forever. Pick a range (a chapter is usually 10–30 pages).`;
+    document.getElementById('ocr-to').value = Math.min(50, _ocrPdf.numPages);
+    document.getElementById('ocr-to').max = _ocrPdf.numPages;
+  } catch(e) {
+    alert('Could not open this PDF: ' + e.message);
+    document.getElementById('setup').classList.remove('hidden');
+  }
+}
+document.getElementById('ocr-cancel').onclick = () => { document.getElementById('ocr-panel').classList.add('hidden'); document.getElementById('setup').classList.remove('hidden'); };
+document.getElementById('ocr-start').onclick = async () => {
+  if (!_ocrPdf || !_ocrFile) return;
+  const from = Math.max(1, parseInt(document.getElementById('ocr-from').value)||1);
+  const to = Math.min(_ocrPdf.numPages, parseInt(document.getElementById('ocr-to').value)||from);
+  document.getElementById('ocr-panel').classList.add('hidden');
+  document.getElementById('loading').classList.add('show');
+  const texts = [];
+  try {
+    let batch = [];
+    for (let p = from; p <= to; p++) {
+      document.querySelector('#loading .msg').textContent = `Reading page ${p} of ${to}…`;
+      const page = await _ocrPdf.getPage(p);
+      const vp = page.getViewport({ scale: 1.6 });
+      const cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
+      await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+      batch.push(cv.toDataURL('image/jpeg', 0.8).split(',')[1]);
+      if (batch.length === 8 || p === to) {
+        const res = await ipcRenderer.invoke('ocr-images', { images: batch });
+        if (res?.error === 'no_key') throw new Error('Google Vision key missing — add GOOGLE_VISION_API_KEY to your .env');
+        if (res?.error) throw new Error(res.error);
+        texts.push(...(res.texts || []));
+        batch = [];
+      }
+    }
+    const fullText = texts.join('\n\n');
+    if (fullText.trim().length < 40) throw new Error('OCR found no readable text on those pages');
+    // cache under range-specific + whole-file key growth (append style)
+    const cacheKey = `${_ocrFile.name}:${_ocrFile.size}`;
+    const prev = await ipcRenderer.invoke('ocr-cache-get', { key: cacheKey }).catch(()=>null);
+    const merged = prev?.text ? (prev.text + '\n\n' + fullText) : fullText;
+    ipcRenderer.invoke('ocr-cache-set', { key: cacheKey, text: merged }).catch(()=>{});
+    document.getElementById('loading').classList.remove('show');
+    structureAndShow(_ocrFile.name, fullText);
+  } catch(e) {
+    document.querySelector('#loading .msg').textContent = e.message;
+    setTimeout(()=>{ document.getElementById('loading').classList.remove('show'); document.getElementById('setup').classList.remove('hidden'); }, 3200);
+  }
+};
+async function structureAndShow(name, text) {
+  document.getElementById('loading').classList.add('show');
+  document.querySelector('#loading .msg').textContent = 'Organizing chapters…';
+  const st = await ipcRenderer.invoke('structure-from-text', { name, text }).catch(()=>null);
+  document.getElementById('loading').classList.remove('show');
+  if (!st) return;
+  extractedDoc = st;
+  if ((st.structure && st.structure.length > 1) || (st.chapters && st.chapters.length > 1)) showChapters(st);
+  else teachText(st.name, st.fullText, st.name);
+}
 
 function showChapters(ex) {
   document.getElementById('setup').classList.add('hidden');
@@ -322,7 +495,7 @@ async function teachText(topic, text, source) {
   document.getElementById('loading').classList.add('show');
   document.querySelector('#loading .msg').textContent = 'Asuka is preparing your lesson…';
   try {
-    const res = await ipcRenderer.invoke('build-lesson-from-text', { topic, text });
+    const res = await ipcRenderer.invoke('build-lesson-from-text', { topic, text, style: (localStorage.getItem('tutor-style')||'direct') });
     if (!res || !res.beats || !res.beats.length) throw new Error('no lesson');
     beats = res.beats; currentTopic = res.topic || topic;
     ipcRenderer.invoke('save-lesson-log', { topic: currentTopic, beats, source: [source] }).catch(()=>{});
@@ -331,6 +504,12 @@ async function teachText(topic, text, source) {
     document.querySelector('#loading .msg').textContent = 'Could not build the lesson. Try a smaller section?';
     setTimeout(()=>{ document.getElementById('loading').classList.remove('show'); }, 2600);
   }
+}
+
+function startTeaching(topic, newBeats, source) {
+  beats = newBeats; currentTopic = topic;
+  ipcRenderer.invoke('save-lesson-log', { topic, beats, source: [source] }).catch(()=>{});
+  startScene();
 }
 
 function arrayBufferToBase64(buf) {
@@ -369,9 +548,54 @@ function highlight(t){ return String(t).replace(/\*\*(.+?)\*\*/g,'<span class="h
 function next(){ if (idx < beats.length-1){ idx++; renderBeat(); } else finishLesson(); }
 function prev(){ if (idx>0){ idx--; renderBeat(); } }
 function finishLesson(){
-  document.getElementById('line').innerHTML = "That's the whole lesson! 🌸 Want to go over anything again? Tap <b>Back</b>, or <b>Ask</b> me a question.";
+  document.getElementById('line').innerHTML = 'That\'s the whole lesson! 🌸 Want to test yourself? <button id="q-start" style="margin-left:8px;padding:7px 16px;border-radius:9px;border:none;background:var(--accent);color:#000;font-weight:700;font-size:12px;cursor:pointer;">🎯 Quiz me</button>';
   document.getElementById('progress-bar').style.width='100%';
-  ipcRenderer.invoke('lesson-finished', { topic: currentTopic }).catch(()=>{});
+  ipcRenderer.invoke('lesson-finished', { topic: currentTopic }).then(r => { if (r?.streak) showStreak(r.streak) }).catch(()=>{});
+  ipcRenderer.invoke('lesson-to-cards', { topic: currentTopic, beats }).then(r => { if (r?.added) refreshDueBadge() }).catch(()=>{});
+  const qb = document.getElementById('q-start');
+  if (qb) qb.onclick = (e) => { e.stopPropagation(); startQuiz(); };
+}
+
+// ── Quiz mode: 5 questions, tap to answer, score at the end ──
+let _quiz = null, _qi = 0, _qScore = 0;
+async function startQuiz() {
+  document.getElementById('line').innerHTML = '💭 writing your quiz…';
+  const res = await ipcRenderer.invoke('build-quiz', { topic: currentTopic, beats }).catch(()=>null);
+  if (!res || !res.questions || !res.questions.length) { document.getElementById('line').innerHTML = 'Hmm, quiz didn\'t load — but you finished the lesson! 🌸'; return; }
+  _quiz = res.questions; _qi = 0; _qScore = 0;
+  renderQuizQ();
+}
+function renderQuizQ() {
+  const q = _quiz[_qi];
+  if (!q) return endQuiz();
+  document.getElementById('line').innerHTML =
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:6px;">Question ' + (_qi+1) + ' of ' + _quiz.length + ' · score ' + _qScore + '</div>' +
+    '<div style="margin-bottom:10px;">' + q.q + '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:6px;">' +
+    q.options.map((o,i) => '<button class="q-opt" data-i="' + i + '" style="text-align:left;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;cursor:pointer;font-family:inherit;">' + String.fromCharCode(65+i) + '.  ' + o + '</button>').join('') +
+    '</div>';
+  document.querySelectorAll('.q-opt').forEach(b => b.onclick = (e) => {
+    e.stopPropagation();
+    const pick = +b.dataset.i, ok = pick === q.correct;
+    if (ok) _qScore++;
+    document.querySelectorAll('.q-opt').forEach(x => {
+      x.disabled = true;
+      if (+x.dataset.i === q.correct) { x.style.borderColor = 'var(--green)'; x.style.background = 'rgba(48,209,88,.14)'; }
+      else if (+x.dataset.i === pick && !ok) { x.style.borderColor = '#ff453a'; x.style.background = 'rgba(255,69,58,.14)'; }
+    });
+    setTimeout(() => { _qi++; renderQuizQ(); }, 1100);
+  });
+}
+function endQuiz() {
+  const pct = Math.round(_qScore / _quiz.length * 100);
+  const mood = pct >= 80 ? 'Amazing!! 🎉' : pct >= 50 ? 'Nice work! 🌸' : 'Good try — want to replay the lesson?';
+  document.getElementById('line').innerHTML = mood + ' You scored <b>' + _qScore + ' / ' + _quiz.length + '</b> (' + pct + '%).';
+}
+function showStreak(n) {
+  let el = document.getElementById('streak-badge');
+  if (!el) return;
+  el.textContent = '🔥 ' + n + '-day study streak';
+  el.style.display = 'inline-block';
 }
 
 // tap stage to advance (not on controls/board scroll)
