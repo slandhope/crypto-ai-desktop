@@ -28,14 +28,20 @@
     "axios": "^1.9.0",
     "dotenv": "^17.4.2",
     "groq-sdk": "^1.2.0",
+    "imapflow": "^1.4.6",
+    "mailparser": "^3.9.14",
     "openai": "^6.39.0",
     "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^3.11.174",
     "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^6.5.10",
+    "puppeteer-core": "^25.3.0",
     "robotjs": "^0.7.1",
     "screenshot-desktop": "^1.15.4",
     "telegram": "^2.26.22",
-    "ws": "^8.21.0"
+    "three": "^0.185.1",
+    "twitter-api-v2": "^1.29.0",
+    "ws": "^8.21.0",
+    "xlsx": "^0.18.5"
   }
 }

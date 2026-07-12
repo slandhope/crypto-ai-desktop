@@ -6,7 +6,10 @@
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body { background:transparent !important; overflow:hidden; }
-    canvas { display:block; background:transparent !important; position:fixed; bottom:0; right:0; }
+    canvas { display:block; background:transparent !important; position:fixed; bottom:0; left:50%; transform:translateX(-50%); z-index:10; }
+    #canvas { z-index:50 !important; left:50% !important; right:auto !important; transform:translateX(-50%) !important; }
+    #scene-vid-blur { z-index:1 !important; } #scene-vid { z-index:2 !important; } #scene-bg { z-index:1 !important; } #scene-grad { z-index:3 !important; } #scene-overlay { z-index:4 !important; }
+    #scene-vid, #scene-bg { display:block !important; }
 
     .btn {
       position:fixed; width:36px; height:36px; border-radius:50%;
@@ -208,6 +211,7 @@
   <script src="./node_modules/pixi-live2d-display/dist/cubism4.min.js"></script>
 
   <script>
+    console.log('%c[MAIN SCRIPT STARTED]', 'color:cyan;font-size:16px')
     const { ipcRenderer } = require('electron')
     const { Live2DModel } = PIXI.live2d
 
@@ -268,7 +272,7 @@
     // ── Live2D ─────────────────────────────────────────────────────────────
     const pixiApp = new PIXI.Application({
       view: document.getElementById('canvas'),
-      autoStart: true, transparent: true, backgroundAlpha: 0, width: 400, height: 700
+      autoStart: true, transparent: true, backgroundAlpha: 0, width: 520, height: 720
     })
     window.pixiApp = pixiApp
     async function loadModel() {
@@ -297,9 +301,9 @@
 
     // ── Drag window ────────────────────────────────────────────────────────
     let isDragging = false, dragX, dragY
-    const noDragIds = ['history-btn','chat-btn','her-mute-btn','mic-mute-btn','user-input','send-btn','webcam-btn','dashboard-btn','study-btn','care-btn','confirm-yes','confirm-no','history-clear']
+    const noDragIds = ['history-btn','chat-btn','her-mute-btn','mic-mute-btn','user-input','send-btn','webcam-btn','dashboard-btn','study-btn','care-btn','confirm-yes','confirm-no','history-clear','ab-in','ab-send','ab-file','ab-chip','ab-chip-x','ab-chip-name','wp-btn','wp-pop','wp-pop-none']
     document.addEventListener('mousedown', e => {
-      if (noDragIds.includes(e.target.id) || e.target.closest('#chat-panel') || e.target.closest('#confirm-bar') || e.target.closest('#history-panel')) return
+      if (noDragIds.includes(e.target.id) || e.target.closest('#ask-bar') || e.target.closest('#wp-pop') || e.target.closest('#wp-btn') || e.target.closest('#chat-panel') || e.target.closest('#confirm-bar') || e.target.closest('#history-panel')) return
       isDragging = true; dragX = e.screenX; dragY = e.screenY; e.preventDefault()
     })
     document.addEventListener('mousemove', e => {
@@ -747,8 +751,78 @@ VOICE RESPONSE RULES — CRITICAL:
                   },
                   {
                     name: 'compose_content',
-                    description: 'Write something FOR the user they can copy or save: a poem, letter, essay, email, document, story, lyrics, speech, message, or any text they ask you to create or write for them.',
-                    parameters: { type: 'object', properties: { request: { type: 'string', description: 'The full request word for word' } }, required: ['request'] }
+                    description: 'Write something FOR the user they can copy or save: a poem, letter, essay, document, story, lyrics, speech, message, or any text they ask you to create. Set open_in_word=true if they want it opened as a document in Word.',
+                    parameters: { type: 'object', properties: { request: { type: 'string', description: 'The full request word for word' }, open_in_word: { type: 'boolean' } }, required: ['request'] }
+                  },
+                  {
+                    name: 'draft_email',
+                    description: 'Prepare a complete email draft in the user Mail app, ready to send. YOU write the full subject and body based on what they asked.',
+                    parameters: { type: 'object', properties: { to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } }, required: ['subject','body'] }
+                  },
+                  {
+                    name: 'point_and_do',
+                    description: 'The user is POINTING at something on screen with their mouse while speaking ("change this", "what is this", "fix this part", "make this section longer"). Call this with their exact words — you will see what they point at and act.',
+                    parameters: { type: 'object', properties: { instruction: { type: 'string' } }, required: ['instruction'] }
+                  },
+                  {
+                    name: 'revise_last_work',
+                    description: 'Change something you recently made (letter, document, spreadsheet, poem): "make it shorter", "add a totals column", "change the tone". Give a precise instruction. It re-saves and reopens automatically.',
+                    parameters: { type: 'object', properties: { instruction: { type: 'string' }, which: { type: 'string', description: 'optional: part of the title if not the latest item' } }, required: ['instruction'] }
+                  },
+                  {
+                    name: 'read_spreadsheet',
+                    description: 'Find and read an Excel/CSV file on the user computer, summarize its contents and problems.',
+                    parameters: { type: 'object', properties: { query: { type: 'string', description: 'file name to find' } }, required: ['query'] }
+                  },
+                  {
+                    name: 'fix_spreadsheet',
+                    description: 'Edit/fix/fill an Excel or CSV file: clean data, fill missing values, add totals with formulas, restructure. Saves as a NEW copy, opens it. Give a precise instruction.',
+                    parameters: { type: 'object', properties: { query: { type: 'string' }, instruction: { type: 'string' } }, required: ['query','instruction'] }
+                  },
+                  {
+                    name: 'create_spreadsheet',
+                    description: 'Create a brand new Excel spreadsheet from a description (budget tracker, schedule, inventory…) with real formulas, and open it.',
+                    parameters: { type: 'object', properties: { request: { type: 'string' } }, required: ['request'] }
+                  },
+                  {
+                    name: 'write_in_google_docs',
+                    description: 'Open a new Google Doc in Chrome and TYPE content into it live. Use when the user asks to write something in Google Docs / a doc. You compose the full content.',
+                    parameters: { type: 'object', properties: { title: { type: 'string' }, content: { type: 'string', description: 'the complete written piece' } }, required: ['title','content'] }
+                  },
+                  {
+                    name: 'gmail_compose',
+                    description: 'Open Gmail in the browser with a complete email draft prefilled (to, subject, body). Use when the user asks to write/reply to email in Gmail. You write the full email.',
+                    parameters: { type: 'object', properties: { to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } }, required: ['subject','body'] }
+                  },
+                  {
+                    name: 'check_inbox',
+                    description: 'Check the user Gmail inbox: unread count and latest senders/subjects. Use when they ask about their email/inbox/gmail.',
+                    parameters: { type: 'object', properties: { limit: { type: 'number', description: 'how many recent emails (default 8)' } } }
+                  },
+                  {
+                    name: 'read_email',
+                    description: 'Read and summarize one email from the last inbox check. number is its position in that list (1 = newest).',
+                    parameters: { type: 'object', properties: { number: { type: 'number' } }, required: ['number'] }
+                  },
+                  {
+                    name: 'find_file',
+                    description: 'Search the user computer for files by name. Use when they ask to find a file/folder/document.',
+                    parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] }
+                  },
+                  {
+                    name: 'open_file',
+                    description: 'Find and open a file on the user computer (opens in its default app).',
+                    parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] }
+                  },
+                  {
+                    name: 'summarize_file',
+                    description: 'Read a file on the user computer (txt/pdf/md/etc) and summarize its contents.',
+                    parameters: { type: 'object', properties: { query: { type: 'string', description: 'file name to find' } }, required: ['query'] }
+                  },
+                  {
+                    name: 'set_effect',
+                    description: 'Ambient weather effect over the scene: rain, snow, sakura (falling petals), or none to stop. Use when the user asks to make it rain/snow, add petals, or set a mood.',
+                    parameters: { type: 'object', properties: { effect: { type: 'string' } }, required: ['effect'] }
                   },
                   {
                     name: 'set_reminder',
@@ -757,8 +831,8 @@ VOICE RESPONSE RULES — CRITICAL:
                   },
                   {
                     name: 'set_scene',
-                    description: 'Change the hangout scene when the user suggests going somewhere together: cafe (coffee/tea date), beach, night (night walk), room (chill at home). Use none to end the scene.',
-                    parameters: { type: 'object', properties: { scene: { type: 'string', enum: ['cafe','beach','night','room','none'] } }, required: ['scene'] }
+                    description: 'Change the hangout scene when the user suggests going somewhere together. Pass the scene name (your instructions list what is available — plus cafe, beach, night, room always work). Use none to end the scene.',
+                    parameters: { type: 'object', properties: { scene: { type: 'string' } }, required: ['scene'] }
                   },
                   {
                     name: 'get_market_data',
@@ -945,14 +1019,159 @@ VOICE RESPONSE RULES — CRITICAL:
       night: 'linear-gradient(180deg, rgba(20,25,60,.7), rgba(60,30,90,.6))',
       room:  'linear-gradient(180deg, rgba(70,60,90,.55), rgba(35,30,50,.75))'
     }
+    window._sceneFiles = {}
+    ipcRenderer.invoke('list-scenes').then(r => { (r?.scenes||[]).forEach(s => window._sceneFiles[s.name] = { path: s.path, video: !!s.video }) }).catch(()=>{})
+    function fileURL(p){ return 'file://' + encodeURI(p) }
+    function applyBox(el){
+      // full-window immersive backdrop BEHIND her — she stands inside the scene
+      el.style.setProperty('position','fixed','important')
+      el.style.setProperty('left','0','important')
+      el.style.setProperty('top','0','important')
+      el.style.setProperty('width','100vw','important')
+      el.style.setProperty('height','100vh','important')
+      el.style.setProperty('z-index','1','important')          // BEHIND her canvas (z-index 3)
+      el.style.setProperty('pointer-events','none','important')
+      el.style.setProperty('overflow','hidden','important')
+      el.style.setProperty('object-fit','cover','important')
+      el.style.setProperty('object-position','center','important')
+      el.style.setProperty('opacity','0','important')
+      el.style.setProperty('transition','opacity .8s','important')
+    }
     function setScene(name) {
+      const _key0 = name ? String(name).toLowerCase().trim() : null
+      console.log('🕹️ [4] setScene key:', _key0); if (_key0 === '__pixelroom__') { console.log('🕹️ [5] calling enterPixelRoom()'); enterPixelRoom(); return }
+      if (window._pixelRoomActive) exitPixelRoom()
       let bg = document.getElementById('scene-bg')
       if (!bg) { bg = document.createElement('div'); bg.id = 'scene-bg'
-        bg.style.cssText = 'position:fixed;inset:8px;border-radius:22px;z-index:-1;transition:opacity .8s;opacity:0;pointer-events:none;'
-        document.body.prepend(bg) }
-      if (name && SCENES[name]) { bg.style.background = SCENES[name]; bg.style.opacity = '1' }
-      else bg.style.opacity = '0'
-      ipcRenderer.invoke('companion-scene', { scene: name }).catch(()=>{})
+        applyBox(bg); bg.style.setProperty('background-size','cover','important'); bg.style.setProperty('background-position','center','important')
+        document.body.appendChild(bg) }
+      const key = name ? String(name).toLowerCase().trim() : null
+      const f = key && window._sceneFiles[key]
+      console.log('🖼️ setScene:', key, '| file:', f)
+      // ground gradient so she doesn't look pasted onto the scene
+      let grad = document.getElementById('scene-grad')
+      if (!grad) { grad = document.createElement('div'); grad.id = 'scene-grad'
+        grad.style.cssText = 'position:fixed;left:0;bottom:0;width:100vw;height:45vh;z-index:3;pointer-events:none;opacity:0;transition:opacity .8s;background:linear-gradient(to top, rgba(0,0,0,.5), transparent);'
+        document.body.appendChild(grad) }
+      grad.style.opacity = key ? '1' : '0'
+
+      // ①③ Scene props: her greeting line + tappable objects layered over the video
+      const SCENE_PROPS = {
+        cafe:  { hello:'Mmm~ smells like coffee in here ☕ sit with me?', pet:'sipping', objs:[{e:'☕',x:24,y:62,say:'*sips* ah, warm~ 💕'},{e:'🍰',x:70,y:66,say:'share the cake with me?'}] },
+        beach: { hello:'The waves! 🌊 come on, let\'s put our feet in~', pet:'happy', objs:[{e:'🐚',x:20,y:70,say:'a shell! for you 🐚'},{e:'🏖️',x:74,y:64,say:'race you to the water!'},{e:'🍹',x:48,y:60,say:'coconut drink? 🍹'}] },
+        night: { hello:'Pretty lights… 🌙 stay out here with me a while?', pet:'sit', objs:[{e:'⭐',x:30,y:26,say:'make a wish~ ✨'},{e:'🌙',x:70,y:22,say:'the moon\'s watching us 🌙'}] },
+        room:  { hello:'Just us at home~ get comfy 🏠', pet:'sit', objs:[{e:'🎮',x:26,y:64,say:'play a game with me? 🎮'},{e:'📺',x:70,y:58,say:'movie night? 🍿'}] }
+      }
+      // clear old overlay
+      let ov = document.getElementById('scene-overlay')
+      if (ov) ov.remove()
+      const props = key && SCENE_PROPS[key]
+      // generic fallback for custom scenes (cyberpunk, autumn, etc.)
+      const genericObjs = [{e:'✨',x:26,y:40,say:'this place is beautiful~ ✨'},{e:'💕',x:72,y:44,say:'I like being here with you 💕'}]
+      const objs = props ? props.objs : (key ? genericObjs : null)
+      if (objs) {
+        ov = document.createElement('div'); ov.id = 'scene-overlay'
+        ov.style.cssText = 'position:fixed;inset:0;z-index:4;pointer-events:none;'
+        objs.forEach(o => {
+          const b = document.createElement('div')
+          b.textContent = o.e
+          b.style.cssText = `position:fixed;left:${o.x}%;top:${o.y}%;font-size:26px;cursor:pointer;pointer-events:auto;z-index:4;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5));transition:transform .15s;`
+          b.onmouseenter = () => b.style.transform = 'scale(1.25)'
+          b.onmouseleave = () => b.style.transform = 'scale(1)'
+          b.onclick = () => { try { showBubble(o.say, 2600) } catch(e){}; try { if (typeof speakText==='function' && !isHerMuted) speakText(o.say.replace(/\*[^*]*\*/g,'').replace(/[^\x00-\x7F]/g,'').trim()) } catch(e){} }
+          ov.appendChild(b)
+        })
+        document.body.appendChild(ov)
+      }
+      // ① she greets the new scene (spoken) + ② scene-matched pose
+      if (key) {
+        const hello = props ? props.hello : 'Ooh, nice place~ 🌸'
+        try { showBubble(hello, 3200) } catch(e){}
+        try { if (typeof speakText==='function' && !isHerMuted) speakText(hello.replace(/[^\x00-\x7F]/g,'').trim()) } catch(e){}
+        // ② map to an existing pixel pose if pixel mode is active
+        try { if (typeof pixelMode!=='undefined' && pixelMode && typeof setState==='function') {
+          const pose = props ? props.pet : 'happy'
+          setState({ sipping:'sit', happy:'happy', sit:'sit' }[pose] || 'happy') } } catch(e){}
+      } else { if (ov) ov.remove() }
+      let vid = document.getElementById('scene-vid')
+      let vidBlur = document.getElementById('scene-vid-blur')
+      if (f && f.video) {
+        // Blurred fill layer (covers whole window, no gaps)
+        if (!vidBlur) { vidBlur = document.createElement('video'); vidBlur.id = 'scene-vid-blur'
+          vidBlur.muted = true; vidBlur.loop = true; vidBlur.autoplay = true; vidBlur.playsInline = true
+          applyBox(vidBlur)
+          vidBlur.style.setProperty('object-fit','cover','important')
+          vidBlur.style.setProperty('filter','blur(28px) brightness(.7)','important')
+          vidBlur.style.setProperty('transform','scale(1.15)','important')
+          vidBlur.style.setProperty('z-index','1','important')
+          document.body.appendChild(vidBlur) }
+        // Sharp full video (whole frame visible, no crop, full quality)
+        if (!vid) { vid = document.createElement('video'); vid.id = 'scene-vid'
+          vid.muted = true; vid.loop = true; vid.autoplay = true; vid.playsInline = true
+          applyBox(vid)
+          vid.style.setProperty('object-fit','contain','important')   // NO crop, NO zoom, full quality
+          vid.style.setProperty('object-position','center top','important')
+          vid.style.setProperty('z-index','2','important')
+          vid.addEventListener('loadeddata', () => console.log('🖼️ video loaded OK'))
+          document.body.appendChild(vid) }
+        const url = fileURL(f.path)
+        vid.src = url; vidBlur.src = url
+        vid.load(); vidBlur.load()
+        vid.style.setProperty('opacity','1','important'); vidBlur.style.setProperty('opacity','1','important')
+        const kp = () => { vid.play().catch(()=>{}); vidBlur.play().catch(()=>{}) }
+        kp(); vid.onpause = () => { if (vid.style.opacity === '1') setTimeout(kp, 100) }
+        bg.style.opacity = '0'
+
+      } else {
+        if (vid) { vid.style.setProperty('opacity','0','important'); vid.pause() }
+        if (vidBlur) { vidBlur.style.setProperty('opacity','0','important'); vidBlur.pause() }
+        if (f) {
+          const im = new Image()
+          im.onload = () => { bg.style.backgroundImage = "url('" + fileURL(f.path) + "')"; bg.style.setProperty('opacity','1','important'); console.log('🖼️ image shown') }
+          im.onerror = () => console.error('🖼️ IMAGE failed to load:', f.path)
+          im.src = fileURL(f.path)
+        }
+        else if (key && SCENES[key]) { bg.style.backgroundImage = 'none'; bg.style.background = SCENES[key]; bg.style.setProperty('opacity','1','important') }
+        else if (key) { bg.style.backgroundImage = 'none'; bg.style.background = SCENES.night; bg.style.opacity = '1' }
+        else bg.style.opacity = '0'
+      }
+      ipcRenderer.invoke('companion-scene', { scene: key }).catch(()=>{})
+    }
+
+    // ── 🌧️ Ambient effects: rain / snow / sakura over the scene ──
+    let _amb = null
+    function setEffect(type) {
+      let cv = document.getElementById('ambient-cv')
+      if (_amb) { cancelAnimationFrame(_amb); _amb = null }
+      if (!type || type === 'none') { if (cv) cv.style.opacity = '0'; return }
+      if (!cv) { cv = document.createElement('canvas'); cv.id = 'ambient-cv'
+        cv.style.cssText = 'position:fixed;left:50%; transform:translateX(-50%); width:260px; height:180px; top:150px;border-radius:18px;z-index:-1;pointer-events:none;transition:opacity .6s;opacity:0;'
+        document.body.prepend(cv) }
+      cv.style.opacity = '1'
+      const rect = cv.getBoundingClientRect(); cv.width = rect.width; cv.height = rect.height
+      const x = cv.getContext('2d')
+      const N = type === 'rain' ? 90 : 45
+      const ps = Array.from({length: N}, () => ({ px: Math.random()*cv.width, py: Math.random()*cv.height,
+        v: type === 'rain' ? 7+Math.random()*6 : 0.5+Math.random()*1.2, drift: (Math.random()-0.5)*1.2, r: 2+Math.random()*3, a: Math.random()*Math.PI*2 }))
+      function tick() {
+        x.clearRect(0, 0, cv.width, cv.height)
+        for (const p of ps) {
+          if (type === 'rain') { x.strokeStyle = 'rgba(160,200,255,.5)'; x.lineWidth = 1.2
+            x.beginPath(); x.moveTo(p.px, p.py); x.lineTo(p.px - 2, p.py + 12); x.stroke()
+            p.py += p.v; p.px -= 1 }
+          else if (type === 'snow') { x.fillStyle = 'rgba(255,255,255,.75)'
+            x.beginPath(); x.arc(p.px, p.py, p.r * 0.8, 0, 7); x.fill()
+            p.py += p.v; p.px += Math.sin(p.py / 30) * 0.6 }
+          else { // sakura petals
+            p.a += 0.03; x.save(); x.translate(p.px, p.py); x.rotate(p.a)
+            x.fillStyle = 'rgba(255,183,207,.8)'; x.beginPath(); x.ellipse(0, 0, p.r + 1, p.r * 0.55, 0, 0, 7); x.fill(); x.restore()
+            p.py += p.v; p.px += p.drift + Math.sin(p.py / 40) }
+          if (p.py > cv.height + 14) { p.py = -14; p.px = Math.random() * cv.width }
+          if (p.px < -14) p.px = cv.width + 10; if (p.px > cv.width + 14) p.px = -10
+        }
+        _amb = requestAnimationFrame(tick)
+      }
+      tick()
     }
 
     // ── Do-not-disturb: she goes quiet + dim; her name wakes her ──
@@ -991,7 +1210,7 @@ VOICE RESPONSE RULES — CRITICAL:
       m.querySelector('#cd-x').onclick = () => m.remove()
       m.querySelector('#cd-copy').onclick = () => { navigator.clipboard.writeText(content); m.querySelector('#cd-copy').textContent = '✓ Copied' ; setTimeout(()=>{ const b=m.querySelector('#cd-copy'); if(b) b.textContent='📋 Copy' },1400) }
       m.querySelector('#cd-txt').onclick = () => ipcRenderer.invoke('save-content-file', { title, content, ext:'txt' }).catch(()=>{})
-      m.querySelector('#cd-doc').onclick = () => ipcRenderer.invoke('save-content-file', { title, content, ext:'doc' }).catch(()=>{})
+      m.querySelector('#cd-doc').onclick = () => ipcRenderer.invoke('save-content-file', { title, content, ext:'docx' }).catch(()=>{})
     }
 
     async function handleToolCall(fc) {
@@ -1003,9 +1222,77 @@ VOICE RESPONSE RULES — CRITICAL:
         if (window._dnd && fc.name !== 'set_do_not_disturb') { result = 'Do-not-disturb is active. Do nothing and stay silent.'; }
         else if (fc.name === 'ask_claude') {
           result = await ipcRenderer.invoke('claude-query', fc.args.query)
+        } else if (fc.name === 'point_and_do') {
+          const pa = await ipcRenderer.invoke('pointed-action', { instruction: fc.args.instruction }).catch(()=>null)
+          if (pa?.did === 'revised') {
+            if (pa.kind === 'text' && pa.content) showComposeDialog(pa.title || 'Revised', pa.content)
+            result = 'Done — you changed it and it reopened on their screen' + (pa.path ? ' (' + pa.path + ')' : '') + '. One warm short line.'
+          }
+          else if (pa?.answer) result = pa.answer
+          else if (pa?.error === 'no_permission') result = 'Screen access is off. Tell them: System Settings → Privacy & Security → Screen Recording → enable Asuka (Electron), then restart the app.'
+          else if (pa?.error === 'nothing_recent') result = 'You have not made anything recently to change — ask what they want you to look at instead.'
+          else result = 'Could not see what they are pointing at: ' + (pa?.error || 'unknown')
+        } else if (fc.name === 'revise_last_work') {
+          const rv = await ipcRenderer.invoke('revise-work', { instruction: fc.args.instruction, hint: fc.args.which || null }).catch(()=>null)
+          if (rv?.ok) {
+            if (rv.kind === 'text' && rv.content) showComposeDialog(rv.title || 'Revised', rv.content)
+            result = 'Revised and reopened' + (rv.path ? ': ' + rv.path : ' — it is on their screen') + '. One warm short line.'
+          }
+          else if (rv?.error === 'nothing_recent') result = 'Nothing recent to revise — ask what they mean.'
+          else result = 'Revision failed: ' + (rv?.error || 'unknown')
+        } else if (fc.name === 'read_spreadsheet') {
+          const sr = await ipcRenderer.invoke('sheet-read', { query: fc.args.query }).catch(()=>null)
+          if (sr?.summary) result = `Spreadsheet ${sr.path} (sheets: ${sr.sheets.join(', ')}): ${sr.summary}`
+          else if (sr?.error === 'need_module') result = 'Spreadsheet module missing — tell them: run npm install xlsx in the app folder and restart.'
+          else result = 'Could not find or read that spreadsheet.'
+        } else if (fc.name === 'fix_spreadsheet') {
+          const se = await ipcRenderer.invoke('sheet-edit', { query: fc.args.query, instruction: fc.args.instruction }).catch(()=>null)
+          if (se?.ok) result = `Fixed and saved as a new copy: ${se.path} — it just opened. The original is untouched. One warm short line.`
+          else if (se?.error === 'too_big') result = 'That sheet is too large for me to edit safely (' + se.rows + ' rows — my limit is ~220).'
+          else if (se?.error === 'need_module') result = 'Spreadsheet module missing — tell them: run npm install xlsx and restart.'
+          else result = 'Could not edit it: ' + (se?.error || 'unknown')
+        } else if (fc.name === 'create_spreadsheet') {
+          const sc = await ipcRenderer.invoke('sheet-create', { request: fc.args.request }).catch(()=>null)
+          if (sc?.ok) result = `Created ${sc.path} with working formulas — it just opened. One warm short line.`
+          else if (sc?.error === 'need_module') result = 'Spreadsheet module missing — tell them: run npm install xlsx and restart.'
+          else result = 'Could not create it.'
+        } else if (fc.name === 'write_in_google_docs') {
+          const dw = await ipcRenderer.invoke('docs-write', { title: fc.args.title, content: fc.args.content }).catch(()=>null)
+          if (dw?.ok) result = 'Done — the Google Doc is open on their screen with everything typed in. One warm short line.'
+          else if (dw?.error === 'need_module') result = 'The browser module is missing. Tell them: run npm install puppeteer-core in the app folder and restart.'
+          else if (dw?.error === 'login_timeout') result = 'They need to log into Google in the Chrome window that opened, then ask again.'
+          else result = 'Could not open Google Docs: ' + (dw?.error || 'unknown')
+        } else if (fc.name === 'gmail_compose') {
+          const gc = await ipcRenderer.invoke('gmail-compose-web', { to: fc.args.to || '', subject: fc.args.subject, body: fc.args.body }).catch(()=>null)
+          result = gc?.ok ? 'Gmail just opened with the draft fully written — they only need to hit send. One short warm line.' : 'Could not open Gmail.'
+        } else if (fc.name === 'check_inbox') {
+          const inb = await ipcRenderer.invoke('gmail-check').catch(()=>null)
+          if (inb?.error === 'no_creds') result = 'Gmail is not connected yet. Tell them: add GMAIL_USER and GMAIL_APP_PASSWORD to the .env file (Google app password, 2 minutes) and restart.'
+          else if (inb?.error) result = 'Inbox check failed: ' + inb.error
+          else { window._inboxCache = inb.latest || []
+            result = `Unread: ${inb.unread}. Latest: ` + (inb.latest||[]).map((x,i)=>`${i+1}. ${x.from} — "${x.subject}"`).join(' | ') + '. Recap this briefly and warmly.' }
+        } else if (fc.name === 'read_email') {
+          const item = (window._inboxCache||[])[(fc.args.number||1)-1]
+          if (!item) result = 'No such email in the last check — run check_inbox first.'
+          else { const rd = await ipcRenderer.invoke('gmail-read', { uid: item.uid }).catch(()=>null)
+            result = rd?.summary ? `From ${rd.from}, "${rd.subject}": ${rd.summary}` : 'Could not read that email.' }
+        } else if (fc.name === 'find_file') {
+          const ff = await ipcRenderer.invoke('find-files', { query: fc.args.query }).catch(()=>null)
+          result = ff?.files?.length ? 'Found: ' + ff.files.slice(0,6).join(' | ') + '. Tell them the best matches briefly.' : 'No files found by that name.'
+        } else if (fc.name === 'open_file') {
+          const of = await ipcRenderer.invoke('open-file-by-query', { query: fc.args.query }).catch(()=>null)
+          result = of?.ok ? `Opened ${of.path}. Confirm in one short line.` : 'Could not find that file.'
+        } else if (fc.name === 'summarize_file') {
+          const sf = await ipcRenderer.invoke('summarize-file', { query: fc.args.query }).catch(()=>null)
+          if (sf?.summary) result = `File ${sf.path}: ${sf.summary}`
+          else if (sf?.error === 'unsupported_type') result = 'Found it but that file type is not readable yet (txt and pdf work).'
+          else result = 'Could not find or read that file.'
         } else if (fc.name === 'set_reminder') {
           const rr = await ipcRenderer.invoke('set-reminder', { minutes: fc.args.minutes, message: fc.args.message || '' }).catch(()=>null)
           result = rr?.ok ? `Reminder set for ${rr.mins} minutes from now. Confirm warmly in one short line.` : 'Failed to set the reminder.'
+        } else if (fc.name === 'set_effect') {
+          setEffect(String(fc.args.effect || 'none').toLowerCase())
+          result = fc.args.effect === 'none' ? 'Effect stopped.' : `It is now ${fc.args.effect}ing over your scene — react in one short charming line.`
         } else if (fc.name === 'set_scene') {
           setScene(fc.args.scene === 'none' ? null : fc.args.scene)
           result = fc.args.scene === 'none' ? 'Scene ended.' : `You are now at the ${fc.args.scene} together — react in character, one short line.`
@@ -1016,8 +1303,15 @@ VOICE RESPONSE RULES — CRITICAL:
           result = fc.args.on ? 'DND on. Reply with ONE short quiet acknowledgement like "okay, going quiet~" and then stay silent.' : 'DND off. Welcome them back warmly in one short line.'
         } else if (fc.name === 'compose_content') {
           const comp = await ipcRenderer.invoke('compose-content', { request: fc.args.request }).catch(()=>null)
-          if (comp?.content) { showComposeDialog(comp.title || 'For you', comp.content); result = 'Done — it is on their screen now with copy and save buttons. Tell them warmly in one short line.' }
+          if (comp?.content && fc.args.open_in_word) {
+            const sv = await ipcRenderer.invoke('save-and-open-doc', { title: comp.title, content: comp.content }).catch(()=>null)
+            result = sv?.ok ? 'The document just opened in Word on their screen, saved in Documents/Asuka. One warm short line.' : 'Could not open it — showing on screen instead.'
+            if (!sv?.ok) showComposeDialog(comp.title || 'For you', comp.content)
+          } else if (comp?.content) { showComposeDialog(comp.title || 'For you', comp.content); result = 'Done — it is on their screen now with copy and save buttons. Tell them warmly in one short line.' }
           else result = 'Composition failed, apologize briefly.'
+        } else if (fc.name === 'draft_email') {
+          const dr = await ipcRenderer.invoke('draft-email', { to: fc.args.to || '', subject: fc.args.subject, body: fc.args.body }).catch(()=>null)
+          result = dr?.ok ? 'Their Mail app just opened with the draft ready to send. One short warm line.' : 'Could not open Mail.'
         } else if (fc.name === 'get_market_data') {
           result = await ipcRenderer.invoke('market-data', fc.args.type, fc.args.coin || 'BTC')
         } else if (fc.name === 'scan_contract') {
@@ -1117,7 +1411,10 @@ VOICE RESPONSE RULES — CRITICAL:
       if (isMicMuted) return
       // Always clean up before creating new audio context
       try { if (audioProcessor) { audioProcessor.disconnect(); audioProcessor = null } } catch(e) {}
-      try { if (audioContext) { audioContext.close(); audioContext = null } } catch(e) {}
+      if (window._micStarting) { console.log('🎤 mic start already in progress, skipping'); return }
+      window._micStarting = true
+      try { if (audioProcessor) { try { audioProcessor.disconnect() } catch(e){} audioProcessor = null } } catch(e) {}
+      try { if (audioContext) { await audioContext.close(); audioContext = null } } catch(e) {}
       try { if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null } } catch(e) {}
       try {
         mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -1126,6 +1423,7 @@ VOICE RESPONSE RULES — CRITICAL:
 
         // Use actual 48kHz (browser default) and downsample to 16kHz
         audioContext = new AudioContext({ sampleRate: 48000 })
+        if (audioContext.state === 'suspended') { try { await audioContext.resume() } catch(e){} }
         const source = audioContext.createMediaStreamSource(mediaStream)
 
         await audioContext.audioWorklet.addModule(`data:application/javascript,
@@ -1168,9 +1466,11 @@ VOICE RESPONSE RULES — CRITICAL:
         source.connect(workletNode)
         workletNode.connect(audioContext.destination)
         audioProcessor = workletNode
+        window._micStarting = false
         setStatus('Listening...')
 
       } catch(e) {
+        window._micStarting = false
         console.error('Mic error:', e.message)
         setStatus('Mic error — retrying...')
         // Auto retry after 2 seconds
@@ -1258,6 +1558,78 @@ VOICE RESPONSE RULES — CRITICAL:
       // DND / wake by text
       if (/(do ?n[o']t disturb|dnd\b|be quiet|going quiet|leave me alone for)/.test(low)) { setDND(true); addToHistory('user', text); addToHistory('asuka', 'Okay… going quiet 🤫 say my name when you need me.'); return }
       if (window._dnd && /asuka|come back|you can talk/.test(low)) { setDND(false); addToHistory('user', text); addToHistory('asuka', "I'm here! Missed you 🌸"); await speakText("I'm here! Missed you~"); return }
+      // point-and-tell typed: "change this…" / "what's this" (mouse hovering over the target)
+      if (/^(change|fix|edit|what'?s|whats|explain|translate|make) this\b/.test(low) || /\bthis (one|part|bit|section|thing)\b/.test(low)) {
+        addToHistory('user', text); setStatus('Looking where you\'re pointing…')
+        const pa = await ipcRenderer.invoke('pointed-action', { instruction: text }).catch(()=>null)
+        if (pa?.did === 'revised') { if (pa.kind === 'text' && pa.content) showComposeDialog(pa.title || 'Revised', pa.content)
+          addToHistory('asuka', '✅ Changed it — reopening for you now~') }
+        else if (pa?.answer) { addToHistory('asuka', pa.answer); if (!isHerMuted && pa.answer.length < 500) await speakText(pa.answer) }
+        else if (pa?.error === 'no_permission') addToHistory('asuka', '👀 I need screen access to see where you\'re pointing: System Settings → Privacy & Security → Screen Recording → enable the app, then restart me.')
+        else addToHistory('asuka', 'Hmm, I couldn\'t work out what you\'re pointing at — try hovering right on it?')
+        setStatus('Listening...'); return
+      }
+      // revise typed: "make it shorter" etc → latest artifact
+      if (/^(make (it|the)|shorten|lengthen|redo|rewrite|revise)\b/.test(low)) {
+        addToHistory('user', text); setStatus('Revising…')
+        const rv = await ipcRenderer.invoke('revise-work', { instruction: text }).catch(()=>null)
+        if (rv?.ok) { if (rv.kind === 'text' && rv.content) showComposeDialog(rv.title || 'Revised', rv.content)
+          addToHistory('asuka', '✅ Done — revised and reopened~') }
+        else addToHistory('asuka', rv?.error === 'nothing_recent' ? 'I haven\'t made anything recently — what should I revise?' : 'That revision didn\'t work, try rephrasing?')
+        setStatus('Listening...'); return
+      }
+      // spreadsheet typed
+      const shm = low.match(/(fix|clean|fill|update|edit)\s+(my\s+)?(.{2,40}?)\s*(spreadsheet|sheet|excel|xlsx|csv)/)
+      if (shm) {
+        addToHistory('user', text); setStatus('Working on your spreadsheet…')
+        const se = await ipcRenderer.invoke('sheet-edit', { query: shm[3].trim(), instruction: text }).catch(()=>null)
+        addToHistory('asuka', se?.ok ? `📊 Done! Saved as a new copy and opened it — your original is untouched.` :
+          se?.error === 'need_module' ? 'Run `npm install xlsx` in the app folder first, then ask me again!' :
+          se?.error === 'too_big' ? `That sheet's too big for me to edit safely (${se.rows} rows).` :
+          'Couldn\'t find or edit that sheet — what\'s the file called?')
+        setStatus('Listening...'); return
+      }
+      if (/(make|create|build).{0,24}(spreadsheet|excel|xlsx|budget tracker|sheet)\b/.test(low)) {
+        addToHistory('user', text); setStatus('Building your spreadsheet…')
+        const sc = await ipcRenderer.invoke('sheet-create', { request: text }).catch(()=>null)
+        addToHistory('asuka', sc?.ok ? '📊 Made it with working formulas — just opened on your screen!' :
+          sc?.error === 'need_module' ? 'Run `npm install xlsx` first, then ask me again!' : 'Hmm, that didn\'t come out — try rephrasing?')
+        setStatus('Listening...'); return
+      }
+      // google docs typed
+      if (/(google )?docs?\b.*(write|letter|draft)|write.*(in|into).*(google )?docs?\b/.test(low)) {
+        addToHistory('user', text); setStatus('Opening Google Docs…')
+        const comp = await ipcRenderer.invoke('compose-content', { request: text }).catch(()=>null)
+        if (comp?.content) {
+          const dw = await ipcRenderer.invoke('docs-write', { title: comp.title, content: comp.content }).catch(()=>null)
+          addToHistory('asuka', dw?.ok ? '📝 Done! It\'s all typed into the doc on your screen~' :
+            dw?.error === 'need_module' ? 'One thing first: run `npm install puppeteer-core` in the app folder, restart, then ask me again!' :
+            dw?.error === 'login_timeout' ? 'Log into Google in the window I opened, then ask me again~' :
+            'Couldn\'t drive Chrome — is it installed?')
+        }
+        setStatus('Listening...'); return
+      }
+      // gmail compose typed
+      if (/(open )?gmail\b.*(write|reply|compose|email)|(write|reply).*(in|on) gmail/.test(low)) {
+        addToHistory('user', text); setStatus('Writing in Gmail…')
+        const comp = await ipcRenderer.invoke('compose-content', { request: text + ' (write as a complete email: first line = subject, rest = body)' }).catch(()=>null)
+        if (comp?.content) {
+          const lines = comp.content.split('\n'); const subject = (lines[0]||comp.title).replace(/^subject:\s*/i,'').slice(0,120)
+          await ipcRenderer.invoke('gmail-compose-web', { to:'', subject, body: lines.slice(1).join('\n').trim() }).catch(()=>{})
+          addToHistory('asuka', '✉️ Gmail is open with the whole email written — read it and hit send~')
+        }
+        setStatus('Listening...'); return
+      }
+      // inbox typed
+      if (/check (my )?(inbox|gmail|email|mail)\b/.test(low)) {
+        addToHistory('user', text); setStatus('Checking your inbox…')
+        const inb = await ipcRenderer.invoke('gmail-check').catch(()=>null)
+        if (inb?.error === 'no_creds') addToHistory('asuka', '📬 Gmail isn\'t connected — add GMAIL_USER + GMAIL_APP_PASSWORD to .env (I\'ll walk you through it) and restart.')
+        else if (inb?.error) addToHistory('asuka', 'Couldn\'t reach Gmail: ' + inb.error)
+        else { window._inboxCache = inb.latest || []
+          addToHistory('asuka', `📬 ${inb.unread} unread.` + (inb.latest||[]).map((x,i)=>`\n${i+1}. ${x.from} — ${x.subject}`).join('')) }
+        setStatus('Listening...'); return
+      }
       // "remind me in X minutes" typed
       const rm = low.match(/remind me (?:in |after )?(\d+)\s*(min|minute|hour|hr)/)
       if (rm) {
@@ -1266,11 +1638,43 @@ VOICE RESPONSE RULES — CRITICAL:
         await ipcRenderer.invoke('set-reminder', { minutes: mins, message: note }).catch(()=>{})
         addToHistory('user', text); addToHistory('asuka', `⏰ Got it — I'll remind you in ${mins} minutes.`); return
       }
+      // ambient effects typed
+      const efm = low.match(/make it (rain|snow)|(sakura|petals?|cherry blossom)/)
+      if (efm) { setEffect(efm[1] || 'sakura'); addToHistory('user', text); addToHistory('asuka', '🌸 There~'); return }
+      if (/stop (the )?(rain|snow|petals|effects?)/.test(low)) { setEffect('none'); addToHistory('user', text); addToHistory('asuka', 'Okay, clear skies~'); return }
+      // scene invites typed — any scene image you dropped in assets/scenes/
+      const gsc = low.match(/(?:let'?s go to|take me to|go to)\s+(?:the\s+)?([a-z0-9 _-]{2,24})/)
+      if (gsc) { const nm2 = gsc[1].trim()
+        if (window._sceneFiles[nm2] || ['cafe','beach','night','room'].includes(nm2)) {
+          setScene(nm2); addToHistory('user', text); addToHistory('asuka', '🎭 ' + nm2 + '! Let\'s go~'); return }
+        else { addToHistory('user', text); addToHistory('asuka', 'I don\'t have a "' + nm2 + '" scene yet — drop ' + nm2 + '.mp4 or .jpg into assets/scenes/ and restart me~'); return } }
       // scene invites typed
       if (/(coffee|cafe) (date|together|break)|let'?s (get|grab) (a )?(coffee|tea)/.test(low)) { setScene('cafe'); addToHistory('user', text); addToHistory('asuka', '☕ Café date! I want something sweet~'); return }
       if (/beach (day|date|together)|let'?s go to the beach/.test(low)) { setScene('beach'); addToHistory('user', text); addToHistory('asuka', '🏖️ Beach!! Race you to the water~'); return }
       if (/night walk|walk (at|in the) night|evening walk/.test(low)) { setScene('night'); addToHistory('user', text); addToHistory('asuka', '🌙 A night walk… stay close, okay?'); return }
       if (/end (the )?scene|back to (normal|work)/.test(low)) { setScene(null); addToHistory('user', text); addToHistory('asuka', 'Back to reality~ that was nice though 🌸'); return }
+      // "write/prepare an email" typed → compose then open Mail draft
+      if (/(write|draft|prepare|create).{0,24}(email|e-mail)\b/.test(low)) {
+        addToHistory('user', text); setStatus('Drafting your email…')
+        const comp = await ipcRenderer.invoke('compose-content', { request: text + ' (write it as a complete email: first line = subject, then the body)' }).catch(()=>null)
+        if (comp?.content) {
+          const lines = comp.content.split('\n'); const subject = (lines[0]||comp.title).replace(/^subject:\s*/i,'').slice(0,120)
+          await ipcRenderer.invoke('draft-email', { to:'', subject, body: lines.slice(1).join('\n').trim() }).catch(()=>{})
+          addToHistory('asuka', '✉️ Draft is open in Mail — read it over and hit send~')
+        } else addToHistory('asuka', 'Hmm, the draft didn\'t come out — try again?')
+        setStatus('Listening...'); return
+      }
+      // "open in word / make a word document" typed → compose then open
+      if (/(open|make|create).{0,20}(word|document|doc)\b/.test(low) && /(write|letter|poem|essay|story|document|doc)/.test(low)) {
+        addToHistory('user', text); setStatus('Writing your document…')
+        const comp = await ipcRenderer.invoke('compose-content', { request: text }).catch(()=>null)
+        if (comp?.content) {
+          const sv = await ipcRenderer.invoke('save-and-open-doc', { title: comp.title, content: comp.content }).catch(()=>null)
+          addToHistory('asuka', sv?.ok ? '📂 Opening it in Word now — saved in Documents/Asuka too.' : 'Couldn\'t open Word, showing it here instead.')
+          if (!sv?.ok) showComposeDialog(comp.title || 'For you', comp.content)
+        }
+        setStatus('Listening...'); return
+      }
       // "write/create X for me" → compose dialog
       if (/^(write|create|compose|draft|make)\b/.test(low) && /(poem|letter|essay|email|document|word|story|lyrics|speech|message|caption|bio|tweet|post)/.test(low)) {
         addToHistory('user', text); setStatus('Writing for you…')
@@ -1424,6 +1828,7 @@ VOICE RESPONSE RULES — CRITICAL:
     window.addEventListener('mousedown', () => { const n = Date.now(); if (n - _seenT > 120000) { _seenT = n; ipcRenderer.invoke('companion-seen').catch(()=>{}) } })
     // her mood drives the pixel pet
     ipcRenderer.on('asuka-mood', (e, m) => { window._asukaMood = m?.v || 'content' })
+    ipcRenderer.on('apply-scene', (e, d) => { console.log('🕹️ [3] waifu received apply-scene:', d); try { setScene(d?.name || null) } catch(err){ console.error('🕹️ setScene threw:', err) } })
     // include care-btn in no-drag
     setTimeout(()=>{refreshCare();refreshRelationship()}, 1500)
 
@@ -1832,9 +2237,63 @@ VOICE RESPONSE RULES — CRITICAL:
         sw.style.display='block'
       }
 
+      // ═══ 🕹️ Pixel Room: a whole pixelated room, entered via the WALLPAPER picker ═══
+      // Live2D disappears entirely; only the pixel room + pixel character remain.
+      window._pixelRoomActive = false
+      function buildPixelRoom(){
+        let room = document.getElementById('pixel-room')
+        if (room) return room
+        room = document.createElement('div'); room.id = 'pixel-room'
+        room.style.cssText = 'position:fixed;inset:0;z-index:1;background:#2b2a4a;overflow:hidden;image-rendering:pixelated;'
+        room.innerHTML = `
+          <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,#2b2a4a,#2b2a4a 38px,#332f56 38px,#332f56 40px);"></div>
+          <div style="position:absolute;top:10%;left:8%;width:18%;height:22%;background:#8fd0e8;box-shadow:0 0 0 6px #1c1a33, inset 0 0 0 3px #cdeff7;"></div>
+          <div style="position:absolute;left:0;right:0;bottom:0;height:26%;background:#6b4636;box-shadow:0 4px 0 #4a2f24 inset;"></div>
+          <div style="position:absolute;bottom:8%;left:20%;width:60%;height:8%;background:#3d5a7c;border-radius:6px;opacity:.55;"></div>
+          <div id="pr-tv" style="position:absolute;bottom:24%;left:66%;width:15%;height:16%;background:#1c1a2e;box-shadow:0 0 0 4px #0e0d1a;cursor:pointer;">
+            <div style="position:absolute;inset:10%;background:#4de1c1;opacity:.85;"></div>
+          </div>
+          <div id="pr-console" style="position:absolute;bottom:24%;left:16%;width:13%;height:9%;background:#3a3358;box-shadow:0 0 0 4px #201c38;cursor:pointer;">
+            <div style="position:absolute;top:22%;left:15%;width:18%;height:18%;background:#e06b6b;"></div>
+            <div style="position:absolute;top:22%;left:45%;width:18%;height:18%;background:#e6c96b;"></div>
+          </div>
+          <div id="pr-board" style="position:absolute;bottom:24%;left:44%;width:11%;height:5%;background:#e69a6b;box-shadow:0 0 0 3px #a8623f;cursor:pointer;border-radius:3px;"></div>
+        `
+        document.body.appendChild(room)
+        document.getElementById('pr-tv').onclick = () => goToSpot(0.72, '📺 watching TV~', 'sit')
+        document.getElementById('pr-console').onclick = () => goToSpot(0.22, '🎮 playing games~', 'sit')
+        document.getElementById('pr-board').onclick = () => goToSpot(0.5, '🛹 let\'s skate!', 'walk')
+        return room
+      }
+      function goToSpot(xFrac, label, poseAfter){
+        try {
+          posX = Math.max(10, Math.min(window.innerWidth - 140, window.innerWidth * xFrac - 65))
+          petCanvas.style.left = posX + 'px'
+          setState('walk')
+          setTimeout(() => { setState(poseAfter || 'sit'); showBubble(label, 3000) }, 750)
+        } catch(e) { console.error('goToSpot:', e) }
+      }
+      function enterPixelRoom(){
+        console.log('🕹️ [6] enterPixelRoom() running, already active:', window._pixelRoomActive)
+        if (window._pixelRoomActive) return
+        window._pixelRoomActive = true
+        const cv = document.getElementById('canvas'); if (cv) { cv.style.opacity = '0'; cv.style.pointerEvents = 'none' }
+        buildPixelRoom()
+        if (!pixelMode) enterPixel()
+        petCanvas.style.zIndex = '5'
+        showBubble('welcome to my room~ 🕹️', 2600)
+      }
+      function exitPixelRoom(){
+        if (!window._pixelRoomActive) return
+        window._pixelRoomActive = false
+        const room = document.getElementById('pixel-room'); if (room) room.remove()
+        if (pixelMode) exitPixel()
+        const cv = document.getElementById('canvas'); if (cv) { cv.style.opacity = '1'; cv.style.pointerEvents = '' }
+      }
+
       let _lastToggle = 0
       const toggle = (e)=>{
-        if(noDragIds.includes(e.target?.id)||e.target?.closest?.('#chat-panel'))return
+        if(noDragIds.includes(e.target?.id)||e.target?.closest?.('#chat-panel')||e.target?.closest?.('#ask-bar'))return
         const now = Date.now(); if(now - _lastToggle < 400) return; _lastToggle = now
         pixelMode?exitPixel():enterPixel()
       }
@@ -1860,7 +2319,9 @@ VOICE RESPONSE RULES — CRITICAL:
         const over = e.clientX>=R.l && e.clientX<=R.r && e.clientY>=R.t && e.clientY<=R.b
         const sw=document.getElementById('pixel-switch')
         const overSwitch = sw && sw.style.display!=='none' && (()=>{const b=sw.getBoundingClientRect();return e.clientX>=b.left&&e.clientX<=b.right&&e.clientY>=b.top&&e.clientY<=b.bottom})()
-        const active = over || overSwitch || _petDragging
+        const bar = document.getElementById('ask-bar')
+        const overBar = bar && (()=>{const b=bar.getBoundingClientRect();return e.clientX>=b.left&&e.clientX<=b.right&&e.clientY>=b.top&&e.clientY<=b.bottom})()
+        const active = over || overSwitch || overBar || _petDragging
         if(active!==_wasOver){ _wasOver=active; try{ipcRenderer.send('pixel-hit',active)}catch(err){} }
       })
 
@@ -1941,5 +2402,127 @@ VOICE RESPONSE RULES — CRITICAL:
   <canvas id="pixel-pet" width="128" height="128" style="display:none;position:fixed;bottom:20px;left:20px;width:140px;height:140px;image-rendering:pixelated;image-rendering:crisp-edges;cursor:pointer;z-index:9999;"></canvas>
   <div id="pixel-bubble" style="display:none;position:fixed;bottom:150px;left:20px;background:rgba(20,18,30,0.92);color:#fff;font-size:11px;font-family:system-ui,sans-serif;padding:6px 10px;border-radius:10px;z-index:10000;white-space:nowrap;pointer-events:none;"></div>
 
+
+<!-- ══ Quick wallpaper switcher (beside her) ══ -->
+<div id="wp-btn" title="Wallpapers" style="position:fixed;bottom:180px;left:10px;width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.14);display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;z-index:9001;backdrop-filter:blur(10px);">🖼️</div>
+<div id="wp-pop" style="display:none;position:fixed;bottom:180px;left:56px;width:210px;max-height:280px;overflow-y:auto;background:rgba(20,20,23,.95);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:8px;z-index:9001;box-shadow:0 10px 40px rgba(0,0,0,.5);">
+  <div style="font-size:11px;font-weight:700;color:#a0a0a8;margin:2px 4px 8px;">Wallpapers</div>
+  <div id="wp-pop-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"></div>
+  <div id="wp-pop-none" style="margin-top:6px;text-align:center;font-size:11px;color:#a0a0a8;cursor:pointer;padding:6px;border:1px solid rgba(255,255,255,.1);border-radius:8px;">✕ None</div>
+</div>
+
+<!-- ══ Ask bar: type anything, attach anything ══ -->
+<div id="ask-bar" style="position:fixed;left:10px;right:10px;bottom:12px;z-index:9000;display:flex;flex-direction:column;gap:6px;">
+  <div id="ab-chip" style="display:none;align-self:flex-start;background:rgba(10,132,255,.18);border:1px solid rgba(10,132,255,.4);border-radius:10px;padding:5px 10px;font-size:11px;color:#cfe6ff;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+    <span id="ab-chip-name"></span> <span id="ab-chip-x" style="cursor:pointer;margin-left:6px;opacity:.8;">✕</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;background:rgba(20,20,23,.92);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:7px 8px 7px 12px;box-shadow:0 8px 30px rgba(0,0,0,.4);">
+    <label for="ab-file" style="cursor:pointer;font-size:15px;opacity:.75;flex-shrink:0;" title="Attach a file">📎</label>
+    <input id="ab-file" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.pdf,.txt,.md,.csv,.xlsx,.xls,.json,.log" style="display:none;">
+    <input id="ab-in" placeholder="Ask Asuka anything…" style="flex:1;background:transparent;border:none;outline:none;color:#f5f5f7;font-size:13px;font-family:inherit;min-width:0;">
+    <button id="ab-send" style="flex-shrink:0;width:30px;height:30px;border:none;border-radius:10px;background:#0a84ff;color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➤</button>
+  </div>
+</div>
+<script>
+console.log('%c[ASK-BAR SCRIPT REACHED]', 'color:lime;font-size:16px')
+window.__askBarLoaded = true
+;(function(){
+  function initAskBar(){
+  const { ipcRenderer } = require('electron')
+  const inp = document.getElementById('ab-in'), send = document.getElementById('ab-send')
+  const fileIn = document.getElementById('ab-file'), chip = document.getElementById('ab-chip')
+  if (!inp || !send) { console.error('ask-bar: elements missing'); return }
+  console.log('ask-bar: initialized OK')
+  let attached = null   // { name, b64, media }
+
+  function setChip(f) {
+    attached = f
+    chip.style.display = f ? 'inline-block' : 'none'
+    if (f) document.getElementById('ab-chip-name').textContent = '📎 ' + f.name
+  }
+  document.getElementById('ab-chip-x').onclick = () => { setChip(null); fileIn.value = '' }
+
+  function readFile(f) {
+    return new Promise((res, rej) => {
+      const r = new FileReader()
+      r.onload = () => res({ name: f.name, b64: String(r.result).split(',')[1], media: f.type || '' })
+      r.onerror = rej
+      r.readAsDataURL(f)
+    })
+  }
+  fileIn.addEventListener('change', async () => {
+    if (!fileIn.files[0]) return
+    if (fileIn.files[0].size > 25*1024*1024) { setChip(null); alert('That file is over 25MB — too big for the ask bar.'); return }
+    setChip(await readFile(fileIn.files[0]))
+  })
+  // paste an image straight into the bar (chart screenshots!)
+  inp.addEventListener('paste', async (e) => {
+    const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'))
+    if (item) { e.preventDefault(); const f = item.getAsFile(); if (f) setChip(await readFile(new File([f], 'pasted-image.png', { type: f.type }))) }
+  })
+
+  async function go() {
+    try {
+      const text = inp.value.trim()
+      if (!text && !attached) return
+      inp.value = ''
+      if (attached) {
+        const f = attached; setChip(null); fileIn.value = ''
+        try { window.addToHistory && addToHistory('user', (text || 'What is this?') + ' [' + f.name + ']') } catch(e){}
+        try { window.setStatus && setStatus('Looking at ' + f.name + '…') } catch(e){}
+        const r = await ipcRenderer.invoke('analyze-upload', { name: f.name, b64: f.b64, media: f.media, prompt: text }).catch(()=>null)
+        const ans = r?.answer ? r.answer
+          : r?.error === 'scanned_pdf' ? 'That PDF is scanned images — take it to the Study room and I\'ll OCR it there!'
+          : r?.error === 'unsupported' ? 'I can\'t read that file type yet — images, PDFs, spreadsheets, and text files work.'
+          : 'Hmm, I couldn\'t read that one.'
+        try { window.addToHistory && addToHistory('asuka', ans) } catch(e){}
+        try { if (typeof isHerMuted !== 'undefined' && !isHerMuted && typeof speakText === 'function' && ans.length < 600) await speakText(ans) } catch(e){}
+        try { window.setStatus && setStatus('Listening...') } catch(e){}
+      } else {
+        if (typeof sendTypedMessage === 'function') await sendTypedMessage(text)
+        else { try { addToHistory && addToHistory('asuka', '(chat not ready — reloading)') } catch(e){}; }
+      }
+    } catch(err) { console.error('ask-bar go() error:', err); try { addToHistory && addToHistory('asuka', 'oops, something glitched — try again?') } catch(e){} }
+  }
+  send.onclick = go
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go() } })
+  // extra safety: focus the input when the bar is clicked anywhere
+  document.getElementById('ask-bar')?.addEventListener('mousedown', (e) => { if (e.target.id !== 'ab-send' && e.target.id !== 'ab-file') inp.focus() })
+  }
+  try {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAskBar)
+    else initAskBar()
+  } catch(err) { console.error('ask-bar init failed:', err) }
+
+  // ── Quick wallpaper switcher beside her ──
+  function initWpSwitcher(){
+    const { ipcRenderer } = require('electron')
+    const btn = document.getElementById('wp-btn'), pop = document.getElementById('wp-pop'), grid = document.getElementById('wp-pop-grid')
+    if (!btn || !pop || !grid) return
+    async function loadThumbs(){
+      const r = await ipcRenderer.invoke('list-scenes').catch(()=>({scenes:[]}))
+      const scenes = r?.scenes || []
+      const pixelTile = `<div class="wpp" id="wpp-pixelroom" style="cursor:pointer;border:1px solid rgba(77,225,193,.35);border-radius:9px;padding:3px;text-align:center;background:rgba(77,225,193,.08);"><div style="width:100%;height:46px;border-radius:7px;background:linear-gradient(135deg,#2b2a4a,#3a3358);display:flex;align-items:center;justify-content:center;font-size:20px;">🕹️</div><div style="font-size:9px;color:#4de1c1;margin-top:2px;">Pixel Room</div></div>`
+      grid.innerHTML = pixelTile + (scenes.length ? scenes.map(s => {
+        const src = 'file://' + s.path.replace(/'/g, "\\'")
+        const thumb = s.video
+          ? `<video src="${src}" muted style="width:100%;height:46px;object-fit:cover;border-radius:7px;"></video>`
+          : `<div style="width:100%;height:46px;border-radius:7px;background:url('${src}') center/cover;"></div>`
+        return `<div class="wpp" data-name="${s.name}" style="cursor:pointer;border:1px solid rgba(255,255,255,.1);border-radius:9px;padding:3px;text-align:center;">${thumb}<div style="font-size:9px;color:#a0a0a8;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.name}${s.video?' 🎬':''}</div></div>`
+      }).join('') : '<div style="grid-column:1/-1;color:#6a6a72;font-size:11px;text-align:center;padding:8px;">Drop images/videos into assets/scenes/</div>')
+      document.getElementById('wpp-pixelroom').onclick = () => { setScene('__pixelroom__'); pop.style.display='none' }
+      grid.querySelectorAll('.wpp:not(#wpp-pixelroom)').forEach(el => el.onclick = () => { try { setScene(el.dataset.name) } catch(e){}
+        grid.querySelectorAll('.wpp').forEach(x=>x.style.borderColor='rgba(255,255,255,.1)'); el.style.borderColor='#0a84ff' })
+    }
+    btn.addEventListener('click', () => {
+      const open = pop.style.display !== 'none'
+      pop.style.display = open ? 'none' : 'block'
+      if (!open) loadThumbs()
+    })
+    document.getElementById('wp-pop-none').addEventListener('click', () => { try { setScene(null) } catch(e){} })
+  }
+  try { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initWpSwitcher); else initWpSwitcher() } catch(e){ console.error('wp switcher:', e) }
+})()
+</script>
 </body>
 </html>

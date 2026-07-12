@@ -588,8 +588,20 @@ function renderQuizQ() {
 }
 function endQuiz() {
   const pct = Math.round(_qScore / _quiz.length * 100);
-  const mood = pct >= 80 ? 'Amazing!! 🎉' : pct >= 50 ? 'Nice work! 🌸' : 'Good try — want to replay the lesson?';
+  const mood = pct >= 80 ? 'Amazing!! 🎉' : pct >= 50 ? 'Nice work! 🌸' : 'Good try!';
+  const board = document.getElementById('board') || document.getElementById('stage');
   document.getElementById('line').innerHTML = mood + ' You scored <b>' + _qScore + ' / ' + _quiz.length + '</b> (' + pct + '%).';
+  // Show real action buttons so it is not a dead end
+  let panel = document.getElementById('quiz-end-panel');
+  if (panel) panel.remove();
+  panel = document.createElement('div');
+  panel.id = 'quiz-end-panel';
+  panel.style.cssText = 'display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap;';
+  panel.innerHTML = '<button id="quiz-replay" style="padding:11px 20px;border-radius:10px;border:none;background:#4de1c1;color:#04141a;font-weight:700;cursor:pointer;font-size:14px;">🔁 Replay lesson</button>'
+    + '<button id="quiz-done" style="padding:11px 20px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:transparent;color:#fff;cursor:pointer;font-size:14px;">✓ Done</button>';
+  (board || document.body).appendChild(panel);
+  document.getElementById('quiz-replay').onclick = (e) => { e.stopPropagation(); panel.remove(); _qi = 0; _qScore = 0; idx = 0; render(); };
+  document.getElementById('quiz-done').onclick = (e) => { e.stopPropagation(); panel.remove(); try { window.close(); } catch(err){} };
 }
 function showStreak(n) {
   let el = document.getElementById('streak-badge');

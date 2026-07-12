@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+
+
+
 <meta charset="UTF-8">
 <title>Asuka — Dashboard</title>
 <link rel="stylesheet" href="asuka-design.css">
@@ -1513,83 +1516,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     <div id="edit-btn">Edit Character</div>
   </div>
 
-  <!-- 2: PORTFOLIO -->
-  <div class="col">
-    <div class="col-header">Portfolio</div>
-    <div id="portfolio-hero">
-      <div id="port-label">Total Value</div>
-      <div id="port-value">$0.00</div>
-      <div id="risk-pill" style="display:none;margin-top:6px;font-size:11px;padding:4px 12px;border-radius:14px;width:fit-content;"></div>
-      <div id="port-change" class="pos">+0.00%</div>
-      <div style="display:flex;gap:8px;">
-        <div id="add-wallet-pill">+ Add Wallet</div>
-        <div id="manage-wallets-pill" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:6px 12px;border-radius:20px;font-size:12px;cursor:pointer;color:var(--text2);">Manage</div>
-      </div>
-    </div>
-    <div class="section-label">Tokens</div>
-    <div id="tokens-section">
-      <div class="empty-state">No wallets connected</div>
-    </div>
-    <div class="section-label">Transactions</div>
-    <div id="txns-section">
-      <div class="empty-state">Connect a wallet to see transactions</div>
-    </div>
-  </div>
 
-  <!-- 3: WATCHLIST -->
-  <div class="col">
-    <div class="col-header">Watchlist</div>
-    <div id="add-coin-row">
-      <input id="add-coin-input" placeholder="Add coin (BTC, ETH…)" />
-      <button id="add-coin-btn">Add</button>
-    </div>
-    <div id="prices-section">
-      <div class="empty-state">Add coins above to track prices</div>
-    </div>
-    <div id="alerts-panel">
-      <div class="section-label">Price Alerts</div>
-      <div id="add-alert-row">
-        <input class="al-input" id="alert-coin-input" placeholder="BTC" />
-        <input class="al-input" id="alert-price-input" placeholder="Target price" />
-        <select class="al-input" id="alert-dir-select" style="width:46px">
-          <option value="above">↑</option>
-          <option value="below">↓</option>
-        </select>
-        <div id="add-alert-btn">Set</div>
-      </div>
-      <div id="alerts-list"></div>
-    </div>
-  </div>
-
-  <!-- 4: TRACKED WALLETS -->
-  <div class="col" style="position:relative">
-    <div class="col-header">Tracked Wallets</div>
-    <div id="add-track-row">
-      <input id="tracked-addr-input" placeholder="Paste wallet address…" />
-      <div style="margin-top:12px;border-top:1px solid var(--border2);padding-top:10px;">
-        <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.05em;margin-bottom:6px;">🛡️ TOKEN SAFETY CHECK</div>
-        <div style="display:flex;gap:6px;">
-          <input id="safety-ca" placeholder="Paste token CA…" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:8px 10px;color:var(--text);font-size:11px;outline:none;">
-          <button id="safety-btn" style="padding:8px 12px;border:none;border-radius:9px;background:var(--accent);color:#000;font-weight:700;font-size:11px;cursor:pointer;">Check</button>
-        </div>
-        <div id="safety-result" style="margin-top:8px;"></div>
-      </div>
-      <div id="add-track-btn">Track</div>
-    </div>
-    <div id="tracked-list">
-      <div class="empty-state">Track any wallet to see their moves</div>
-    </div>
-
-    <!-- Wallet detail -->
-    <div id="wallet-detail">
-      <div id="wd-topbar">
-        <div class="back-pill" id="wd-back">← Back</div>
-        <div><div id="wd-name"></div><div id="wd-addr"></div></div>
-      </div>
-      <div id="wd-body"></div>
-    </div>
-  </div>
-</div>
 
 
 <!-- END PAGE 1 -->
@@ -1887,6 +1814,55 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
   </div>
 
   <div class="trade-tab-content" id="tab-autodesk">
+    <!-- 🐦 X AUTONOMOUS PROJECT MANAGER -->
+    <div class="tg-section" style="margin:12px 0 10px;padding:14px;border:1px solid rgba(29,161,242,.35);background:linear-gradient(135deg,rgba(29,161,242,.08),rgba(124,58,237,.05));">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:13px;font-weight:700;">🐦 X Account Manager <span style="font-size:10px;color:var(--text2);font-weight:500;">— she runs your project's X, fully autonomous</span></div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;">
+          <input type="checkbox" id="xm-enabled" style="accent-color:#1da1f2;"> <b id="xm-enabled-lbl">Off</b>
+        </label>
+      </div>
+
+      <div style="font-size:10px;color:#ffcf6b;background:rgba(255,207,107,.08);border:1px solid rgba(255,207,107,.25);border-radius:8px;padding:7px 9px;margin:9px 0;line-height:1.5;">
+        ⚠️ A built-in safety filter blocks price predictions, buy/sell calls, promises of returns, and slurs on <b>every</b> post and reply. It cannot be turned off. You are responsible for the account's activity.
+      </div>
+
+      <div style="font-size:11px;font-weight:600;margin:8px 0 4px;color:var(--text2);">Project</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+        <input class="tg-input" id="xm-name" placeholder="Project name" style="margin:0;">
+        <input class="tg-input" id="xm-ticker" placeholder="Ticker (BULL)" style="margin:0;">
+        <input class="tg-input" id="xm-handle" placeholder="@handle" style="margin:0;">
+        <input class="tg-input" id="xm-vibe" placeholder="Voice (playful, confident…)" style="margin:0;">
+      </div>
+
+      <div style="font-size:11px;font-weight:600;margin:10px 0 4px;color:var(--text2);">X API credentials (from developer.x.com)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+        <input class="tg-input" id="xm-apikey" placeholder="API key" style="margin:0;">
+        <input class="tg-input" id="xm-apisecret" type="password" placeholder="API secret" style="margin:0;">
+        <input class="tg-input" id="xm-token" placeholder="Access token" style="margin:0;">
+        <input class="tg-input" id="xm-tokensecret" type="password" placeholder="Access token secret" style="margin:0;">
+      </div>
+
+      <div style="font-size:11px;font-weight:600;margin:10px 0 4px;color:var(--text2);">What she does</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;">
+        <label><input type="checkbox" id="xm-post" checked style="accent-color:#1da1f2;"> Post updates</label>
+        <label><input type="checkbox" id="xm-retweet" checked style="accent-color:#1da1f2;"> Retweet positive</label>
+        <label><input type="checkbox" id="xm-reply" checked style="accent-color:#1da1f2;"> Reply to mentions</label>
+        <label style="display:flex;align-items:center;gap:4px;">Posts/day <input class="tg-input" id="xm-perday" value="6" style="margin:0;width:44px;padding:3px;text-align:center;"></label>
+      </div>
+
+      <div style="display:flex;gap:6px;margin-top:10px;">
+        <button class="tg-add-btn" id="xm-save" style="flex:1;">💾 Save</button>
+        <button class="tg-add-btn" id="xm-preview" style="flex:1;">👁️ Preview a post</button>
+      </div>
+      <div id="xm-preview-out" style="display:none;font-size:11px;margin-top:6px;padding:9px;border-radius:8px;background:rgba(15,23,42,.6);border:1px solid var(--border);line-height:1.5;"></div>
+
+      <details style="margin-top:10px;">
+        <summary style="font-size:11px;color:var(--text2);cursor:pointer;">📜 Activity log (what she posted / blocked)</summary>
+        <div id="xm-log" style="font-size:10px;line-height:1.6;padding:8px 4px;max-height:220px;overflow-y:auto;color:var(--text);">Loading…</div>
+      </details>
+    </div>
+
     <div class="tg-section" style="margin:12px 0 10px;padding:14px;">
       <div style="font-size:13px;font-weight:700;">🛠️ Marketing & Launch Tools</div>
       <div style="font-size:11px;color:var(--text2);margin:4px 0 10px;">After you create a project in the Wizard above, use these to check your ticker, generate marketing, and post it.</div>
@@ -3152,6 +3128,13 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
   <!-- ══ LIFE TAB ══ -->
   <div class="others-tab-content" id="others-life">
     <div class="tg-section" style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:700;">🖼️ Wallpapers (behind Asuka)</div>
+      </div>
+      <div id="wp-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">Loading…</div>
+      <button id="wp-none" style="width:100%;margin-top:8px;padding:9px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text2);font-size:12px;cursor:pointer;">✕ No wallpaper</button>
+    </div>
+    <div class="tg-section" style="margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <div style="font-size:12px;font-weight:700;">🎯 Today's quests</div>
         <button id="quest-claim" style="display:none;padding:6px 14px;border:none;border-radius:9px;background:var(--accent);color:#000;font-weight:700;font-size:11px;cursor:pointer;">Claim +30 🪙</button>
@@ -3543,7 +3526,7 @@ let waifuModel=null, editApp=null, custApp=null
 
 // ── Session ──
 const h = new Date().getUTCHours()
-document.getElementById('session-badge').textContent = h<8?'Asia Session':h<16?'Europe Session':'US Session'
+{ const sb=document.getElementById('session-badge'); if(sb) sb.textContent = h<8?'Asia Session':h<16?'Europe Session':'US Session' }
 
 // ── Audio ──
 async function playAudio(b64) {
@@ -3669,6 +3652,7 @@ async function initWaifu() {
         _dancing = true
         _danceT = 0
         const sp = document.getElementById('waifu-speech')
+        if(!sp) return
         if (sp && !sp.textContent) { sp.textContent = '♪～(´ε｀　)'; setTimeout(() => { if (sp.textContent === '♪～(´ε｀　)') sp.textContent = '' }, 4000) }
       }
     }, 5000)
@@ -3680,6 +3664,7 @@ async function initWaifu() {
       if (!_forced && Date.now() - (window._lastVoiceChunkAt || 0) < 8000) { _dancing = false; _danceT = 0; return }
       if (typeof _audioQueue !== 'undefined' && _audioQueue.length) { _dancing = false; _danceT = 0; return }
       const sp = document.getElementById('waifu-speech')
+      if(!sp) return
       if (sp && sp.textContent && sp.textContent !== '♪～(´ε｀　)') return
       _danceT += 0.033
       if (_danceT > 120) { _dancing = false; _danceT = 0; window._lastActivity = Date.now(); return } // 2 min max, then rest
@@ -3698,11 +3683,11 @@ async function initWaifu() {
 
     setTimeout(async()=>{
       const g=`Hey${memory.name?' '+memory.name:''}! Dashboard is open.`
-      document.getElementById('waifu-speech').textContent=g
+      setEl('waifu-speech','textContent',g)
       await playAudio(await ipcRenderer.invoke('get-voice',g))
-      document.getElementById('waifu-speech').textContent=''
+      setEl('waifu-speech','textContent','')
     },800)
-  } catch(e){ document.getElementById('waifu-speech').textContent='Model not found' }
+  } catch(e){ setEl('waifu-speech','textContent','Model not found') }
 }
 
 // ── Load ──
@@ -3712,8 +3697,11 @@ async function loadData() {
   alerts   = await ipcRenderer.invoke('get-alerts')   || []
   watchlist = settings.watchlist || []
   trackedWallets = settings.trackedWallets || []
-  document.getElementById('waifu-name').textContent = settings.characterName || 'Asuka'
-  renderAlerts(); renderTracked(); await loadPrices(); await loadPortfolio()
+  setEl('waifu-name','textContent',settings.characterName || 'Asuka')
+  try{renderAlerts()}catch(e){console.error('renderAlerts:',e)}
+  try{renderTracked()}catch(e){console.error('renderTracked:',e)}
+  try{await loadPrices()}catch(e){console.error('loadPrices:',e)}
+  try{await loadPortfolio()}catch(e){console.error('loadPortfolio:',e)}
 }
 
 // ── Prices ──
@@ -3734,6 +3722,7 @@ async function loadPrices() {
 
 function renderPrices() {
   const sec = document.getElementById('prices-section')
+  if(!sec) return
   if (!watchlist.length) { sec.innerHTML='<div class="empty-state">Add coins above to track prices</div>'; return }
   sec.innerHTML = watchlist.map(coin=>{
     const p=prices[coin]
@@ -3754,7 +3743,7 @@ function renderPrices() {
   }).join('')
   sec.querySelectorAll('.p-bell').forEach(b=>b.addEventListener('click',e=>{
     e.stopPropagation()
-    document.getElementById('alert-coin-input').value=b.dataset.coin.toUpperCase()
+    setEl('alert-coin-input','value',b.dataset.coin.toUpperCase())
     document.getElementById('alert-price-input').focus()
   }))
   sec.querySelectorAll('.p-del').forEach(d=>d.addEventListener('click',async e=>{
@@ -3771,7 +3760,7 @@ document.getElementById('add-coin-btn')?.addEventListener('click',async()=>{
   if (!coin||watchlist.includes(coin)) return
   watchlist.push(coin); settings.watchlist=watchlist
   await ipcRenderer.invoke('save-settings',settings)
-  document.getElementById('add-coin-input').value=''
+  setEl('add-coin-input','value','')
   await loadPrices()
 })
 document.getElementById('add-coin-input')?.addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('add-coin-btn').click() })
@@ -3779,6 +3768,7 @@ document.getElementById('add-coin-input')?.addEventListener('keydown',e=>{ if(e.
 // ── Alerts ──
 function renderAlerts() {
   const list=document.getElementById('alerts-list')
+  if (!list) return
   const active=alerts.filter(a=>!a.triggered)
   if (!active.length) { list.innerHTML='<div style="padding:8px 14px;font-size:11px;color:var(--text3)">No active alerts</div>'; return }
   list.innerHTML=active.map(a=>`<div class="alert-row">
@@ -3798,14 +3788,15 @@ document.getElementById('add-alert-btn')?.addEventListener('click',async()=>{
   if (!coin||!price) return
   alerts.push({id:Date.now().toString(),coin,target:parseFloat(price),direction:dir,triggered:false})
   await ipcRenderer.invoke('save-alerts',alerts)
-  document.getElementById('alert-coin-input').value=''
-  document.getElementById('alert-price-input').value=''
+  setEl('alert-coin-input','value','')
+  setEl('alert-price-input','value','')
   renderAlerts()
 })
 
 // ── Tracked wallets ──
 function renderTracked() {
   const list=document.getElementById('tracked-list')
+  if(!list) return
   if (!trackedWallets.length) { list.innerHTML='<div class="empty-state">Track any wallet to see their moves in real time</div>'; return }
   list.innerHTML=trackedWallets.map((w,i)=>`<div class="track-row" data-idx="${i}">
     <div class="track-avatar">👤</div>
@@ -3871,17 +3862,17 @@ document.getElementById('add-track-btn')?.addEventListener('click',async()=>{
   trackedWallets.push({address:addr, label, addedAt:Date.now()})
   settings.trackedWallets=trackedWallets
   await ipcRenderer.invoke('save-settings',settings)
-  document.getElementById('tracked-addr-input').value=''
+  setEl('tracked-addr-input','value','')
   renderTracked()
 })
 function openWalletDetail(w) {
-  document.getElementById('wd-name').textContent=w.label||'Wallet'
-  document.getElementById('wd-addr').textContent=w.address.slice(0,8)+'…'+w.address.slice(-6)
-  document.getElementById('wd-body').innerHTML=`
+  setEl('wd-name','textContent',w.label||'Wallet')
+  setEl('wd-addr','textContent',w.address.slice(0,8)+'…'+w.address.slice(-6))
+  setEl('wd-body','innerHTML',`
     <div class="wd-stat"><div class="wd-stat-label">Address</div><div class="wd-stat-val" style="font-size:13px;font-weight:500">${w.address.slice(0,14)}…</div></div>
     <div class="wd-stat"><div class="wd-stat-label">Added</div><div class="wd-stat-val" style="font-size:14px">${new Date(w.addedAt).toLocaleDateString()}</div></div>
     <div class="wd-stat"><div class="wd-stat-label">Holdings</div><div class="wd-stat-val" style="font-size:13px;color:var(--text2)">Add Moralis API key in Settings to load holdings</div></div>
-  `
+  `)
   document.getElementById('wallet-detail').classList.add('open')
 }
 document.getElementById('wd-back')?.addEventListener('click',()=>document.getElementById('wallet-detail').classList.remove('open'))
@@ -3898,6 +3889,7 @@ document.getElementById('manage-wallets-close')?.addEventListener('click', () =>
 function renderManageWallets() {
   const wallets = settings.wallets || []
   const list = document.getElementById('manage-wallets-list')
+  if(!list) return
   if (!wallets.length) {
     list.innerHTML = '<div style="color:var(--text2);font-size:13px;text-align:center;padding:20px;">No wallets added yet</div>'
     return
@@ -3940,8 +3932,8 @@ document.getElementById('wallet-add-confirm')?.addEventListener('click',async()=
   const result = await ipcRenderer.invoke('save-settings',settings)
   console.log('Save result:', result)
   document.getElementById('wallet-modal').classList.remove('open')
-  document.getElementById('wallet-addr-input').value=''
-  document.getElementById('wallet-label-input').value=''
+  setEl('wallet-addr-input','value','')
+  setEl('wallet-label-input','value','')
   await loadPortfolio()
 })
 
@@ -4046,13 +4038,14 @@ async function loadTelegramUI() {
     if (settings?.intelNotifications) document.getElementById('intel-notify-toggle').classList.add('on')
 
     if (settings?.tgNotifyContact) {
-      document.getElementById('tg-notify-contact').textContent = settings.tgNotifyContact
+      setEl('tg-notify-contact','textContent',settings.tgNotifyContact)
     }
   }
 }
 
 function renderTgGroups(groups) {
   const list = document.getElementById('tg-groups-list')
+  if(!list) return
   if (!groups?.length) { list.innerHTML = '<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No groups added yet</div>'; return }
   list.innerHTML = groups.map(g => `
     <div class="tg-group-item">
@@ -4103,6 +4096,7 @@ function renderTgCallers(callers, stats) {
 
 function renderTgSignals(signals) {
   const list = document.getElementById('tg-signals-list')
+  if(!list) return
   if (!signals?.length) { list.innerHTML = '<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No signals detected yet</div>'; return }
   list.innerHTML = signals.slice(-10).reverse().map(s => {
     const statusClass = s.status === 'win' ? 'won' : s.status === 'loss' ? 'lost' : ''
@@ -4136,7 +4130,7 @@ async function removeCaller(caller) {
 document.getElementById('tg-connect-btn')?.addEventListener('click', async () => {
   const phone = document.getElementById('tg-phone').value.trim()
   if (!phone) return
-  document.getElementById('tg-connect-btn').textContent = 'Sending code...'
+  setEl('tg-connect-btn','textContent','Sending code...')
   document.getElementById('tg-connect-btn').disabled = true
   // Show code section immediately — backend will send code to phone
   ipcRenderer.invoke('telegram-connect', phone)
@@ -4157,7 +4151,7 @@ ipcRenderer.on('telegram-needs-code', () => {
 document.getElementById('tg-verify-btn')?.addEventListener('click', async () => {
   const code = document.getElementById('tg-code').value.trim()
   if (!code) return
-  document.getElementById('tg-verify-btn').textContent = 'Connecting...'
+  setEl('tg-verify-btn','textContent','Connecting...')
   document.getElementById('tg-verify-btn').disabled = true
   ipcRenderer.send('telegram-code', code)
   // Wait and check if connected
@@ -4166,7 +4160,7 @@ document.getElementById('tg-verify-btn')?.addEventListener('click', async () => 
     if (connected) {
       loadTelegramUI()
     } else {
-      document.getElementById('tg-verify-btn').textContent = 'Verify Code'
+      setEl('tg-verify-btn','textContent','Verify Code')
       document.getElementById('tg-verify-btn').disabled = false
       alert('Could not connect — check the code and try again')
     }
@@ -4185,7 +4179,7 @@ async function loadBotStatus() {
 document.getElementById('bot-connect-btn')?.addEventListener('click', async () => {
   const code = document.getElementById('bot-auth-code').value.trim().toUpperCase()
   if (!code || code.length < 8) {
-    document.getElementById('bot-auth-error').textContent = 'Enter the full code (e.g. ASK-1234)'
+    setEl('bot-auth-error','textContent','Enter the full code (e.g. ASK-1234)')
     document.getElementById('bot-auth-error').style.display = 'block'
     return
   }
@@ -4196,7 +4190,7 @@ document.getElementById('bot-connect-btn')?.addEventListener('click', async () =
     document.getElementById('bot-connected').style.display = 'block'
     document.getElementById('bot-auth-error').style.display = 'none'
   } else {
-    document.getElementById('bot-auth-error').textContent = result.error || 'Invalid code — try again'
+    setEl('bot-auth-error','textContent',result.error || 'Invalid code — try again')
     document.getElementById('bot-auth-error').style.display = 'block'
   }
 })
@@ -4207,21 +4201,22 @@ document.getElementById('bot-disconnect-btn')?.addEventListener('click', async (
   await ipcRenderer.invoke('save-settings', settings)
   document.getElementById('bot-connected').style.display = 'none'
   document.getElementById('bot-not-connected').style.display = 'block'
-  document.getElementById('bot-auth-code').value = ''
+  setEl('bot-auth-code','value','')
 })
 
 // Change notification contact
 document.getElementById('tg-change-contact')?.addEventListener('click', () => {
   const form = document.getElementById('tg-contact-form')
+  if(!form) return
   form.style.display = form.style.display === 'none' ? 'flex' : 'none'
 })
 
 document.getElementById('tg-save-contact-btn')?.addEventListener('click', () => {
   const contact = document.getElementById('tg-contact-input').value.trim()
   if (!contact) return
-  document.getElementById('tg-notify-contact').textContent = contact
+  setEl('tg-notify-contact','textContent',contact)
   document.getElementById('tg-contact-form').style.display = 'none'
-  document.getElementById('tg-contact-input').value = ''
+  setEl('tg-contact-input','value','')
   ipcRenderer.send('set-setting', 'tgNotifyContact', contact)
 })
 
@@ -4234,10 +4229,12 @@ document.getElementById('tg-disconnect-btn')?.addEventListener('click', async ()
 // Add group
 document.getElementById('tg-add-group-btn')?.addEventListener('click', async () => {
   const picker = document.getElementById('tg-group-picker')
+  if(!picker) return
   picker.style.display = picker.style.display === 'none' ? 'block' : 'none'
   if (picker.style.display === 'block') {
     const groups = await ipcRenderer.invoke('telegram-get-groups')
     const avail = document.getElementById('tg-available-groups')
+    if(!avail) return
     avail.innerHTML = groups.map(g => `
       <div class="tg-group-item" style="cursor:pointer" onclick="addGroup(${JSON.stringify(g).replace(/"/g, '&quot;')})">
         <div>
@@ -4268,7 +4265,7 @@ document.getElementById('tg-save-caller-btn')?.addEventListener('click', async (
   if (!caller) return
   await ipcRenderer.invoke('telegram-add-caller', caller.startsWith('@') ? caller : '@' + caller)
   document.getElementById('tg-add-caller-form').style.display = 'none'
-  document.getElementById('tg-caller-input').value = ''
+  setEl('tg-caller-input','value','')
   loadTelegramUI()
 })
 
@@ -4303,16 +4300,18 @@ document.querySelector('.trust-dots[data-key="tradeThreshold"]')?.addEventListen
   container.dataset.val = idx
   
   const pct = idx * 10
-  document.getElementById('conf-threshold-val').textContent = `${pct}%`
+  setEl('conf-threshold-val','textContent',`${pct}%`)
   ipcRenderer.send('set-setting', 'paperTradeThreshold', pct)
   ipcRenderer.send('set-setting', 'independentScanThreshold', pct)
   
   // Update display
   const mainDisp = document.getElementById('main-threshold-display')
+  if(!mainDisp) return
   if (mainDisp) mainDisp.textContent = `${pct}%`
 
   const warning = confWarnings[idx]
   const warningEl = document.getElementById('conf-warning')
+  if(!warningEl) return
   if (warning?.msg) {
     warningEl.textContent = warning.msg
     warningEl.className = warning.type === 'warning' ? 'conf-warning-box' : 'conf-notice-box'
@@ -4339,7 +4338,7 @@ document.getElementById('conf-auto-btn')?.addEventListener('click', async () => 
   ipcRenderer.send('set-setting', 'autoThreshold', true)
   // Calculate current auto threshold
   const autoThreshold = await ipcRenderer.invoke('get-auto-threshold')
-  document.getElementById('auto-threshold-display').textContent = `Current auto threshold: ${autoThreshold}%`
+  setEl('auto-threshold-display','textContent',`Current auto threshold: ${autoThreshold}%`)
 })
 
 // Restore confidence settings
@@ -4354,7 +4353,7 @@ async function restoreConfidenceSettings() {
     if (container) {
       container.dataset.val = dotVal
       container.querySelectorAll('.trust-dot').forEach((d, i) => d.classList.toggle('filled', i < dotVal))
-      if (document.getElementById('conf-threshold-val')) document.getElementById('conf-threshold-val').textContent = `${threshold}%`
+      if (document.getElementById('conf-threshold-val')) setEl('conf-threshold-val','textContent',`${threshold}%`)
     }
   }
 
@@ -4369,6 +4368,7 @@ async function restoreConfidenceSettings() {
       b.classList.toggle('active', parseInt(b.dataset.lev) === settings.paperLeverage)
     })
     const warn = document.getElementById('lev-warning')
+    if(!warn) return
     if (warn) warn.textContent = levWarnings[settings.paperLeverage] || ''
   }
 
@@ -4408,10 +4408,10 @@ async function restoreConfidenceSettings() {
     document.querySelectorAll('.ratio-btn').forEach(b => {
       b.classList.toggle('active', parseFloat(b.dataset.ratio) === settings.tpSlRatio)
     })
-    document.getElementById('ratio-preview').textContent = `Example: SL 1% → TP ${settings.tpSlRatio}%`
+    setEl('ratio-preview','textContent',`Example: SL 1% → TP ${settings.tpSlRatio}%`)
   }
-  if (settings?.customTpPct) document.getElementById('custom-tp-input').value = settings.customTpPct
-  if (settings?.customSlPct) document.getElementById('custom-sl-input').value = settings.customSlPct
+  if (settings?.customTpPct) setEl('custom-tp-input','value',settings.customTpPct)
+  if (settings?.customSlPct) setEl('custom-sl-input','value',settings.customSlPct)
 
   if (settings?.maxScalpTrades) {
     document.querySelectorAll('.scalp-max-btn').forEach(b => {
@@ -4426,12 +4426,14 @@ async function restoreConfidenceSettings() {
   if (scalpContainer) {
     scalpContainer.dataset.val = scalpDotVal
     scalpContainer.querySelectorAll('.trust-dot').forEach((d, i) => d.classList.toggle('filled', i < scalpDotVal))
-    if (document.getElementById('scalp-threshold-val')) document.getElementById('scalp-threshold-val').textContent = `${scalpThreshold}%`
+    if (document.getElementById('scalp-threshold-val')) setEl('scalp-threshold-val','textContent',`${scalpThreshold}%`)
   }
 
   // Update displays
   const mainDisp = document.getElementById('main-threshold-display')
+  if(!mainDisp) return
   const scalpDisp = document.getElementById('scalp-threshold-display')
+  if(!scalpDisp) return
   const mainThreshold = settings?.paperTradeThreshold || 60
   if (mainDisp) mainDisp.textContent = `${mainThreshold}%`
   if (scalpDisp) scalpDisp.textContent = `${scalpThreshold}%`
@@ -4581,12 +4583,12 @@ document.querySelectorAll('.max-pos-btn').forEach(btn => {
 // ── Trading Control ──────────────────────────────────────────────────────
 document.getElementById('pause-trading-btn')?.addEventListener('click', async () => {
   ipcRenderer.send('pause-trading', 60)
-  document.getElementById('trading-status').textContent = '⏸️ Trading Paused (1 hour)'
+  setEl('trading-status','textContent','⏸️ Trading Paused (1 hour)')
   document.getElementById('trading-status').style.color = 'var(--red)'
 })
 document.getElementById('resume-trading-btn')?.addEventListener('click', () => {
   ipcRenderer.send('resume-trading')
-  document.getElementById('trading-status').textContent = '✅ Trading Active'
+  setEl('trading-status','textContent','✅ Trading Active')
   document.getElementById('trading-status').style.color = 'var(--green)'
 })
 
@@ -4605,7 +4607,7 @@ document.getElementById('add-dca-btn')?.addEventListener('click', async () => {
   const amount = parseFloat(document.getElementById('dca-amount').value)
   if (!amount || amount <= 0) return
   ipcRenderer.send('save-dca-plan', { coin, amount, interval: dcaInterval, enabled: true })
-  document.getElementById('dca-amount').value = ''
+  setEl('dca-amount','value','')
   setTimeout(loadDCAPlans, 500)
 })
 
@@ -4651,7 +4653,7 @@ document.getElementById('add-alert-btn')?.addEventListener('click', async () => 
   const price = parseFloat(document.getElementById('alert-price').value)
   if (!price || price <= 0) return
   ipcRenderer.send('set-price-alert', { coin, price, direction: alertDirection })
-  document.getElementById('alert-price').value = ''
+  setEl('alert-price','value','')
   setTimeout(loadAlerts, 300)
 })
 
@@ -4688,6 +4690,7 @@ async function loadUsageStats() {
 
     // Tier badge
     const badge = document.getElementById('user-tier-badge')
+    if(!badge) return
     if (badge) {
       badge.textContent = tierNames[tier] || 'PRO'
       badge.style.color = tierColors[tier] || '#00d4ff'
@@ -4697,6 +4700,7 @@ async function loadUsageStats() {
     // Voice usage
     const voiceLimits = stats.limits?.voice || { used: 0, limit: 200, pct: 0 }
     const voiceText = document.getElementById('voice-usage-text')
+    if(!voiceText) return
     const voiceBar = document.getElementById('voice-usage-bar')
     if (voiceText) {
       if (voiceLimits.limit >= 999999) {
@@ -4737,6 +4741,7 @@ async function loadUsageStats() {
 
     // Auto extend toggle
     const autoToggle = document.getElementById('auto-extend-toggle')
+    if(!autoToggle) return
     if (autoToggle && stats.config?.auto_extend) autoToggle.classList.add('on')
 
     // Store stripe links
@@ -4938,7 +4943,7 @@ document.querySelectorAll('.ratio-btn').forEach(btn => {
     this.classList.add('active')
     const ratio = parseFloat(this.dataset.ratio)
     ipcRenderer.send('set-setting', 'tpSlRatio', ratio)
-    document.getElementById('ratio-preview').textContent = `Example: SL 1% → TP ${ratio}%`
+    setEl('ratio-preview','textContent',`Example: SL 1% → TP ${ratio}%`)
   })
 })
 
@@ -4947,6 +4952,7 @@ document.getElementById('save-tpsl-btn')?.addEventListener('click', () => {
   const tp = parseFloat(document.getElementById('custom-tp-input').value)
   const sl = parseFloat(document.getElementById('custom-sl-input').value)
   const hint = document.getElementById('tpsl-hint')
+  if(!hint) return
   if (!tp || !sl || tp <= 0 || sl <= 0) {
     hint.textContent = 'Enter valid TP and SL values'
     hint.style.color = 'var(--red)'
@@ -4985,8 +4991,9 @@ document.querySelector('.trust-dots[data-key="scalpThreshold"]')?.addEventListen
   dots.forEach((d, i) => d.classList.toggle('filled', i < idx))
   container.dataset.val = idx
   const pct = idx * 10
-  if (document.getElementById('scalp-threshold-val')) document.getElementById('scalp-threshold-val').textContent = `${pct}%`
+  if (document.getElementById('scalp-threshold-val')) setEl('scalp-threshold-val','textContent',`${pct}%`)
   const scalpDisp = document.getElementById('scalp-threshold-display')
+  if(!scalpDisp) return
   if (scalpDisp) scalpDisp.textContent = `${pct}%`
   ipcRenderer.send('set-setting', 'scalpThreshold', pct)
 })
@@ -5082,6 +5089,7 @@ document.querySelectorAll('.coin-btn[data-coin]').forEach(btn => {
 
 document.getElementById('add-custom-coin-btn')?.addEventListener('click', () => {
   const input = document.getElementById('custom-coin-input')
+  if(!input) return
   const coin = input.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
   if (!coin) return
   
@@ -5269,7 +5277,9 @@ function showAdvancedPanel(key) {
   if (!config) return
   const panel = document.getElementById('advanced-settings-panel')
   const title = document.getElementById('adv-panel-title')
+  if(!title) return
   const content = document.getElementById('adv-panel-content')
+  if(!content) return
   if (!panel || !title || !content) return
 
   title.textContent = `⚙️ ${config.label} — Advanced Settings`
@@ -5311,7 +5321,9 @@ function showAdvancedPanel(key) {
 
 function buildIndicatorSections(settings) {
   const mainContainer = document.getElementById('main-indicators-built')
+  if(!mainContainer) return
   const scalpContainer = document.getElementById('scalp-indicators-built')
+  if(!scalpContainer) return
   if (!mainContainer || !scalpContainer) return
 
   mainContainer.innerHTML = ''
@@ -5403,6 +5415,7 @@ document.getElementById('save-daily-size-btn')?.addEventListener('click', () => 
 
 document.getElementById('refresh-daily-signals-btn')?.addEventListener('click', async () => {
   const btn = document.getElementById('refresh-daily-signals-btn')
+  if(!btn) return
   btn.textContent = 'Scanning...'
   btn.disabled = true
   await ipcRenderer.invoke('trigger-daily-scan-wait').catch(() => 
@@ -5615,6 +5628,7 @@ document.querySelectorAll('.lev-btn').forEach(btn => {
     const lev = parseInt(this.dataset.lev)
     ipcRenderer.send('set-setting', 'paperLeverage', lev)
     const warn = document.getElementById('lev-warning')
+    if(!warn) return
     if (warn) warn.textContent = levWarnings[lev] || `${lev}x leverage`
   })
 })
@@ -5642,7 +5656,7 @@ document.getElementById('save-scalp-btn')?.addEventListener('click', () => {
   const size = parseFloat(document.getElementById('scalp-size-input').value)
   if (!size || size <= 0) return
   ipcRenderer.send('set-setting', 'scalpSize', size)
-  document.getElementById('scalp-hint').textContent = `Scalp size: $${size} per trade`
+  setEl('scalp-hint','textContent',`Scalp size: $${size} per trade`)
   document.getElementById('scalp-hint').style.color = 'var(--green)'
 })
 
@@ -5676,7 +5690,7 @@ document.querySelectorAll('.rage-dur-btn').forEach(btn => {
 document.getElementById('manual-lock-btn')?.addEventListener('click', () => {
   ipcRenderer.send('manual-rage-lock', 30)
   document.getElementById('rage-lock-status').style.display = 'block'
-  document.getElementById('rage-lock-reason').textContent = 'Manually locked — take a break!'
+  setEl('rage-lock-reason','textContent','Manually locked — take a break!')
 })
 
 document.getElementById('manual-unlock-btn')?.addEventListener('click', () => {
@@ -5686,7 +5700,7 @@ document.getElementById('manual-unlock-btn')?.addEventListener('click', () => {
 
 ipcRenderer.on('rage-lock-activated', (e, data) => {
   document.getElementById('rage-lock-status').style.display = 'block'
-  document.getElementById('rage-lock-reason').textContent = `${data.reason} — locked for ${data.minutes} min`
+  setEl('rage-lock-reason','textContent',`${data.reason} — locked for ${data.minutes} min`)
 })
 
 ipcRenderer.on('rage-lock-deactivated', () => {
@@ -5698,7 +5712,9 @@ async function loadPsychScore() {
   const score = await ipcRenderer.invoke('get-psychology-score')
   if (!score) return
   const numEl = document.getElementById('psych-score-num')
+  if(!numEl) return
   const gradeEl = document.getElementById('psych-grade')
+  if(!gradeEl) return
   const issuesEl = document.getElementById('psych-issues')
   numEl.textContent = score.score
   numEl.style.color = score.score >= 80 ? 'var(--green)' : score.score >= 60 ? 'var(--gold)' : 'var(--red)'
@@ -5746,7 +5762,7 @@ document.getElementById('dev-change-pwd-settings')?.addEventListener('click', as
     body:JSON.stringify({action:'changePassword',value:pwd})
   }).catch(() => {})
   localStorage.setItem('dev_token', pwd)
-  document.getElementById('dev-new-pwd-settings').value = ''
+  setEl('dev-new-pwd-settings','value','')
 })
 
 // ── Others Page Sub-tabs ─────────────────────────────────────────────────
@@ -5760,6 +5776,7 @@ document.querySelectorAll('[data-others-tab]').forEach(tab => {
     // Load content for tab
     if (this.dataset.othersTab === 'study') loadStudyLibrary()
     if (this.dataset.othersTab === 'her') loadHerTab()
+    if (this.dataset.othersTab === 'life') { try { loadWallpapers() } catch(e){} }
     if (this.dataset.othersTab === 'memory') loadMemories()
     if (this.dataset.othersTab === 'intel') loadIntel()
   })
@@ -5781,6 +5798,7 @@ async function loadStudyLibrary() {
   if (!el) return
   const lib = await ipcRenderer.invoke('get-lesson-library').catch(()=>({lessons:[]}))
   const badge = document.getElementById('lib-count-badge')
+  if(!badge) return
   if (badge) badge.textContent = `${lib.lessons.length} saved`
   if (!lib.lessons.length) { el.innerHTML = '<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px;">No lessons yet. Tap "New Lesson" to upload a document.</div>'; return }
   el.innerHTML = lib.lessons.map(l => `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:7px;">
@@ -5835,6 +5853,7 @@ async function loadReplays() {
 function showReplay(id, replays) {
   const r = replays.find(x => x.id === id); if (!r) return
   const d = document.getElementById('replay-detail')
+  if(!d) return
   const when = new Date(r.timestamp).toLocaleString()
   const agreeVotes = (r.agentVotes||[]).filter(v=>v.agree).length
   d.style.display = 'block'
@@ -5860,6 +5879,7 @@ function showReplay(id, replays) {
 async function loadBrainStats() {
   const b = await ipcRenderer.invoke('get-brain-stats').catch(()=>null)
   const el = document.getElementById('brain-stats')
+  if(!el) return
   if (!b || b.error) { el.innerHTML = '<div style="color:var(--text2);font-size:11px;grid-column:1/3;">No data yet — run the scanners a while.</div>'; return }
   const card = (label, val, sub, color) => `<div style="background:var(--bg3);border-radius:10px;padding:10px;">
     <div style="font-size:10px;color:var(--text2);">${label}</div>
@@ -5876,6 +5896,7 @@ async function loadBrainStats() {
 async function loadWhatSheKnows() {
   const k = await ipcRenderer.invoke('get-what-she-knows').catch(()=>null)
   const el = document.getElementById('knows-content')
+  if(!el) return
   if (!k || k.error) { el.innerHTML = '<div style="color:var(--text2);font-size:11px;">Talk to her more and she\'ll learn about you.</div>'; return }
   let html = ''
   if (k.bondTier) html += `<div style="margin-bottom:10px;"><span class="as-pill as-pill-her">${k.bondTier}</span></div>`
@@ -6259,6 +6280,7 @@ function formatTime(s) {
 
 function updateTimerDisplay() {
   const el = document.getElementById('timer-display')
+  if(!el) return
   if (el) el.textContent = formatTime(timerSeconds)
 }
 
@@ -6271,6 +6293,7 @@ document.querySelectorAll('.timer-preset-btn').forEach(btn => {
     clearInterval(timerInterval)
     updateTimerDisplay()
     const startBtn = document.getElementById('timer-start-btn')
+    if(!startBtn) return
     if (startBtn) startBtn.textContent = '▶ Start'
   })
 })
@@ -6287,7 +6310,7 @@ document.getElementById('timer-start-btn')?.addEventListener('click', function()
       if (timerSeconds <= 0) {
         clearInterval(timerInterval)
         timerRunning = false
-        document.getElementById('timer-start-btn').textContent = '▶ Start'
+        setEl('timer-start-btn','textContent','▶ Start')
         // Notify
         ipcRenderer.invoke('get-voice', 'Time is up! Great work! Take a break.').then(audio => {
           if (audio) playAudio(audio)
@@ -6307,6 +6330,7 @@ document.getElementById('timer-reset-btn')?.addEventListener('click', () => {
   timerSeconds = parseInt(activeBtn?.dataset.min || 25) * 60
   updateTimerDisplay()
   const startBtn = document.getElementById('timer-start-btn')
+  if(!startBtn) return
   if (startBtn) startBtn.textContent = '▶ Start'
 })
 
@@ -6315,6 +6339,7 @@ document.getElementById('calc-btn')?.addEventListener('click', async () => {
   const q = document.getElementById('calc-input')?.value
   if (!q) return
   const result = document.getElementById('calc-result')
+  if(!result) return
   if (result) result.textContent = 'Calculating...'
   try {
     // Simple eval for basic math
@@ -6343,6 +6368,7 @@ document.getElementById('conv-btn')?.addEventListener('click', async () => {
   const from = document.getElementById('conv-from')?.value
   const to = document.getElementById('conv-to')?.value
   const result = document.getElementById('conv-result')
+  if(!result) return
   if (!amount || !from || !to) return
   if (result) result.textContent = 'Converting...'
   try {
@@ -6374,7 +6400,7 @@ document.getElementById('save-note-btn')?.addEventListener('click', async () => 
   const note = document.getElementById('quick-note')?.value?.trim()
   if (!note) return
   await ipcRenderer.invoke('save-memory', note).catch(() => {})
-  document.getElementById('quick-note').value = ''
+  setEl('quick-note','value','')
   loadMemories()
 })
 
@@ -6447,6 +6473,7 @@ async function handleBookFile(input) {
 async function handleBookDrop(event) {
   event.preventDefault()
   const zone = document.getElementById('book-drop-zone')
+  if(!zone) return
   if (zone) zone.style.borderColor = 'var(--border)'
   const file = event.dataTransfer.files[0]
   if (!file) { showStatus('No file detected'); return }
@@ -6560,6 +6587,7 @@ function initBookDropZone() {
     const subject = document.getElementById('book-subject')?.value || 'general'
     const bookName = nameInput?.value.trim() || ''
     const status = document.getElementById('book-index-status')
+    if(!status) return
     if (status) { status.style.display = 'block'; status.style.color = 'var(--accent)'; status.textContent = '⏳ Opening file browser...' }
     ipcRenderer.invoke('open-book-dialog', { name: bookName, subject }).then(async result => {
       if (result?.success) {
@@ -6674,7 +6702,9 @@ async function aldLoadProjects(selectId) {
   _aldList = list
   const picker = document.getElementById('ald-proj-picker')
   const overview = document.getElementById('ald-overview')
+  if(!overview) return
   const console_ = document.getElementById('ald-console')
+  if(!console_) return
   if (!list.length) {
     if (overview) overview.style.display = 'none'
     if (console_) console_.style.display = 'none'
@@ -6688,9 +6718,10 @@ function statusColor(s) { return s==='live'?'var(--green)':s==='paused'?'var(--g
 function showOverview() {
   document.getElementById('ald-console').style.display = 'none'
   const ov = document.getElementById('ald-overview')
+  if(!ov) return
   ov.style.display = 'block'
-  document.getElementById('ald-count').textContent = `${_aldList.length} coin${_aldList.length!==1?'s':''}`
-  document.getElementById('ald-grid').innerHTML = _aldList.map(p => {
+  setEl('ald-count','textContent',`${_aldList.length} coin${_aldList.length!==1?'s':''}`)
+  setEl('ald-grid','innerHTML',_aldList.map(p => {
     const h = p.health || {}
     const price = h.price ? '$' + h.price : '—'
     const liq = h.liq ? '$' + (h.liq/1000).toFixed(0) + 'K' : '—'
@@ -6711,7 +6742,7 @@ function showOverview() {
       </div>
       <button class="ald-del" data-id="${p.id}" data-sym="${p.symbol}" style="position:absolute;top:8px;right:8px;display:none;background:rgba(251,113,133,0.15);border:none;border-radius:6px;color:var(--red);cursor:pointer;font-size:11px;padding:2px 6px;">🗑</button>
     </div>`
-  }).join('')
+  }).join(''))
   // wire cards
   document.querySelectorAll('.ald-card').forEach(c => {
     c.addEventListener('mouseenter', () => { c.style.borderColor = 'var(--violet)'; c.querySelector('.ald-del').style.display='block' })
@@ -6729,6 +6760,7 @@ async function showConsole(id) {
   document.getElementById('ald-overview').style.display = 'none'
   document.getElementById('ald-console').style.display = 'block'
   const picker = document.getElementById('ald-proj-picker')
+  if(!picker) return
   if (picker) picker.value = id
   await aldRenderProject(id)
 }
@@ -6736,27 +6768,27 @@ async function aldRenderProject(id) {
   const p = await ipcRenderer.invoke('launch-get-project', id).catch(() => null)
   if (!p) return
   _aldProject = p
-  document.getElementById('ald-proj-name').textContent = `${p.name || p.symbol} — ${p.status}`
+  setEl('ald-proj-name','textContent',`${p.name || p.symbol} — ${p.status}`)
   const h = p.health || {}
-  document.getElementById('ald-health').textContent = h.price ? `Price $${h.price} | Liq $${((h.liq||0)/1000).toFixed(0)}K | Vol $${((h.vol||0)/1000).toFixed(0)}K` : 'No live data yet (add CA for health tracking)'
+  setEl('ald-health','textContent',h.price ? `Price $${h.price} | Liq $${((h.liq||0)/1000).toFixed(0)}K | Vol $${((h.vol||0)/1000).toFixed(0)}K` : 'No live data yet (add CA for health tracking)')
   document.getElementById('ald-bb-enabled').checked = !!p.buyback.enabled
   const _mode = p.buyback.executionMode || 'approve'
   document.getElementById('ald-bb-mode-approve').checked = _mode === 'approve'
   document.getElementById('ald-bb-mode-auto').checked = _mode === 'auto'
   document.getElementById('ald-bb-auto-note').style.display = _mode === 'auto' ? 'block' : 'none'
-  document.getElementById('ald-bb-trigger').value = p.buyback.triggerType
-  document.getElementById('ald-bb-amount').value = p.buyback.buyAmountUsd
-  document.getElementById('ald-bb-max').value = p.buyback.maxPerDay
-  document.getElementById('ald-bb-cooldown').value = p.buyback.cooldownMin || 30
-  document.getElementById('ald-bb-volthresh').value = p.buyback.volumeThreshold
-  document.getElementById('ald-bb-drop').value = p.buyback.priceDropPct
-  document.getElementById('ald-bb-schedhrs').value = p.buyback.scheduleHours || 24
+  setEl('ald-bb-trigger','value',p.buyback.triggerType)
+  setEl('ald-bb-amount','value',p.buyback.buyAmountUsd)
+  setEl('ald-bb-max','value',p.buyback.maxPerDay)
+  setEl('ald-bb-cooldown','value',p.buyback.cooldownMin || 30)
+  setEl('ald-bb-volthresh','value',p.buyback.volumeThreshold)
+  setEl('ald-bb-drop','value',p.buyback.priceDropPct)
+  setEl('ald-bb-schedhrs','value',p.buyback.scheduleHours || 24)
   document.getElementById('ald-g-enabled').checked = !!p.growth.enabled
-  document.getElementById('ald-g-cadence').value = p.growth.raidCadenceHours
+  setEl('ald-g-cadence','value',p.growth.raidCadenceHours)
   document.getElementById('ald-g-callers').checked = !!p.growth.callerOutreach
   document.getElementById('ald-g-rewards').checked = !!p.growth.holderRewards
-  document.getElementById('ald-status-set').value = p.status === 'paused' ? 'paused' : p.status === 'ended' ? 'ended' : 'live'
-  document.getElementById('ald-log').innerHTML = (p.log||[]).slice(0,20).map(l => `• ${l.msg}`).join('<br>') || 'No activity yet'
+  setEl('ald-status-set','value',p.status === 'paused' ? 'paused' : p.status === 'ended' ? 'ended' : 'live')
+  setEl('ald-log','innerHTML',(p.log||[]).slice(0,20).map(l => `• ${l.msg}`).join('<br>') || 'No activity yet')
   // populate editable identity
   const setv=(id,v)=>{const el=document.getElementById(id); if(el) el.value=v||''}
   setv('aed-name',p.name); setv('aed-symbol',p.symbol); setv('aed-ca',p.ca); setv('aed-tagline',p.tagline)
@@ -6860,7 +6892,9 @@ applyWzType('crypto')
 // Domain handling in wizard — simple yes/no
 document.querySelectorAll('.wz-dom-choice').forEach(b => b.addEventListener('click', async function() {
   const out = document.getElementById('wz-domain-out')
+  if(!out) return
   const ownBox = document.getElementById('wz-domain-own')
+  if(!ownBox) return
   if (this.dataset.c === 'yes') {
     ownBox.style.display = 'block'; ownBox.focus()
     out.style.display = 'none'
@@ -7000,7 +7034,7 @@ document.getElementById('ald-burner-btn')?.addEventListener('click', async () =>
   const key = document.getElementById('ald-burner-key').value.trim()
   const pin = document.getElementById('ald-burner-pin').value.trim()
   const r = await ipcRenderer.invoke('buyback-set-burner', { projectId: _aldProject.id, privateKey: key, pin }).catch(()=>null)
-  if (r?.success) { document.getElementById('ald-burner-key').value=''; aldSay('🔑 Burner armed + encrypted. Unlock with your PIN to enable auto-execution.') }
+  if (r?.success) { setEl('ald-burner-key','value',''); aldSay('🔑 Burner armed + encrypted. Unlock with your PIN to enable auto-execution.') }
   else aldSay('❌ ' + (r?.error||'failed'))
 })
 
@@ -7010,6 +7044,7 @@ document.getElementById('ald-burner-btn')?.addEventListener('click', async () =>
 document.getElementById('ls-ticker-btn')?.addEventListener('click', async function() {
   const sym = document.getElementById('ls-ticker-check').value.trim()
   const out = document.getElementById('ls-ticker-out')
+  if(!out) return
   if (!sym) return
   this.textContent = '⏳'; out.style.display = 'block'; out.textContent = 'Searching DexScreener...'
   const r = await ipcRenderer.invoke('launch-check-ticker', sym).catch(() => null)
@@ -7073,15 +7108,16 @@ document.getElementById('rt-add-btn')?.addEventListener('click', async () => {
   const actions = document.getElementById('rt-actions').value.split('\n').map(a => a.trim()).filter(Boolean)
   const reply = document.getElementById('rt-reply').value.trim()
   const st = document.getElementById('rt-status')
+  if(!st) return
   if (!trigger) { st.style.display='block'; st.style.color='var(--red)'; st.textContent='Need a trigger phrase'; return }
   _routines.push({ trigger: trigger.toLowerCase(), actions, reply: reply || 'Done! ✨' })
   const r = await ipcRenderer.invoke('save-routines', _routines)
   st.style.display = 'block'
   st.style.color = r?.success ? 'var(--green)' : 'var(--red)'
   st.textContent = r?.success ? `✅ Saved! Say "${trigger.split('|')[0]}" to trigger it` : '❌ Failed'
-  document.getElementById('rt-trigger').value = ''
-  document.getElementById('rt-actions').value = ''
-  document.getElementById('rt-reply').value = ''
+  setEl('rt-trigger','value','')
+  setEl('rt-actions','value','')
+  setEl('rt-reply','value','')
   loadRoutinesUI()
 })
 setTimeout(loadRoutinesUI, 2200)
@@ -7092,6 +7128,7 @@ document.getElementById('pd-btn')?.addEventListener('click', async function() {
   const coin = document.getElementById('pd-coin').value.trim()
   const entry = document.getElementById('pd-entry').value
   const out = document.getElementById('pd-out')
+  if(!out) return
   if (!coin || !entry) { out.style.display='block'; out.textContent='Need coin + entry price'; return }
   this.textContent = '⏳ Examining...'
   out.style.display = 'block'; out.textContent = 'Checking live price, flow, regime...'
@@ -7107,6 +7144,7 @@ document.getElementById('pd-btn')?.addEventListener('click', async function() {
 // ── Strategy Sandbox ──────────────────────────────────────────────────────
 document.getElementById('sb-btn')?.addEventListener('click', async function() {
   const out = document.getElementById('sb-out')
+  if(!out) return
   this.disabled = true; this.textContent = '⚔️ Simulating 1000 hours...'
   out.style.display = 'block'; out.style.color = 'var(--accent)'; out.textContent = 'Running both strategies on real history...'
   const r = await ipcRenderer.invoke('backtest-strategy', {
@@ -7125,6 +7163,7 @@ document.getElementById('sb-btn')?.addEventListener('click', async function() {
 // ── Tax export ────────────────────────────────────────────────────────────
 document.getElementById('tax-btn')?.addEventListener('click', async () => {
   const st = document.getElementById('tax-status')
+  if(!st) return
   const r = await ipcRenderer.invoke('export-tax-csv').catch(() => null)
   if (st && r && r.error !== 'canceled') {
     st.style.display = 'block'
@@ -7147,6 +7186,7 @@ document.getElementById('ls-ca')?.addEventListener('blur', async function() {
 })
 document.getElementById('ls-callers-btn')?.addEventListener('click', async () => {
   const out = document.getElementById('ls-callers-out')
+  if(!out) return
   const r = await ipcRenderer.invoke('launch-caller-guide').catch(() => null)
   if (!r?.callers?.length) { out.innerHTML = '<div style="font-size:11px;color:var(--text2);">No caller data yet — track TG signals first, the guide builds itself from real outcomes</div>'; return }
   out.innerHTML = r.callers.map((c, i) => `
@@ -7158,6 +7198,7 @@ document.getElementById('ls-callers-btn')?.addEventListener('click', async () =>
 document.getElementById('ls-ask-btn')?.addEventListener('click', async function() {
   const q = document.getElementById('ls-question').value.trim()
   const box = document.getElementById('ls-advice')
+  if(!box) return
   if (!q) return
   this.textContent = '⏳'
   box.style.display = 'block'; box.textContent = 'Thinking through the launch...'
@@ -7203,21 +7244,23 @@ document.getElementById('feed-trade-btn')?.addEventListener('click', async () =>
   const coin = document.getElementById('feed-coin')?.value.trim()
   const note = document.getElementById('feed-note')?.value.trim()
   const st = document.getElementById('feed-status')
+  if(!st) return
   if (!coin || !note) { if (st) { st.style.display='block'; st.style.color='var(--red)'; st.textContent='Need coin + what happened' } return }
   const r = await ipcRenderer.invoke('feed-trade-lesson', {
     coin, direction: document.getElementById('feed-dir').value,
-    won: document.getElementById('feed-won').value === '1', note
+    won: (document.getElementById('feed-won')||{}).value === '1', note
   }).catch(() => null)
   if (st) {
     st.style.display = 'block'
     st.style.color = r?.success ? 'var(--green)' : 'var(--red)'
     st.textContent = r?.success ? `✅ Asuka learned it (${r.total} lessons total)` : '❌ Failed'
   }
-  if (r?.success) { document.getElementById('feed-coin').value=''; document.getElementById('feed-note').value='' }
+  if (r?.success) { setEl('feed-coin','value',''); const fn=document.getElementById('feed-note'); if(fn) fn.value='' }
 })
 
 document.getElementById('backtest-btn')?.addEventListener('click', async function() {
   const st = document.getElementById('backtest-status')
+  if(!st) return
   this.disabled = true; this.textContent = '🏋️ Training... (30-60s)'
   if (st) { st.style.display='block'; st.style.color='var(--accent)'; st.textContent='Replaying 1000 hours per coin...' }
   const r = await ipcRenderer.invoke('run-backtest-training').catch(() => null)
@@ -7231,12 +7274,14 @@ document.getElementById('backtest-btn')?.addEventListener('click', async functio
 
 document.getElementById('brain-export-btn')?.addEventListener('click', async () => {
   const st = document.getElementById('brain-status')
+  if(!st) return
   const r = await ipcRenderer.invoke('export-brain').catch(() => null)
   if (st) { st.style.display='block'; st.style.color = r?.success ? 'var(--green)' : 'var(--red)'
     st.textContent = r?.success ? `✅ Brain exported (${r.lessons} lessons) → ${r.path}` : (r?.error==='canceled'?'':'❌ Export failed') }
 })
 document.getElementById('brain-import-btn')?.addEventListener('click', async () => {
   const st = document.getElementById('brain-status')
+  if(!st) return
   const r = await ipcRenderer.invoke('import-brain').catch(() => null)
   if (st) { st.style.display='block'; st.style.color = r?.success ? 'var(--green)' : 'var(--red)'
     st.textContent = r?.success ? `✅ Brain merged — ${r.lessons} total lessons now` : (r?.error==='canceled'?'':'❌ Import failed') }
@@ -7247,6 +7292,7 @@ let _lastSnipeCA = null
 document.getElementById('snipe-analyze-btn')?.addEventListener('click', async () => {
   const ca = document.getElementById('snipe-ca')?.value.trim()
   const box = document.getElementById('snipe-result')
+  if(!box) return
   if (!ca || !box) return
   box.style.display = 'block'
   box.innerHTML = '<div style="font-size:11px;color:var(--accent);">⏳ Analyzing...</div>'
@@ -7312,9 +7358,10 @@ ipcRenderer.invoke('get-sponsored').then(c => {
   if (!c || localStorage.getItem('sponsor_dismissed') === String(c.name)) return
   const b = document.getElementById('sponsor-banner')
   if (!b) return
-  document.getElementById('sponsor-text').textContent = c.banner || c.name
+  setEl('sponsor-text','textContent',c.banner || c.name)
   if (c.url) {
     const lb = document.getElementById('sponsor-link-btn')
+    if(!lb) return
     lb.style.display = 'block'
     lb.addEventListener('click', () => ipcRenderer.invoke('open-url', c.url).catch(() => {}))
   }
@@ -7331,6 +7378,7 @@ async function updateOverviewStrip() {
     // Regime
     const regime = await ipcRenderer.invoke('get-market-regime').catch(() => null)
     const regimeEl = document.getElementById('ov-regime')
+    if(!regimeEl) return
     if (regimeEl && regime?.regime) {
       const r = regime.regime.toLowerCase()
       regimeEl.textContent = r === 'bull' ? '🐂 Bull' : r === 'bear' ? '🐻 Bear' : '〰️ Side'
@@ -7346,9 +7394,11 @@ async function updateOverviewStrip() {
       const todayPnl = todayClosed.reduce((s, t) => s + (t.pnl || 0), 0)
 
       const openEl = document.getElementById('ov-open')
+      if(!openEl) return
       if (openEl) openEl.textContent = open.length
 
       const pnlEl = document.getElementById('ov-today-pnl')
+      if(!pnlEl) return
       if (pnlEl) {
         pnlEl.textContent = (todayPnl >= 0 ? '+' : '') + '$' + todayPnl.toFixed(2)
         pnlEl.style.color = todayPnl > 0 ? '#34d399' : todayPnl < 0 ? '#ef4444' : 'var(--text)'
@@ -7357,6 +7407,7 @@ async function updateOverviewStrip() {
 
       // Glow on hero P&L too
       const heroPnl = document.getElementById('pt-pnl')
+      if(!heroPnl) return
       if (heroPnl) {
         const total = trades.trades.filter(t => t.status !== 'open').reduce((s,t) => s + (t.pnl||0), 0)
         heroPnl.classList.remove('profit', 'loss')
@@ -7373,6 +7424,7 @@ setTimeout(updateOverviewStrip, 1500)
 document.getElementById('wi-calc-btn')?.addEventListener('click', async () => {
   const coin = document.getElementById('wi-coin').value.trim()
   const out = document.getElementById('wi-out')
+  if(!out) return
   if (!coin) { out.style.display='block'; out.textContent='Enter a coin!'; return }
   out.style.display = 'block'; out.textContent = '🧮 Calculating...'
   const r = await ipcRenderer.invoke('what-if', {
@@ -7391,6 +7443,7 @@ document.getElementById('wi-calc-btn')?.addEventListener('click', async () => {
 document.getElementById('wi-demo-btn')?.addEventListener('click', async function() {
   const coin = document.getElementById('wi-coin').value.trim()
   const out = document.getElementById('wi-out')
+  if(!out) return
   if (!coin) { out.style.display='block'; out.textContent='Enter a coin!'; return }
   this.textContent = '⏳'
   const r = await ipcRenderer.invoke('open-demo-trade', {
@@ -7411,6 +7464,7 @@ async function updateAsukaScore() {
     const coin = (s?.tradingCoins || ['BTC'])[0]
     const r = await ipcRenderer.invoke('asuka-score', coin).catch(() => null)
     const el = document.getElementById('ov-asuka-score')
+    if(!el) return
     if (!el || !r) return
     el.textContent = `${coin} ${r.score}`
     el.style.color = r.score >= 65 ? '#34d399' : r.score <= 35 ? '#ef4444' : '#fbbf24'
@@ -7430,14 +7484,14 @@ async function showDailyGreeting() {
     const box = document.getElementById('daily-greeting')
     const h = new Date().getHours()
     const greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
-    document.getElementById('greeting-text').textContent = `${greet}! 💕`
-    if (s?.streak > 1) document.getElementById('streak-badge').textContent = `🔥 ${s.streak} day streak`
+    setEl('greeting-text','textContent',`${greet}! 💕`)
+    if (s?.streak > 1) setEl('streak-badge','textContent',`🔥 ${s.streak} day streak`)
     if (mood) {
       const fg = mood.fearGreed
       const parts = []
       if (fg) parts.push(`Market: ${fg.value || fg} ${fg.classification ? '(' + fg.classification + ')' : ''}`)
       if (mood.regime) parts.push(`${mood.regime} regime`)
-      document.getElementById('mood-text').textContent = parts.join(' • ')
+      setEl('mood-text','textContent',parts.join(' • '))
     }
     if (box) box.style.display = 'block'
   } catch(e) {}
@@ -7449,11 +7503,10 @@ async function updateAsukaLevel() {
   try {
     const l = await ipcRenderer.invoke('get-asuka-level')
     if (!l) return
-    document.getElementById('asuka-level').textContent = 'Lv.' + l.level
-    document.getElementById('asuka-xp').textContent = l.xp.toLocaleString() + ' XP'
+    setEl('asuka-level','textContent','Lv.' + l.level)
+    setEl('asuka-xp','textContent',l.xp.toLocaleString() + ' XP')
     document.getElementById('asuka-xp-bar').style.width = l.progress + '%'
-    if (l.breakdown) document.getElementById('asuka-xp-detail').textContent =
-      `${l.breakdown.lessons} lessons • ${l.breakdown.trades} trades • ${l.breakdown.studySessions} study sessions`
+    if (l.breakdown) setEl('asuka-xp-detail','textContent',`${l.breakdown.lessons} lessons • ${l.breakdown.trades} trades • ${l.breakdown.studySessions} study sessions`)
   } catch(e) {}
 }
 setTimeout(updateAsukaLevel, 2000)
@@ -7559,6 +7612,7 @@ async function updateEngineChip() {
   try {
     const s = await ipcRenderer.invoke('get-scanner-status').catch(() => null)
     const el = document.getElementById('ov-engine')
+    if(!el) return
     if (!el || !s) return
     if (s.paused) {
       el.innerHTML = '<span style="color:#ef4444;">⏸ Paused</span>'
@@ -7587,6 +7641,7 @@ document.getElementById('ov-close-all-btn')?.addEventListener('click', async fun
 const _ovOpenObserver = setInterval(() => {
   const open = parseInt(document.getElementById('ov-open')?.textContent || '0')
   const btn = document.getElementById('ov-close-all-btn')
+  if(!btn) return
   if (btn) btn.style.display = open > 0 ? 'block' : 'none'
 }, 5000)
 
@@ -7598,7 +7653,9 @@ document.getElementById('trade-add-alert-btn')?.addEventListener('click', () => 
   document.getElementById('add-alert-btn')?.click()
   setTimeout(() => {
     const src = document.getElementById('alerts-list')
+    if(!src) return
     const dst = document.getElementById('trade-alerts-list')
+    if(!dst) return
     if (src && dst) dst.innerHTML = src.innerHTML
   }, 400)
 })
@@ -7606,7 +7663,9 @@ document.getElementById('trade-add-alert-btn')?.addEventListener('click', () => 
 // Mirror lessons into Others → Memory journal when populated
 const _origLessonsObserver = new MutationObserver(() => {
   const src = document.getElementById('pt-lessons-list')
+  if(!src) return
   const dst = document.getElementById('memory-lessons-list')
+  if(!dst) return
   if (src && dst) dst.innerHTML = src.innerHTML
 })
 const _ptl = document.getElementById('pt-lessons-list')
@@ -7617,6 +7676,7 @@ if (_ptl) _origLessonsObserver.observe(_ptl, { childList: true, subtree: true })
 async function loadMemories() {
   const memories = await ipcRenderer.invoke('get-memories')
   const list = document.getElementById('memories-list')
+  if(!list) return
   if (!memories?.length) {
     list.innerHTML = '<div style="color:var(--text2);">No memories saved yet</div>'
     return
@@ -7639,6 +7699,7 @@ async function deleteMemory(id) {
 
 document.getElementById('save-memory-btn')?.addEventListener('click', async () => {
   const input = document.getElementById('memory-input')
+  if(!input) return
   const text = input.value.trim()
   if (!text) return
   await ipcRenderer.invoke('add-memory-ipc', text)
@@ -7658,11 +7719,14 @@ async function restoreNewSettings() {
     const settings = await ipcRenderer.invoke('get-settings')
     if (settings?.rageLockEnabled) {
       const rlt = document.getElementById('rage-lock-toggle')
+      if(!rlt) return
       const rls = document.getElementById('rage-lock-settings')
+      if(!rls) return
       if (rlt) rlt.classList.add('on')
       if (rls) rls.style.display = 'block'
     }
     const mbt = document.getElementById('morning-briefing-toggle')
+    if(!mbt) return
     if (settings?.morningBriefing && mbt) mbt.classList.add('on')
     loadMemories()
     loadPsychScore()
@@ -7722,6 +7786,7 @@ document.getElementById('spot-buy-btn')?.addEventListener('click', async () => {
   const coin = document.getElementById('spot-buy-coin').value
   const amount = parseFloat(document.getElementById('spot-buy-amount').value)
   const status = document.getElementById('spot-status')
+  if(!status) return
   if (!amount || amount <= 0) { status.textContent = 'Enter amount'; status.style.color = 'var(--red)'; return }
   status.textContent = `Buying $${amount} of ${coin}...`
   status.style.color = 'var(--text2)'
@@ -7730,7 +7795,7 @@ document.getElementById('spot-buy-btn')?.addEventListener('click', async () => {
     if (order) {
       status.textContent = `✅ Bought ${order.quantity} ${coin} at ~$${parseFloat(order.price||0).toLocaleString()}`
       status.style.color = 'var(--green)'
-      document.getElementById('spot-buy-amount').value = ''
+      setEl('spot-buy-amount','value','')
       setTimeout(loadSpotBalances, 1000)
     } else {
       status.textContent = '❌ Buy failed — check balance'
@@ -7746,6 +7811,7 @@ document.getElementById('spot-buy-btn')?.addEventListener('click', async () => {
 document.getElementById('spot-sell-btn')?.addEventListener('click', async () => {
   const coin = document.getElementById('spot-sell-coin').value
   const status = document.getElementById('spot-status')
+  if(!status) return
   status.textContent = `Selling ${spotSellPct}% of ${coin}...`
   status.style.color = 'var(--text2)'
   try {
@@ -7770,13 +7836,14 @@ document.getElementById('spot-limit-buy-btn')?.addEventListener('click', async (
   const price = parseFloat(document.getElementById('spot-limit-price').value)
   const amount = parseFloat(document.getElementById('spot-limit-amount').value)
   const status = document.getElementById('spot-status')
+  if(!status) return
   if (!price || !amount) { status.textContent = 'Enter price and amount'; status.style.color = 'var(--red)'; return }
   const order = await ipcRenderer.invoke('spot-limit-buy', { coin, amount, price })
   if (order) {
     status.textContent = `✅ Limit buy set: ${order.quantity} ${coin} at $${price.toLocaleString()}`
     status.style.color = 'var(--green)'
-    document.getElementById('spot-limit-price').value = ''
-    document.getElementById('spot-limit-amount').value = ''
+    setEl('spot-limit-price','value','')
+    setEl('spot-limit-amount','value','')
     loadOpenLimitOrders()
   } else {
     status.textContent = '❌ Limit order failed'
@@ -7802,7 +7869,7 @@ async function loadOpenLimitOrders() {
 async function cancelLimitOrder(symbol, orderId) {
   const cancelled = await ipcRenderer.invoke('cancel-spot-order', { symbol, orderId })
   if (cancelled) {
-    document.getElementById('spot-status').textContent = '✅ Order cancelled'
+    setEl('spot-status','textContent','✅ Order cancelled')
     document.getElementById('spot-status').style.color = 'var(--green)'
     loadOpenLimitOrders()
   }
@@ -7821,13 +7888,13 @@ document.getElementById('save-drawdown-btn')?.addEventListener('click', () => {
   const val = parseFloat(document.getElementById('max-drawdown-input').value)
   if (!val || val <= 0) return
   ipcRenderer.send('set-setting', 'maxDrawdown', val)
-  document.getElementById('drawdown-hint').textContent = `Auto-close if trade loses more than ${val}%`
+  setEl('drawdown-hint','textContent',`Auto-close if trade loses more than ${val}%`)
   document.getElementById('drawdown-hint').style.color = 'var(--red)'
 })
 document.getElementById('disable-drawdown-btn')?.addEventListener('click', () => {
-  document.getElementById('max-drawdown-input').value = ''
+  setEl('max-drawdown-input','value','')
   ipcRenderer.send('set-setting', 'maxDrawdown', null)
-  document.getElementById('drawdown-hint').textContent = 'Disabled — trades close only at SL or target'
+  setEl('drawdown-hint','textContent','Disabled — trades close only at SL or target')
   document.getElementById('drawdown-hint').style.color = 'var(--text2)'
 })
 
@@ -7897,8 +7964,8 @@ document.querySelectorAll('.interval-btn').forEach(btn => {
     const scansPerDay = 1440 / minutes
     const coinsCount = document.querySelectorAll('.coin-btn[data-coin].active').length || 4
     const dailyCost = (scansPerDay * coinsCount * 0.3 * 0.006).toFixed(2)
-    document.getElementById('scan-interval-hint').textContent = `Every ${minutes} min — ${scansPerDay} scans/day`
-    document.getElementById('scan-cost-hint').textContent = `Est. cost: ~$${dailyCost}/day (~$${(dailyCost * 30).toFixed(0)}/month)`
+    setEl('scan-interval-hint','textContent',`Every ${minutes} min — ${scansPerDay} scans/day`)
+    setEl('scan-cost-hint','textContent',`Est. cost: ~$${dailyCost}/day (~$${(dailyCost * 30).toFixed(0)}/month)`)
   })
 })
 
@@ -7912,6 +7979,7 @@ document.getElementById('independent-scanner-toggle')?.addEventListener('click',
 // ── Trading UI ──
 async function renderLeaderboard(stats) {
   const list = document.getElementById('pt-leaderboard')
+  if(!list) return
   if (!stats || !Object.keys(stats).length) { list.innerHTML = '<div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No data yet</div>'; return }
   const sorted = Object.entries(stats).sort((a, b) => b[1].winRate - a[1].winRate)
   const trustedCallers = await ipcRenderer.invoke('get-trusted-callers')
@@ -7981,9 +8049,13 @@ function renderOpenPositions(stats) {
   const unrealized = openTrades.reduce((s,t) => s+(t.unrealizedPnl||0), 0)
 
   const wrEl = document.getElementById('pt-winrate')
+  if(!wrEl) return
   const pnlEl = document.getElementById('pt-pnl')
+  if(!pnlEl) return
   const totalEl = document.getElementById('pt-total')
+  if(!totalEl) return
   const balEl = document.getElementById('pt-balance')
+  if(!balEl) return
   if (wrEl) { wrEl.textContent = `${winRate}%`; wrEl.style.color = winRate>=60?'var(--green)':winRate>=40?'var(--text)':'var(--red)' }
   if (pnlEl) { const d = pnl+unrealized; pnlEl.textContent = `${d>=0?'+':''}$${d.toFixed(2)}`; pnlEl.style.color = d>=0?'var(--green)':'var(--red)' }
   if (totalEl) totalEl.textContent = total
@@ -8013,6 +8085,7 @@ async function renderTradeHistory(stats) {
 
   // Render lessons
   const lessonsList = document.getElementById('pt-lessons-list')
+  if(!lessonsList) return
   if (lessonsList) {
     const lessons = await ipcRenderer.invoke('get-lessons').catch(() => [])
     if (lessons.length) {
@@ -8091,9 +8164,13 @@ function applySettingsToUI(settings) {
   try {
     // Toggles
     const autoEl = document.getElementById('auto-trade-toggle')
+    if(!autoEl) return
     const scanEl = document.getElementById('independent-scanner-toggle')
+    if(!scanEl) return
     const chartEl = document.getElementById('chart-analysis-toggle')
+    if(!chartEl) return
     const scalpEl = document.getElementById('scalp-toggle')
+    if(!scalpEl) return
     if (autoEl) autoEl.classList.toggle('on', !!settings.autoPaperTrade)
     if (scanEl) scanEl.classList.toggle('on', !!settings.independentScanner)
     if (chartEl) chartEl.classList.toggle('on', !!settings.chartAnalysis)
@@ -8105,6 +8182,7 @@ function applySettingsToUI(settings) {
         b.classList.toggle('active', parseInt(b.dataset.lev) === settings.paperLeverage)
       )
       const warn = document.getElementById('lev-warning')
+      if(!warn) return
       if (warn) warn.textContent = levWarnings[settings.paperLeverage] || ''
     }
 
@@ -8138,14 +8216,17 @@ function applySettingsToUI(settings) {
 
     // Trade size
     const sizeEl = document.getElementById('trade-size-input')
+    if(!sizeEl) return
     if (sizeEl && settings.paperTradeSize) sizeEl.value = settings.paperTradeSize
 
     // Scalp size
     const scalpSizeEl = document.getElementById('scalp-size-input')
+    if(!scalpSizeEl) return
     if (scalpSizeEl && settings.scalpSize) scalpSizeEl.value = settings.scalpSize
 
     // Drawdown
     const ddEl = document.getElementById('max-drawdown-input')
+    if(!ddEl) return
     if (ddEl && settings.maxDrawdown) ddEl.value = settings.maxDrawdown
 
     // TP/SL mode
@@ -8163,6 +8244,7 @@ function applySettingsToUI(settings) {
       document.getElementById('ta-manual-btn')?.classList.add('active')
       document.getElementById('ta-auto-btn')?.classList.remove('active')
       const panel = document.getElementById('ta-manual-panel')
+      if(!panel) return
       if (panel) panel.style.display = 'block'
     }
 
@@ -8209,6 +8291,7 @@ function applySettingsToUI(settings) {
 
     // Scalp panel visibility
     const scalpPanel = document.getElementById('scalp-settings-panel')
+    if(!scalpPanel) return
     if (scalpPanel) scalpPanel.style.display = settings.scalpTrading ? 'block' : 'none'
 
     // Rage lock settings
@@ -8254,8 +8337,11 @@ async function _old_stats_block() {
   // Restore all toggles
   try {
     const autoEl = document.getElementById('auto-trade-toggle')
+    if(!autoEl) return
     const scanEl = document.getElementById('independent-scanner-toggle')
+    if(!scanEl) return
     const chartEl = document.getElementById('chart-analysis-toggle')
+    if(!chartEl) return
     if (autoEl) autoEl.classList.toggle('on', !!settings?.autoPaperTrade)
     if (scanEl) scanEl.classList.toggle('on', !!settings?.independentScanner)
     if (chartEl) chartEl.classList.toggle('on', !!settings?.chartAnalysis)
@@ -8266,13 +8352,13 @@ async function _old_stats_block() {
     document.querySelectorAll('.lev-btn').forEach(b => {
       b.classList.toggle('active', parseInt(b.dataset.lev) === settings.paperLeverage)
     })
-    if(document.getElementById('lev-warning')) document.getElementById('lev-warning').textContent = levWarnings[settings.paperLeverage] || `${settings.paperLeverage}x leverage`
+    if(document.getElementById('lev-warning')) setEl('lev-warning','textContent',levWarnings[settings.paperLeverage] || `${settings.paperLeverage}x leverage`)
   }
 
   // Restore trade size
   if (settings?.paperTradeSize) {
-    document.getElementById('trade-size-input').value = settings.paperTradeSize
-    document.getElementById('size-hint').textContent = `Fixed size: $${settings.paperTradeSize} per trade`
+    setEl('trade-size-input','value',settings.paperTradeSize)
+    setEl('size-hint','textContent',`Fixed size: $${settings.paperTradeSize} per trade`)
   }
 
   // Restore scan interval
@@ -8281,7 +8367,7 @@ async function _old_stats_block() {
     b.classList.toggle('active', parseInt(b.dataset.min) === intervalMin)
   })
   const scansPerDay = Math.round(1440 / intervalMin)
-  document.getElementById('scan-interval-hint').textContent = `Every ${intervalMin} min — ${scansPerDay} scans/day`
+  setEl('scan-interval-hint','textContent',`Every ${intervalMin} min — ${scansPerDay} scans/day`)
 
   // Restore coin selections
   restoreCoinSelections(settings)
@@ -8302,14 +8388,14 @@ async function _old_stats_block() {
     })
   }
   if (settings?.scalpSize) {
-    document.getElementById('scalp-size-input').value = settings.scalpSize
-    document.getElementById('scalp-hint').textContent = `Scalp size: $${settings.scalpSize} per trade`
+    setEl('scalp-size-input','value',settings.scalpSize)
+    setEl('scalp-hint','textContent',`Scalp size: $${settings.scalpSize} per trade`)
   }
 
   // Restore max drawdown
   if (settings?.maxDrawdown) {
-    document.getElementById('max-drawdown-input').value = settings.maxDrawdown
-    document.getElementById('drawdown-hint').textContent = `Auto-close if trade loses more than ${settings.maxDrawdown}%`
+    setEl('max-drawdown-input','value',settings.maxDrawdown)
+    setEl('drawdown-hint','textContent',`Auto-close if trade loses more than ${settings.maxDrawdown}%`)
     document.getElementById('drawdown-hint').style.color = 'var(--red)'
   }
 
@@ -8321,19 +8407,21 @@ async function _old_stats_block() {
   const binanceWinRate = binanceClosed.length > 0 ? Math.round(binanceWins / binanceClosed.length * 100) : 0
   const binancePnl = binanceClosed.reduce((s, t) => s + (t.pnl || 0), 0)
 
-  document.getElementById('pt-winrate').textContent = `${binanceWinRate}%`
-  document.getElementById('pt-total').textContent = binanceClosed.length
-  document.getElementById('pt-balance').textContent = `$${Number(stats.balance || 100000).toLocaleString('en-US', {maximumFractionDigits:2})}`
+  setEl('pt-winrate','textContent',`${binanceWinRate}%`)
+  setEl('pt-total','textContent',binanceClosed.length)
+  setEl('pt-balance','textContent',`$${Number(stats.balance || 100000).toLocaleString('en-US', {maximumFractionDigits:2})}`)
   
   // Show Binance testnet indicator
   const binanceBar = document.getElementById('binance-status-bar')
+  if(!binanceBar) return
   if (stats.source === 'binance') {
     binanceBar.style.display = 'flex'
-    document.getElementById('binance-balance').textContent = `$${Number(stats.balance).toFixed(2)}`
-    document.getElementById('binance-positions').textContent = stats.openTrades
+    setEl('binance-balance','textContent',`$${Number(stats.balance).toFixed(2)}`)
+    setEl('binance-positions','textContent',stats.openTrades)
   }
 
   const pnlEl = document.getElementById('pt-pnl')
+  if(!pnlEl) return
   const unrealized = openTrades.reduce((s, t) => s + (t.unrealizedPnl || 0), 0)
   const totalDisplay = binancePnl + unrealized
   pnlEl.textContent = `${totalDisplay >= 0 ? '+' : ''}$${totalDisplay.toFixed(2)}`
@@ -8341,6 +8429,7 @@ async function _old_stats_block() {
 
   // Open positions
   const openList = document.getElementById('pt-open-list')
+  if(!openList) return
   const openTrades = stats.trades.filter(t => t.status === 'open' && t.useBinance)
   openList.innerHTML = openTrades.length ? openTrades.map(t => {
     const pnlClass = (t.unrealizedPnl || 0) >= 0 ? 'trade-pnl-pos' : 'trade-pnl-neg'
@@ -8384,6 +8473,7 @@ async function _old_stats_block() {
 
   // History
   const histList = document.getElementById('pt-history-list')
+  if(!histList) return
   const closed = stats.trades.filter(t => t.status !== 'open' && t.useBinance)
   histList.innerHTML = closed.length ? closed.map(t => {
     const conf = t.confidence || 0
@@ -8408,6 +8498,7 @@ async function _old_stats_block() {
   // Load lessons
   const lessonsData = await ipcRenderer.invoke('get-trading-lessons')
   const lessonsList = document.getElementById('lessons-list')
+  if(!lessonsList) return
   const lessons = lessonsData?.lessons || []
   if (lessons.length) {
     lessonsList.innerHTML = lessons.slice(-10).reverse().map(l => `
@@ -8597,16 +8688,16 @@ function loadIntelFeedUI() {
 async function loadPortfolio() {
   const wallets = settings.wallets || [];
   if (!wallets.length) {
-    document.getElementById('tokens-section').innerHTML = '<div class="empty-state">No wallets connected</div>';
-    document.getElementById('txns-section').innerHTML = '<div class="empty-state">Connect a wallet to see transactions</div>';
-    document.getElementById('port-value').textContent = '$0.00';
+    setEl('tokens-section','innerHTML','<div class="empty-state">No wallets connected</div>')
+    setEl('txns-section','innerHTML','<div class="empty-state">Connect a wallet to see transactions</div>')
+    setEl('port-value','textContent','$0.00')
     return;
   }
 
   // Only show "Loading" on FIRST load — afterwards keep showing last data while refreshing
   if (!window._lastPortfolio) {
-    document.getElementById('tokens-section').innerHTML = '<div class="empty-state">Loading...</div>';
-    document.getElementById('txns-section').innerHTML = '<div class="empty-state">Loading...</div>';
+    setEl('tokens-section','innerHTML','<div class="empty-state">Loading...</div>')
+    setEl('txns-section','innerHTML','<div class="empty-state">Loading...</div>')
   }
 
   let totalValue = 0;
@@ -8642,13 +8733,13 @@ async function loadPortfolio() {
 
   // Update total value
   if (window.countMoney) window.countMoney(document.getElementById('port-value'), totalValue);
-  else document.getElementById('port-value').textContent = `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  document.getElementById('port-value').style.opacity = anyStale ? '0.6' : '1';
+  else setEl('port-value','textContent',`$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+  { const _e=document.getElementById('port-value'); if(_e) _e.style.opacity = anyStale ? '0.6' : '1' }
   document.getElementById('port-value').title = anyStale ? 'Refreshing — showing last known values' : '';
 
   // Render tokens
   if (allTokens.length) {
-    document.getElementById('tokens-section').innerHTML = allTokens.slice(0, 20).map(t => `
+    setEl('tokens-section','innerHTML',allTokens.slice(0, 20).map(t => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2);">
         <div>
           <div style="font-size:13px;font-weight:600;">${t.symbol || 'Unknown'}</div>
@@ -8658,14 +8749,14 @@ async function loadPortfolio() {
           <div style="font-size:13px;font-weight:600;">$${(t.usdValue || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</div>
           <div style="font-size:11px;color:var(--text2);">${parseFloat(t.balance || 0).toFixed(4)} ${t.symbol}</div>
         </div>
-      </div>`).join('');
+      </div>`).join(''));
   } else {
-    document.getElementById('tokens-section').innerHTML = '<div class="empty-state">No tokens found</div>';
+    setEl('tokens-section','innerHTML','<div class="empty-state">No tokens found</div>')
   }
 
   // Render transactions
   if (allTxns.length) {
-    document.getElementById('txns-section').innerHTML = allTxns.slice(0, 20).map(t => `
+    setEl('txns-section','innerHTML',allTxns.slice(0, 20).map(t => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2);">
         <div>
           <div style="font-size:12px;font-weight:600;">${t.type || 'Transfer'} ${t.symbol || ''}</div>
@@ -8674,9 +8765,9 @@ async function loadPortfolio() {
         <div style="font-size:12px;color:${t.type === 'receive' ? 'var(--green)' : 'var(--text2)'};">
           ${t.type === 'receive' ? '+' : '-'}${parseFloat(t.amount || 0).toFixed(4)} ${t.symbol || ''}
         </div>
-      </div>`).join('');
+      </div>`).join(''));
   } else {
-    document.getElementById('txns-section').innerHTML = '<div class="empty-state">No recent transactions</div>';
+    setEl('txns-section','innerHTML','<div class="empty-state">No recent transactions</div>')
   }
 }
 
@@ -8695,6 +8786,7 @@ document.getElementById('edit-btn')?.addEventListener('click',()=>{
 document.getElementById('back-from-edit')?.addEventListener('click',()=>document.getElementById('edit-page').classList.remove('open'))
 function buildCharRow() {
   const row=document.getElementById('char-row')
+  if(!row) return
   row.innerHTML=chars.map((c,i)=>`<div class="char-card ${!c.free?'locked':''} ${i===0?'active':''}" data-idx="${i}">
     <div class="char-badge ${c.free?'free':'pro'}">${c.free?'Free':'Pro'}</div>
     <div class="char-emoji">${c.emoji}</div>
@@ -8703,7 +8795,18 @@ function buildCharRow() {
   row.querySelectorAll('.char-card:not(.locked)').forEach(card=>{
     card.addEventListener('click',()=>{
       row.querySelectorAll('.char-card').forEach(c=>c.classList.remove('active')); card.classList.add('active')
-      document.getElementById('edit-char-name').textContent=chars[parseInt(card.dataset.idx)].name
+      const chosen = chars[parseInt(card.dataset.idx)].name
+      setEl('edit-char-name','textContent',chosen)
+      // Swap the model ONLY if it actually changes (Nova=3D, everyone else=2D)
+      try {
+        const ipc = require('electron').ipcRenderer
+        const want = chosen === 'Nova' ? '3d' : '2d'
+        const cur = localStorage.getItem('asuka-model') || '2d'
+        if (want !== cur) {
+          localStorage.setItem('asuka-model', want)
+          if (want === '3d') ipc.invoke('open-3d'); else ipc.invoke('close-3d')
+        }
+      } catch(e){ console.error('char swap:', e) }
     })
   })
 }
@@ -8738,9 +8841,9 @@ async function initCustWaifu() {
 }
 
 async function loadCustSettings() {
-  if (settings.characterName) document.getElementById('c-name').value=settings.characterName
-  if (memory.wakeName) document.getElementById('c-wake').value=memory.wakeName
-  if (memory.voiceSpeed) { document.getElementById('c-speed').value=memory.voiceSpeed*100; updateSpeedVal() }
+  if (settings.characterName) setEl('c-name','value',settings.characterName)
+  if (memory.wakeName) setEl('c-wake','value',memory.wakeName)
+  if (memory.voiceSpeed) { setEl('c-speed','value',memory.voiceSpeed*100); updateSpeedVal() }
   document.querySelectorAll('[data-personality]').forEach(c=>c.classList.toggle('active',c.dataset.personality===(memory.personality||'chill')))
   document.querySelectorAll('[data-level]').forEach(c=>c.classList.toggle('active',c.dataset.level===(memory.learningLevel||'intermediate')))
   document.querySelectorAll('[data-ai]').forEach(c=>c.classList.toggle('active',c.dataset.ai===(settings.aiMode||'balanced')))
@@ -8754,7 +8857,7 @@ document.querySelectorAll('.item-card:not(.locked)').forEach(s=>s.addEventListen
   const grp=s.closest('.item-wrap'); grp.querySelectorAll('.item-card').forEach(x=>x.classList.remove('active')); s.classList.add('active')
 }))
 document.getElementById('c-speed')?.addEventListener('input',updateSpeedVal)
-function updateSpeedVal() { document.getElementById('c-speed-val').textContent=(document.getElementById('c-speed').value/100).toFixed(1)+'×' }
+function updateSpeedVal() { const e=document.getElementById('c-speed'); if(e) setEl('c-speed-val','textContent',(e.value/100).toFixed(1)+'×') }
 
 document.getElementById('cust-save')?.addEventListener('click',async()=>{
   const name=document.getElementById('c-name').value||'Asuka'
@@ -8768,12 +8871,12 @@ document.getElementById('cust-save')?.addEventListener('click',async()=>{
   await ipcRenderer.invoke('save-settings',settings)
   await ipcRenderer.invoke('save-memory',memory)
   document.getElementById('customize-page').classList.remove('open')
-  document.getElementById('waifu-name').textContent=name
-  document.getElementById('cust-name').textContent=name
+  setEl('waifu-name','textContent',name)
+  setEl('cust-name','textContent',name)
   const msg=`Got it! You can call me ${name} now.`
-  document.getElementById('waifu-speech').textContent=msg
+  setEl('waifu-speech','textContent',msg)
   await playAudio(await ipcRenderer.invoke('get-voice',msg))
-  document.getElementById('waifu-speech').textContent=''
+  setEl('waifu-speech','textContent','')
 })
 
 // ── Settings ──
@@ -8782,6 +8885,7 @@ document.getElementById('cust-save')?.addEventListener('click',async()=>{
 async function refreshModeDisplay() {
   const r = await ipcRenderer.invoke('get-app-mode').catch(()=>({mode:null}))
   const el = document.getElementById('s-current-mode')
+  if(!el) return
   if (el) el.textContent = r.mode === 'trading' ? '📈 Trading PRO' : r.mode === 'companion' ? '🌸 Companion' : 'not chosen'
 }
 document.getElementById('s-mode-companion')?.addEventListener('click', async () => {
@@ -8806,13 +8910,13 @@ document.getElementById('settings-open-btn')?.addEventListener('click',()=>{
   // Restore settings values
   const s = window._cachedSettings || {}
   const mem = window._cachedMemory || {}
-  if (s.coingeckoKey) document.getElementById('s-coingecko').value=s.coingeckoKey
-  if (s.moralisKey)   document.getElementById('s-moralis').value=s.moralisKey
-  if (s.youtubeKey)   document.getElementById('s-youtube').value=s.youtubeKey
-  if (s.etherscanKey) document.getElementById('s-etherscan').value=s.etherscanKey
-  if (mem.alarmTime)  document.getElementById('s-alarm').value=mem.alarmTime
-  if (mem.sleepHour)  document.getElementById('s-sleep').value=mem.sleepHour
-  if (mem.waterReminderMinutes) document.getElementById('s-water').value=mem.waterReminderMinutes
+  if (s.coingeckoKey) setEl('s-coingecko','value',s.coingeckoKey)
+  if (s.moralisKey)   setEl('s-moralis','value',s.moralisKey)
+  if (s.youtubeKey)   setEl('s-youtube','value',s.youtubeKey)
+  if (s.etherscanKey) setEl('s-etherscan','value',s.etherscanKey)
+  if (mem.alarmTime)  setEl('s-alarm','value',mem.alarmTime)
+  if (mem.sleepHour)  setEl('s-sleep','value',mem.sleepHour)
+  if (mem.waterReminderMinutes) setEl('s-water','value',mem.waterReminderMinutes)
 })
 
 document.getElementById('back-from-settings')?.addEventListener('click',()=>{
@@ -8841,9 +8945,9 @@ document.getElementById('settings-save-btn')?.addEventListener('click',async()=>
   await ipcRenderer.invoke('save-memory',memory)
   document.getElementById('settings-page').classList.remove('open')
   const msg='Settings saved!'
-  document.getElementById('waifu-speech').textContent=msg
+  setEl('waifu-speech','textContent',msg)
   await playAudio(await ipcRenderer.invoke('get-voice',msg))
-  document.getElementById('waifu-speech').textContent=''
+  setEl('waifu-speech','textContent','')
 })
 document.getElementById('export-btn')?.addEventListener('click',()=>ipcRenderer.invoke('export-data'))
 
@@ -8932,8 +9036,8 @@ document.getElementById('dev-save-pwd-btn')?.addEventListener('click', async () 
   await devApiCall('changePassword', { value: pwd })
   _devToken = pwd
   localStorage.setItem('dev_token', pwd)
-  document.getElementById('dev-new-pwd').value = ''
-  document.getElementById('dev-unlock-err').textContent = ''
+  setEl('dev-new-pwd','value','')
+  setEl('dev-unlock-err','textContent','')
   alert('Password changed!')
 })
 
@@ -8952,9 +9056,9 @@ document.getElementById('import-btn')?.addEventListener('click',()=>{
   inp.onchange=async e=>{
     const txt=await e.target.files[0].text()
     const result=await ipcRenderer.invoke('restore-backup',txt)
-    document.getElementById('waifu-speech').textContent=result
+    setEl('waifu-speech','textContent',result)
     await playAudio(await ipcRenderer.invoke('get-voice',result))
-    document.getElementById('waifu-speech').textContent=''
+    setEl('waifu-speech','textContent','')
   }; inp.click()
 })
 
@@ -8983,6 +9087,7 @@ function applyMode(mode) {
   const tgTab = document.querySelector('.page-tab[data-page="2"]')
   const tradingTab = document.querySelector('.page-tab[data-page="3"]')
   const webTab = document.getElementById('website-tab')
+  if(!webTab) return
   if (tgTab) tgTab.style.display = companion ? 'none' : ''
   if (tradingTab) tradingTab.style.display = companion ? 'none' : ''
   // Show the standalone Website tab only in companion mode
@@ -8992,6 +9097,7 @@ function applyMode(mode) {
   if (wiz) {
     if (companion) {
       const host = document.getElementById('website-page-host')
+      if(!host) return
       if (host && wiz.parentElement !== host) host.appendChild(wiz)
     } else {
       const launch = document.getElementById('tab-launch')
@@ -9050,6 +9156,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   </div>
 </div></div>
 <script>
+
+// null-safe element setter (auto-added): setEl('id','innerHTML', value)
+function setEl(id, prop, val){ const e=document.getElementById(id); if(e) e[prop]=val; return e }
 // ══ Premium layer: themes, Cmd+K, onboarding, sparklines, count-up ══
 (function(){
   // ── Themes ──
@@ -9071,6 +9180,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const ca = document.getElementById('safety-ca').value.trim()
     if (!ca) return
     const out = document.getElementById('safety-result')
+    if(!out) return
     out.innerHTML = '<div class="skeleton" style="height:60px;"></div>'
     const ipc = require('electron').ipcRenderer
     const r = await ipc.invoke('safety-card', { ca, chain: 'eth' }).catch(()=>null)
@@ -9088,6 +9198,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     ipc.invoke('get-auto-launch').then(r => { const el = document.getElementById('s-autolaunch'); if (el) el.checked = !!r?.on })
     document.getElementById('s-autolaunch')?.addEventListener('change', (e) => ipc.invoke('set-auto-launch', { on: e.target.checked })) } catch(e){}
   document.querySelectorAll('.theme-chip').forEach(c => c.onclick = () => applyTheme(c.dataset.theme))
+
+  document.querySelectorAll('.model-chip').forEach(c => c.onclick = () => {
+    document.querySelectorAll('.model-chip').forEach(x => { x.classList.remove('active'); x.style.borderColor = 'var(--border)' })
+    c.classList.add('active'); c.style.borderColor = 'var(--accent)'
+    localStorage.setItem('asuka-model', c.dataset.model)
+    try {
+      const ipc = require('electron').ipcRenderer
+      if (c.dataset.model === '3d') { console.log('opening Nova 3D'); ipc.invoke('open-3d') }
+      else { console.log('closing Nova, back to 2D'); ipc.invoke('close-3d') }
+    } catch(e) { console.error('model switch error:', e) }
+  })
 
   // ── Sparkline history + renderer ──
   window._ph = JSON.parse(localStorage.getItem('price-hist') || '{}')
@@ -9165,11 +9286,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   const ob = document.getElementById('onboard')
   function obRender() {
     const s = STEPS[obI]
-    document.getElementById('ob-emoji').textContent = s.e
-    document.getElementById('ob-title').textContent = s.t
-    document.getElementById('ob-text').textContent = s.x
-    document.getElementById('onboard-dots').innerHTML = STEPS.map((_,i)=>'<span class="' + (i<=obI?'on':'') + '"></span>').join('')
-    document.getElementById('ob-next').textContent = obI === STEPS.length-1 ? 'Get started' : 'Next'
+    setEl('ob-emoji','textContent',s.e)
+    setEl('ob-title','textContent',s.t)
+    setEl('ob-text','textContent',s.x)
+    setEl('onboard-dots','innerHTML',STEPS.map((_,i)=>'<span class="' + (i<=obI?'on':'') + '"></span>').join(''))
+    setEl('ob-next','textContent',obI === STEPS.length-1 ? 'Get started' : 'Next')
   }
   function obDone(){ ob.classList.remove('show'); localStorage.setItem('asuka-onboarded','1') }
   document.getElementById('ob-next').onclick = () => { if (obI < STEPS.length-1) { obI++; obRender() } else obDone() }
@@ -9180,15 +9301,15 @@ window.addEventListener('DOMContentLoaded', async () => {
   const origDone = obDone
   function firstMeeting() {
     ob.classList.add('show')
-    document.getElementById('onboard-dots').innerHTML = ''
-    document.getElementById('ob-emoji').textContent = '🌸'
-    document.getElementById('ob-title').textContent = "Before we start… tell me about you?"
-    document.getElementById('ob-text').innerHTML =
-      '<input id="fm-name" placeholder="Your name" style="width:100%;margin-bottom:8px;padding:11px 14px;border-radius:11px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;outline:none;">' +
+    setEl('onboard-dots','innerHTML','')
+    setEl('ob-emoji','textContent','🌸')
+    setEl('ob-title','textContent',"Before we start… tell me about you?")
+    setEl('ob-text','innerHTML','<input id="fm-name" placeholder="Your name" style="width:100%;margin-bottom:8px;padding:11px 14px;border-radius:11px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;outline:none;">' +
       '<input id="fm-callme" placeholder="What should I call you? (optional)" style="width:100%;margin-bottom:8px;padding:11px 14px;border-radius:11px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;outline:none;">' +
-      '<input id="fm-dream" placeholder="Your dream — what are we working toward?" style="width:100%;padding:11px 14px;border-radius:11px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;outline:none;">'
+      '<input id="fm-dream" placeholder="Your dream — what are we working toward?" style="width:100%;padding:11px 14px;border-radius:11px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;outline:none;">')
     document.getElementById('ob-skip').style.display = 'none'
     const nx = document.getElementById('ob-next')
+    if(!nx) return
     nx.textContent = "Nice to meet you 💕"
     nx.onclick = async () => {
       const name = document.getElementById('fm-name')?.value.trim()
@@ -9248,10 +9369,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   // ── Risk disclaimer (one-time accept, security pass) ──
   if (!localStorage.getItem('asuka-tos') && localStorage.getItem('asuka-onboarded') && localStorage.getItem('asuka-met')) {
     ob.classList.add('show')
-    document.getElementById('onboard-dots').innerHTML = ''
-    document.getElementById('ob-emoji').textContent = '⚠️'
-    document.getElementById('ob-title').textContent = 'Before you trade'
-    document.getElementById('ob-text').textContent = 'ASUKA is paper trading — simulated, no real funds move. Nothing here is financial advice. Advisor calls are their opinions, not ours. Crypto is volatile; only ever risk what you can afford to lose.'
+    setEl('onboard-dots','innerHTML','')
+    setEl('ob-emoji','textContent','⚠️')
+    setEl('ob-title','textContent','Before you trade')
+    setEl('ob-text','textContent','ASUKA is paper trading — simulated, no real funds move. Nothing here is financial advice. Advisor calls are their opinions, not ours. Crypto is volatile; only ever risk what you can afford to lose.')
     document.getElementById('ob-skip').style.display = 'none'
     const nx2 = document.getElementById('ob-next'); nx2.textContent = 'I understand'
     nx2.onclick = () => { localStorage.setItem('asuka-tos','1'); ob.classList.remove('show') }
@@ -9326,6 +9447,33 @@ window.addEventListener('DOMContentLoaded', async () => {
     } catch(e){}
   })()
 
+  // ── 🖼️ Wallpaper picker ──
+  window.loadWallpapers = async function() {
+    const ipc = require('electron').ipcRenderer
+    const grid = document.getElementById('wp-grid'); if (!grid) return
+    const r = await ipc.invoke('list-scenes').catch(()=>({scenes:[]}))
+    const scenes = r?.scenes || []
+    const pixelTile = `<div class="wp-item" data-name="__pixelroom__" style="cursor:pointer;border:1px solid rgba(77,225,193,.35);border-radius:10px;padding:4px;text-align:center;background:rgba(77,225,193,.08);"><div style="width:100%;height:54px;border-radius:8px;background:linear-gradient(135deg,#2b2a4a,#3a3358);display:flex;align-items:center;justify-content:center;font-size:24px;">🕹️</div><div style="font-size:10px;color:#4de1c1;margin-top:3px;">Pixel Room</div></div>`
+    if (!scenes.length) { grid.innerHTML = pixelTile + '<div style="grid-column:2/4;color:var(--text3);font-size:12px;display:flex;align-items:center;">Drop images/videos into assets/scenes/ for more.</div>'; }
+    else grid.innerHTML = pixelTile + scenes.map(s => {
+      const src = 'file://' + s.path.replace(/'/g, "\\'")
+      const thumb = s.video
+        ? `<video src="${src}" muted style="width:100%;height:54px;object-fit:cover;border-radius:8px;"></video>`
+        : `<div style="width:100%;height:54px;border-radius:8px;background:url('${src}') center/cover;"></div>`
+      return `<div class="wp-item" data-name="${s.name}" style="cursor:pointer;border:1px solid var(--border);border-radius:10px;padding:4px;text-align:center;">
+        ${thumb}<div style="font-size:10px;color:var(--text2);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.name}${s.video?' 🎬':''}</div></div>`
+    }).join('')
+    grid.querySelectorAll('.wp-item').forEach(el => el.onclick = async () => {
+      console.log('🕹️ [1] wallpaper tile clicked:', el.dataset.name)
+      const r = await ipc.invoke('apply-scene', { name: el.dataset.name }).catch(e=>{console.error('🕹️ apply-scene invoke failed:', e); return null})
+      console.log('🕹️ [2] apply-scene IPC result:', r)
+      grid.querySelectorAll('.wp-item').forEach(x => x.style.borderColor = 'var(--border)')
+      el.style.borderColor = 'var(--accent)'
+    })
+  }
+  document.getElementById('wp-none')?.addEventListener('click', () => require('electron').ipcRenderer.invoke('apply-scene', { name: null }).catch(()=>{}))
+  setTimeout(loadWallpapers, 2800)
+
   // ── 🎯 Daily quests ──
   window.loadQuests = async function() {
     const ipc = require('electron').ipcRenderer
@@ -9333,6 +9481,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const el = document.getElementById('quest-list'); if (!el || !q) return
     el.innerHTML = q.quests.map(x => `<div style="padding:4px 0;">${x.done ? '✅' : '⬜'} ${x.label}</div>`).join('')
     const btn = document.getElementById('quest-claim')
+    if(!btn) return
     btn.style.display = (!q.claimed && q.quests.every(x=>x.done)) ? 'inline-block' : 'none'
     if (q.claimed) el.innerHTML += '<div style="color:var(--green);padding-top:4px;">Claimed today — see you tomorrow 🌸</div>'
     btn.onclick = async () => { const r = await ipc.invoke('quests-claim').catch(()=>null); if (r?.ok) loadQuests() }
@@ -9380,44 +9529,44 @@ window.addEventListener('DOMContentLoaded', async () => {
     const r = await ipc.invoke('companion-get').catch(()=>null)
     if (!r) return
     const c = r.companion
-    document.getElementById('her-tier').textContent = `${r.tier.emoji} ${r.tier.name} · ${r.bondXP} XP`
+    setEl('her-tier','textContent',`${r.tier.emoji} ${r.tier.name} · ${r.bondXP} XP`)
     const span = r.nextTier ? (r.nextTier.xp - (r.tier.xp||0)) : 1
     document.getElementById('her-xpfill').style.width = r.nextTier ? Math.min(100,((r.bondXP - r.tier.xp)/span*100)) + '%' : '100%'
     const met = c.flags.firstDay
-    document.getElementById('her-stats').innerHTML =
-      `<span>💭 mood: <b>${c.mood?.v||'content'}</b></span>` +
+    setEl('her-stats','innerHTML',`<span>💭 mood: <b>${c.mood?.v||'content'}</b></span>` +
       `<span>📈 her record: <b>${r.record.right}W / ${r.record.wrong}L</b></span>` +
       `<span>💕 met: <b>${met}</b></span>` +
-      (r.habits.length ? `<span>👀 she's noticed: <b>${r.habits.join(' · ')}</b></span>` : '')
-    document.getElementById('her-callme').value = c.profile.callMe || ''
-    document.getElementById('her-bday').value = c.profile.birthday || ''
-    document.getElementById('her-dream').value = c.profile.dream || ''
-    document.getElementById('her-safeword').value = c.profile.safeword || ''
-    document.getElementById('her-teasing').value = c.sliders.teasing ?? 45
-    document.getElementById('her-sweet').value = c.sliders.sweetness ?? 60
-    document.getElementById('her-chatty').value = c.sliders.chattiness ?? 55
-    document.getElementById('her-diary').innerHTML = (c.diary||[]).slice(0,14).map(x =>
+      (r.habits.length ? `<span>👀 she's noticed: <b>${r.habits.join(' · ')}</b></span>` : ''))
+    setEl('her-callme','value',c.profile.callMe || '')
+    setEl('her-bday','value',c.profile.birthday || '')
+    setEl('her-dream','value',c.profile.dream || '')
+    setEl('her-safeword','value',c.profile.safeword || '')
+    setEl('her-teasing','value',c.sliders.teasing ?? 45)
+    setEl('her-sweet','value',c.sliders.sweetness ?? 60)
+    setEl('her-chatty','value',c.sliders.chattiness ?? 55)
+    setEl('her-diary','innerHTML',(c.diary||[]).slice(0,14).map(x =>
       `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 13px;margin-bottom:6px;"><div style="font-size:10px;color:var(--text3);margin-bottom:3px;">${x.date}</div><div style="font-size:12px;line-height:1.5;">${x.entry}</div></div>`).join('')
-      || '<div style="color:var(--text3);font-size:12px;">No entries yet — she writes her first one tonight.</div>'
-    document.getElementById('her-moments').innerHTML = (c.moments||[]).slice(0,20).map(x =>
+      || '<div style="color:var(--text3);font-size:12px;">No entries yet — she writes her first one tonight.</div>')
+    setEl('her-moments','innerHTML',(c.moments||[]).slice(0,20).map(x =>
       `<div style="display:flex;justify-content:space-between;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 13px;margin-bottom:6px;font-size:12px;"><span>${x.title}</span><span style="color:var(--text3);">${x.detail||''} · ${x.date}</span></div>`).join('')
-      || '<div style="color:var(--text3);font-size:12px;">Your story together starts here — first big win, first lesson, anniversaries.</div>'
+      || '<div style="color:var(--text3);font-size:12px;">Your story together starts here — first big win, first lesson, anniversaries.</div>')
     const sh = await ipc.invoke('get-shadow-stats').catch(()=>null)
     if (sh?.stats && document.getElementById('her-shadow')) {
       const s = sh.stats, tot = (s.wouldWin||0)+(s.wouldLose||0)+(s.neutral||0)
-      document.getElementById('her-shadow').innerHTML = tot
+      setEl('her-shadow','innerHTML',tot
         ? `🕶️ Shadow mode — if you'd let her calls run untouched: <b style="color:var(--green)">${s.wouldWin||0} would-be wins</b> · <b style="color:var(--red)">${s.wouldLose||0} would-be losses</b> · ${s.neutral||0} neutral`
-        : '🕶️ Shadow mode: data builds as trades you touched get simulated.'
+        : '🕶️ Shadow mode: data builds as trades you touched get simulated.')
     }
     const reps = (c.diary||[]).filter(x => (x.entry||'').startsWith('📋 WEEKLY REPORT'))
-    if (document.getElementById('her-reports')) document.getElementById('her-reports').innerHTML = reps.slice(0,8).map(x =>
+    if (document.getElementById('her-reports')) setEl('her-reports','innerHTML',reps.slice(0,8).map(x =>
       `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 13px;margin-bottom:6px;"><div style="font-size:10px;color:var(--text3);margin-bottom:3px;">${x.date}</div><div style="font-size:12px;line-height:1.5;">${x.entry.replace('📋 WEEKLY REPORT — ','')}</div></div>`).join('')
-      || '<div style="color:var(--text3);font-size:12px;">First report card this Sunday evening — or tap "Review my week now".</div>'
+      || '<div style="color:var(--text3);font-size:12px;">First report card this Sunday evening — or tap "Review my week now".</div>')
     // keep report entries out of the main diary list
-    document.getElementById('her-diary').innerHTML = (c.diary||[]).filter(x=>!(x.entry||'').startsWith('📋')).slice(0,14).map(x =>
+    setEl('her-diary','innerHTML',(c.diary||[]).filter(x=>!(x.entry||'').startsWith('📋')).slice(0,14).map(x =>
       `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 13px;margin-bottom:6px;"><div style="font-size:10px;color:var(--text3);margin-bottom:3px;">${x.date}</div><div style="font-size:12px;line-height:1.5;">${x.entry}</div></div>`).join('')
-      || '<div style="color:var(--text3);font-size:12px;">No entries yet — she writes her first one tonight.</div>'
+      || '<div style="color:var(--text3);font-size:12px;">No entries yet — she writes her first one tonight.</div>')
     const rvBtn = document.getElementById('her-review-now')
+    if(!rvBtn) return
     if (rvBtn) rvBtn.onclick = async () => { rvBtn.textContent = 'reviewing…'; await ipc.invoke('weekly-report').catch(()=>{}); rvBtn.textContent = 'Review my week now'; loadHerTab() }
     document.getElementById('her-save').onclick = async () => {
       await ipc.invoke('companion-set', { profile: {
@@ -9432,7 +9581,56 @@ window.addEventListener('DOMContentLoaded', async () => {
       const b = document.getElementById('her-save'); b.textContent = 'Saved 💕'; setTimeout(()=>b.textContent='Save', 1400)
     }
   }
-})()
+})();
+
+  // ── 🐦 X Manager wiring ──
+  (function(){
+   try {
+    const ipc = require('electron').ipcRenderer
+    const $ = id => document.getElementById(id)
+    async function loadXM(){
+      const d = await ipc.invoke('xmgr-get').catch(()=>null); if(!d) return
+      if(!$('xm-enabled')) return   // tab not present — bail safely
+      const set = (id,prop,val)=>{ const el=$(id); if(el) el[prop]=val }
+      set('xm-enabled','checked',d.enabled); set('xm-enabled-lbl','textContent',d.enabled?'On':'Off')
+      set('xm-name','value',d.project.name||''); set('xm-ticker','value',d.project.ticker||'')
+      set('xm-handle','value',d.project.handle||''); set('xm-vibe','value',d.project.vibe||'')
+      set('xm-apikey','value',d.creds.apiKey||''); set('xm-token','value',d.creds.accessToken||'')
+      set('xm-post','checked',d.behavior.post); set('xm-retweet','checked',d.behavior.retweet)
+      set('xm-reply','checked',d.behavior.reply); set('xm-perday','value',d.behavior.postsPerDay||6)
+      loadXMLog()
+    }
+    async function loadXMLog(){
+      const log = await ipc.invoke('xmgr-log').catch(()=>[])
+      const icon = { posted:'✅', replied:'💬', blocked:'🚫', skipped_reply:'⏭️', would_post:'📝', error:'⚠️', manual:'✅' }
+      $('xm-log').innerHTML = log.length ? log.map(l=>{
+        const t = new Date(l.at).toLocaleTimeString()
+        const c = l.action==='blocked'?'#ff6b6b':l.action==='posted'||l.action==='replied'?'#4de1c1':'var(--text2)'
+        return `<div style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05);"><span style="color:${c}">${icon[l.action]||'•'} ${l.action}</span> ${l.reason?'('+l.reason+') ':''}<span style="color:var(--text2)">${t}</span><br><span style="opacity:.8">${(l.text||'').slice(0,120)}</span></div>`
+      }).join('') : '<div style="color:var(--text2)">Nothing yet.</div>'
+    }
+    $('xm-save')?.addEventListener('click', async ()=>{
+      await ipc.invoke('xmgr-set', {
+        enabled: $('xm-enabled').checked,
+        project: { name:$('xm-name').value, ticker:$('xm-ticker').value.replace(/^\$/,''), handle:$('xm-handle').value, vibe:$('xm-vibe').value||'confident, community-first, playful' },
+        creds: { apiKey:$('xm-apikey').value, ...(document.getElementById('xm-apisecret').value?{apiSecret:$('xm-apisecret').value}:{}) , accessToken:$('xm-token').value, ...(document.getElementById('xm-tokensecret').value?{accessSecret:$('xm-tokensecret').value}:{}) },
+        behavior: { post:$('xm-post').checked, retweet:$('xm-retweet').checked, reply:$('xm-reply').checked, postsPerDay:parseInt($('xm-perday').value)||6 }
+      })
+      $('xm-save').textContent = '✓ Saved'; setTimeout(()=>$('xm-save').textContent='💾 Save',1500)
+    })
+    $('xm-enabled')?.addEventListener('change', ()=>{ $('xm-enabled-lbl').textContent = $('xm-enabled').checked?'On':'Off' })
+    $('xm-preview')?.addEventListener('click', async ()=>{
+      const out = $('xm-preview-out'); out.style.display='block'; out.textContent='Writing…'
+      const r = await ipc.invoke('xmgr-test-post', { context:'a genuine community post, no price talk' }).catch(()=>null)
+      if(!r){ out.textContent='Error'; return }
+      out.innerHTML = `<b>Preview:</b> ${r.text}<br><span style="color:${r.guardrail.ok?'#4de1c1':'#ff6b6b'}">${r.guardrail.ok?'✅ passes safety filter':'🚫 blocked: '+r.guardrail.reason}</span>`
+    })
+    // load when auto-desk tab opens
+    document.querySelectorAll('[data-tab="autodesk"]').forEach(b=>b.addEventListener('click', ()=>setTimeout(loadXM,200)))
+    setTimeout(()=>{ if(document.getElementById('xm-name')) loadXM() }, 2500)
+   } catch(e){ console.error('X manager init failed (non-fatal):', e) }
+  })()
+
 </script>
 </body>
 </html>
