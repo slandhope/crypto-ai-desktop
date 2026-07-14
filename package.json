@@ -36,11 +36,13 @@
     "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^6.5.10",
     "puppeteer-core": "^25.3.0",
+    "qrcode": "^1.5.4",
     "robotjs": "^0.7.1",
     "screenshot-desktop": "^1.15.4",
     "telegram": "^2.26.22",
     "three": "^0.185.1",
     "twitter-api-v2": "^1.29.0",
+    "whatsapp-web.js": "^1.34.7",
     "ws": "^8.21.0",
     "xlsx": "^0.18.5"
   }

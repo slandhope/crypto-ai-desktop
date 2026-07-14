@@ -127,7 +127,6 @@
   <div id="gemini-indicator">● GEMINI LIVE</div>
 
   <div id="history-btn"  class="btn" title="Chat history">📜</div>
-  <div id="chat-btn"     class="btn" title="Type message">💬</div>
   <div id="her-mute-btn" class="btn" title="Mute her voice">🔊</div>
   <div id="mic-mute-btn" class="btn" title="Mute your mic">🎤</div>
   <div id="webcam-btn"   class="btn" title="Toggle camera">📷</div>
@@ -191,18 +190,25 @@
     <div id="history-list"></div>
   </div>
 
-  <div id="chat-panel">
-    <div id="input-row">
-      <input id="user-input" type="text" placeholder="Ask anything or paste CA..." />
-      <div id="send-btn">Send</div>
-    </div>
-  </div>
-
   <div id="confirm-bar">
     <div id="confirm-text"></div>
     <div id="confirm-btns">
       <div class="c-yes" id="confirm-yes">Yes</div>
       <div class="c-no"  id="confirm-no">No</div>
+    </div>
+  </div>
+
+  <!-- 💹 Voice trade confirmation card -->
+  <div id="trade-card" style="display:none;position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);width:min(88vw,340px);z-index:10001;background:rgba(10,12,18,0.98);border:2px solid #2dd4ff;border-radius:18px;padding:18px;box-shadow:0 16px 60px rgba(0,0,0,0.7);font-family:system-ui;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div id="tc-side" style="font-size:13px;font-weight:800;letter-spacing:1px;"></div>
+      <div id="tc-coin" style="font-size:16px;font-weight:800;font-family:ui-monospace,monospace;color:#f4f5fb;"></div>
+    </div>
+    <div id="tc-rows" style="font-size:12px;color:#aab2c7;line-height:2;font-family:ui-monospace,monospace;"></div>
+    <div style="font-size:10px;color:#fbbf24;margin:8px 0 12px;line-height:1.5;">⚠️ Real order. Double-check before confirming.</div>
+    <div style="display:flex;gap:8px;">
+      <button id="tc-confirm" style="flex:1;padding:12px;border:none;border-radius:11px;font-weight:800;font-size:13px;cursor:pointer;background:linear-gradient(135deg,#34d399,#10b981);color:#04120b;">✓ Confirm</button>
+      <button id="tc-cancel" style="flex:1;padding:12px;border:none;border-radius:11px;font-weight:800;font-size:13px;cursor:pointer;background:rgba(251,113,133,0.15);border:1px solid rgba(251,113,133,0.4);color:#fb7185;">✕ Cancel</button>
     </div>
   </div>
 
@@ -301,9 +307,9 @@
 
     // ── Drag window ────────────────────────────────────────────────────────
     let isDragging = false, dragX, dragY
-    const noDragIds = ['history-btn','chat-btn','her-mute-btn','mic-mute-btn','user-input','send-btn','webcam-btn','dashboard-btn','study-btn','care-btn','confirm-yes','confirm-no','history-clear','ab-in','ab-send','ab-file','ab-chip','ab-chip-x','ab-chip-name','wp-btn','wp-pop','wp-pop-none']
+    const noDragIds = ['history-btn','chat-btn','her-mute-btn','mic-mute-btn','user-input','send-btn','webcam-btn','dashboard-btn','study-btn','care-btn','confirm-yes','confirm-no','history-clear','ab-in','ab-send','ab-file','ab-chip','ab-chip-x','ab-chip-name','wp-btn','wp-pop','wp-pop-none','sd-toggle']
     document.addEventListener('mousedown', e => {
-      if (noDragIds.includes(e.target.id) || e.target.closest('#ask-bar') || e.target.closest('#wp-pop') || e.target.closest('#wp-btn') || e.target.closest('#chat-panel') || e.target.closest('#confirm-bar') || e.target.closest('#history-panel')) return
+      if (noDragIds.includes(e.target.id) || e.target.closest('#ask-bar') || e.target.closest('#wp-pop') || e.target.closest('#wp-btn') || e.target.closest('#chat-panel') || e.target.closest('#confirm-bar') || e.target.closest('#history-panel') || e.target.closest('#side-drawer')) return
       isDragging = true; dragX = e.screenX; dragY = e.screenY; e.preventDefault()
     })
     document.addEventListener('mousemove', e => {
@@ -845,6 +851,71 @@ VOICE RESPONSE RULES — CRITICAL:
                       },
                       required: ['type']
                     }
+                  },
+                  {
+                    name: 'make_video',
+                    description: 'Create a rendered animated video lesson (with narration) explaining any concept — math, physics, trading, anything. Takes 1-3 minutes to render. Use when they ask for a video about/explaining something.',
+                    parameters: { type: 'object', properties: { topic: { type: 'string', description: 'what to explain' } }, required: ['topic'] }
+                  },
+                  {
+                    name: 'why_this_trade',
+                    description: 'Explain WHY a recent trade was taken — the full reasoning, agent votes, bull/bear arguments. Use when they ask "why did you take this trade", "explain the SOL entry", "what was the logic".',
+                    parameters: { type: 'object', properties: { coin: { type: 'string', description: 'optional: which coin, else latest trade' } } }
+                  },
+                  {
+                    name: 'trade_action',
+                    description: 'The user wants to BUY, SELL, or CLOSE a position by voice ("buy 100 dollars of SOL", "sell half my ETH", "close my BTC trade"). This shows them a confirmation card — nothing executes until they tap Confirm. Always use this for any order request.',
+                    parameters: { type: 'object', properties: {
+                      action: { type: 'string', enum: ['buy','sell','close'] },
+                      coin: { type: 'string', description: 'symbol e.g. BTC SOL ETH' },
+                      usd_amount: { type: 'number', description: 'for buys: USD amount' },
+                      percent: { type: 'number', description: 'for sells: percent of holding (e.g. 50 for half, 100 for all)' }
+                    }, required: ['action','coin'] }
+                  },
+                  {
+                    name: 'check_calendar',
+                    description: 'Check the user Apple Calendar: today or upcoming events. Use when they ask about their schedule, meetings, "what is my day like".',
+                    parameters: { type: 'object', properties: { days: { type: 'number', description: 'how many days ahead, default 1' } } }
+                  },
+                  {
+                    name: 'morning_ritual',
+                    description: 'The full morning briefing in one: unread texts, notifications, calendar today, portfolio overnight, fear & greed. Use when they say good morning / give me my briefing / catch me up.',
+                    parameters: { type: 'object', properties: {} }
+                  },
+                  {
+                    name: 'check_messages',
+                    description: 'Check the user iMessages/texts: recent messages and who they are from. Use when they ask about their texts/messages/iMessage.',
+                    parameters: { type: 'object', properties: { limit: { type: 'number' } } }
+                  },
+                  {
+                    name: 'send_message',
+                    description: 'Send an iMessage/text to a phone number or contact handle. YOU write the message text from what they asked.',
+                    parameters: { type: 'object', properties: { to: { type: 'string', description: 'phone number or email handle' }, text: { type: 'string' } }, required: ['to','text'] }
+                  },
+                  {
+                    name: 'check_notifications',
+                    description: 'Check the user recent macOS notifications — which apps pinged them and what about. Use when they ask what notifications they got / what they missed.',
+                    parameters: { type: 'object', properties: { limit: { type: 'number' } } }
+                  },
+                  {
+                    name: 'check_notes',
+                    description: 'List the user Apple Notes (titles + modified dates), or read one specific note by title.',
+                    parameters: { type: 'object', properties: { read_title: { type: 'string', description: 'if set, read this note instead of listing' } } }
+                  },
+                  {
+                    name: 'create_note',
+                    description: 'Create a new Apple Note. YOU write the title and body from what they asked.',
+                    parameters: { type: 'object', properties: { title: { type: 'string' }, body: { type: 'string' } }, required: ['title','body'] }
+                  },
+                  {
+                    name: 'check_whatsapp',
+                    description: 'Check WhatsApp chats: unread counts and last messages. If not connected this auto-starts linking and a QR appears for them to scan.',
+                    parameters: { type: 'object', properties: { limit: { type: 'number' } } }
+                  },
+                  {
+                    name: 'send_whatsapp',
+                    description: 'Send a WhatsApp message to a chat by contact/group name. YOU write the message text.',
+                    parameters: { type: 'object', properties: { to: { type: 'string', description: 'contact or group name' }, text: { type: 'string' } }, required: ['to','text'] }
                   }
                 ]
               }]
@@ -1039,8 +1110,10 @@ VOICE RESPONSE RULES — CRITICAL:
     }
     function setScene(name) {
       const _key0 = name ? String(name).toLowerCase().trim() : null
-      console.log('🕹️ [4] setScene key:', _key0); if (_key0 === '__pixelroom__') { console.log('🕹️ [5] calling enterPixelRoom()'); enterPixelRoom(); return }
-      if (window._pixelRoomActive) exitPixelRoom()
+      console.log('🕹️ [4] setScene key:', _key0); if (_key0 === '__pixelroom__') { console.log('🕹️ [5] calling enterPixelRoom()'); window.enterPixelRoom ? window.enterPixelRoom() : enterPixelRoom(); return }
+      if (_key0 === '__layersandwich__') { console.log('🛋️ calling enterLayerSandwichRoom()'); window.enterLayerSandwichRoom ? window.enterLayerSandwichRoom() : enterLayerSandwichRoom(); return }
+      if (window._pixelRoomActive) { window.exitPixelRoom ? window.exitPixelRoom() : exitPixelRoom() }
+      if (window._layerSandwichActive) { window.exitLayerSandwichRoom ? window.exitLayerSandwichRoom() : exitLayerSandwichRoom() }
       let bg = document.getElementById('scene-bg')
       if (!bg) { bg = document.createElement('div'); bg.id = 'scene-bg'
         applyBox(bg); bg.style.setProperty('background-size','cover','important'); bg.style.setProperty('background-position','center','important')
@@ -1232,6 +1305,65 @@ VOICE RESPONSE RULES — CRITICAL:
           else if (pa?.error === 'no_permission') result = 'Screen access is off. Tell them: System Settings → Privacy & Security → Screen Recording → enable Asuka (Electron), then restart the app.'
           else if (pa?.error === 'nothing_recent') result = 'You have not made anything recently to change — ask what they want you to look at instead.'
           else result = 'Could not see what they are pointing at: ' + (pa?.error || 'unknown')
+        } else if (fc.name === 'make_video') {
+          ipcRenderer.invoke('make-video-lesson', { topic: fc.args.topic }).then(r => {
+            if (r?.ok) addToHistory('asuka', `🎬 Video ready: "${r.title}" — opening it now! (also in the » Docs drawer)`)
+            else if (r?.hint) addToHistory('asuka', '🎬 ' + (r.hint))
+            else if (r?.error) addToHistory('asuka', '🎬 Render failed: ' + (r.detail || r.error))
+          }).catch(()=>{})
+          result = `Video render started for "${fc.args.topic}" — takes 1-3 minutes, it will open automatically when done. Tell them it's rendering and they can keep chatting meanwhile.`
+        } else if (fc.name === 'why_this_trade') {
+          const reps = await ipcRenderer.invoke('get-trade-replays').catch(()=>[])
+          let rep = null
+          if (fc.args.coin) rep = (reps||[]).find(r => (r.coin||'').toUpperCase() === fc.args.coin.toUpperCase())
+          if (!rep) rep = (reps||[])[reps.length-1] || (reps||[])[0]
+          if (rep) result = `Explain this trade reasoning conversationally as Asuka: ${rep.direction?.toUpperCase()} ${rep.coin} — entry $${rep.entry}, target $${rep.target}, stop $${rep.stopLoss}, confidence ${rep.confidence}. Core reason: ${(rep.claudeReason||rep.finalReason||'').slice(0,400)}. Agents agreed ${rep.swarmAgreePct}% (${rep.agentsTotal} agents). Bull case: ${(rep.bullArg||'').slice(0,200)}. Bear case considered: ${(rep.bearArg||'').slice(0,200)}. Grade: ${rep.qualityGrade||'n/a'}.`
+          else result = 'No trade replays saved yet — the scanners record reasoning on every new entry.'
+        } else if (fc.name === 'trade_action') {
+          const r = await showTradeCard(fc.args).catch(e => ({ error: e.message }))
+          if (r?.confirmed) result = `Order executed: ${r.summary}. Tell them warmly it's done.`
+          else if (r?.cancelled) result = 'They cancelled it. One short acknowledgment, no pressure.'
+          else result = 'Could not prepare the trade: ' + (r?.error || 'unknown')
+        } else if (fc.name === 'check_calendar') {
+          const r = await ipcRenderer.invoke('calendar-today', { days: fc.args.days || 1 }).catch(()=>null)
+          if (r?.events?.length) result = 'Their calendar: ' + r.events.map(ev => `${ev.title} at ${ev.start}${ev.location?' ('+ev.location+')':''}`).join(' | ')
+          else if (r?.events) result = 'Calendar is clear — nothing scheduled.'
+          else result = 'Could not read the calendar: ' + (r?.error || 'needs an Allow click on the macOS automation popup first')
+        } else if (fc.name === 'morning_ritual') {
+          const r = await ipcRenderer.invoke('morning-ritual').catch(()=>null)
+          result = r?.briefing ? ('Give them this morning briefing warmly and concisely: ' + r.briefing) : 'Briefing failed: ' + (r?.error || 'unknown')
+        } else if (fc.name === 'check_messages') {
+          const r = await ipcRenderer.invoke('imessage-recent', { limit: fc.args.limit || 10 }).catch(()=>null)
+          if (r?.messages) result = 'Recent texts: ' + r.messages.map(m => `${m.fromMe?'(you→)':''}${m.from} at ${m.when}: "${m.text.slice(0,120)}"`).join(' | ') + '. Summarize the important ones warmly.'
+          else if (r?.error === 'no_permission') result = 'No Full Disk Access. Tell them: System Settings → Privacy & Security → Full Disk Access → enable the app, restart me — '
+          else result = 'Could not read messages: ' + (r?.error || 'unknown')
+        } else if (fc.name === 'send_message') {
+          const r = await ipcRenderer.invoke('imessage-send', { to: fc.args.to, text: fc.args.text }).catch(()=>null)
+          result = r?.ok ? 'Sent! One short warm confirmation.' : 'Send failed: ' + (r?.error || 'unknown') + '. Check the number/handle exists in Messages.'
+        } else if (fc.name === 'check_notifications') {
+          const r = await ipcRenderer.invoke('notifications-recent', { limit: fc.args.limit || 15 }).catch(()=>null)
+          if (r?.notifications) result = 'Recent notifications: ' + r.notifications.map(n => `${n.app} (${n.when}): ${n.snippets.join(' / ').slice(0,100)}`).join(' | ') + '. Give them the highlights.'
+          else if (r?.error === 'no_permission') result = 'Needs Full Disk Access — tell them to enable it in System Settings → Privacy & Security, '
+          else result = 'Could not read notifications: ' + (r?.error || 'unknown')
+        } else if (fc.name === 'check_notes') {
+          if (fc.args.read_title) {
+            const r = await ipcRenderer.invoke('note-read', { title: fc.args.read_title }).catch(()=>null)
+            result = r?.text ? `Note "${r.title}": ${r.text.slice(0,1500)}` : 'Could not find/read that note: ' + (r?.error || 'unknown')
+          } else {
+            const r = await ipcRenderer.invoke('notes-list', { limit: 15 }).catch(()=>null)
+            result = r?.notes ? 'Their notes: ' + r.notes.map(n => `"${n.title}" (${n.modified})`).join(', ') : 'Could not list notes: ' + (r?.error || 'unknown') + '. First use needs an Allow click on the macOS automation popup.'
+          }
+        } else if (fc.name === 'create_note') {
+          const r = await ipcRenderer.invoke('note-create', { title: fc.args.title, body: fc.args.body }).catch(()=>null)
+          result = r?.ok ? 'Note created in Apple Notes. One short warm line.' : 'Could not create the note: ' + (r?.error || 'unknown')
+        } else if (fc.name === 'check_whatsapp') {
+          const r = await ipcRenderer.invoke('whatsapp-recent', { limit: fc.args.limit || 10 }).catch(()=>null)
+          if (r?.chats) result = 'WhatsApp: ' + r.chats.map(c => `${c.chat}${c.unread?` (${c.unread} unread)`:''}: "${c.last.slice(0,80)}"`).join(' | ')
+          else if (r?.error === 'not_connected' || r?.error === 'scan_qr') { ipcRenderer.invoke('whatsapp-start').catch(()=>{}); result = 'WhatsApp is not linked yet. You just started the link — tell them a QR code will pop up in the chat panel shortly, scan it with the phone (WhatsApp app, Linked Devices).' }
+          else result = 'WhatsApp error: ' + (r?.error || 'unknown')
+        } else if (fc.name === 'send_whatsapp') {
+          const r = await ipcRenderer.invoke('whatsapp-send', { to: fc.args.to, text: fc.args.text }).catch(()=>null)
+          result = r?.ok ? `Sent to ${r.chat}! One short warm confirmation.` : (r?.error === 'not_connected' ? 'WhatsApp not linked yet — tell them to say check my whatsapp first to link it.' : 'Send failed: ' + (r?.error || 'unknown'))
         } else if (fc.name === 'revise_last_work') {
           const rv = await ipcRenderer.invoke('revise-work', { instruction: fc.args.instruction, hint: fc.args.which || null }).catch(()=>null)
           if (rv?.ok) {
@@ -1553,6 +1685,100 @@ VOICE RESPONSE RULES — CRITICAL:
     async function sendTypedMessage(text) {
       if (!text?.trim()) return
       const low = text.toLowerCase()
+      // butler typed triggers
+      // 🎓 grade my attempt: "grade this: ..." / "check my answer: ..." / "my attempt: ..."
+      const gm = text.match(/^(?:grade (?:this|my (?:answer|attempt|work))|check my (?:answer|attempt|work))[:\s-]*([\s\S]{3,})/i)
+      if (gm) {
+        addToHistory('user', text); setStatus('Grading your attempt…')
+        const r = await ipcRenderer.invoke('grade-attempt', { attempt: gm[1].trim(), topic: window._lastTeachTopic || '' }).catch(()=>null)
+        if (r && !r.error) {
+          const wrong = (r.wrong||[]).map(w => `✗ ${w.mistake} → ${w.fix}`).join('\n')
+          const right = (r.right||[]).map(x => `✓ ${x}`).join('\n')
+          addToHistory('asuka', `📝 Score: ${r.score}/100 — ${r.verdict}\n${right}${wrong?'\n'+wrong:''}\n💡 ${r.next_hint||''}\n${r.encouragement||''}`)
+        } else addToHistory('asuka', 'Grading hiccup — try again? ' + (r?.error||''))
+        setStatus('Listening...'); return
+      }
+      // 🎯 practice reps: "give me 10 practice questions on funding rates"
+      const pm = low.match(/(?:give me|make|generate)\s+(\d{1,2})?\s*practice (?:questions|problems|quiz)\s+(?:on|about|for)\s+(.{3,80})/)
+      if (pm) {
+        addToHistory('user', text)
+        const n = Math.min(15, parseInt(pm[1]||'8'))
+        window._lastTeachTopic = pm[2].trim()
+        addToHistory('asuka', `🎯 ${n} practice questions on ${pm[2].trim()} coming up — opening the lesson window!`)
+        ipcRenderer.invoke('process-voice-input-text', `Create exactly ${n} practice exercises on "${pm[2].trim()}", ramping from easy to hard, and open them as a lesson for me`, null).catch(()=>{})
+        return
+      }
+      const vm = low.match(/(?:make|create|generate)\s+(?:me\s+)?a?\s*video\s+(?:lesson\s+)?(?:about|on|explaining|for)\s+(.{3,120})/)
+      if (vm) {
+        addToHistory('user', text)
+        addToHistory('asuka', '🎬 On it! Writing and rendering your video — takes a minute or two, I\'ll open it when it\'s done~')
+        ipcRenderer.invoke('make-video-lesson', { topic: vm[1].trim() }).then(r => {
+          if (r?.ok) addToHistory('asuka', `🎬 Done! "${r.title}" is playing — it's also saved in the » Docs drawer.`)
+          else if (r?.hint) addToHistory('asuka', '🎬 ' + r.hint)
+          else addToHistory('asuka', '🎬 Render failed: ' + (r?.detail || r?.error || 'unknown'))
+        }).catch(()=>{})
+        return
+      }
+      const tm = low.match(/^(buy|sell|close)\s+(?:\$?(\d+(?:\.\d+)?)\s*(?:dollars?|usd|bucks)?\s*(?:of|worth of)?\s*)?(?:my\s+)?([a-z]{2,6})\b/)
+      if (tm && /buy|sell|close/.test(tm[1]) && !/note|email|mail/.test(low)) {
+        addToHistory('user', text)
+        const args = { action: tm[1], coin: tm[3].toUpperCase() }
+        if (tm[1] === 'buy' && tm[2]) args.usd_amount = Number(tm[2])
+        if (tm[1] === 'sell') { if (/half/.test(low)) args.percent = 50; else if (tm[2]) args.percent = Number(tm[2]) }
+        const r = await showTradeCard(args).catch(e=>({error:e.message}))
+        if (r?.confirmed) addToHistory('asuka', '✅ Done — ' + r.summary)
+        else if (r?.error) addToHistory('asuka', '⚠️ ' + r.error)
+        return
+      }
+      if (/what'?s (on )?my (day|schedule|calendar)|my (meetings|events) today|check (my )?calendar/.test(low)) {
+        addToHistory('user', text); setStatus('Checking your calendar…')
+        const r = await ipcRenderer.invoke('calendar-today', { days: 1 }).catch(()=>null)
+        if (r?.events?.length) addToHistory('asuka', '📅 ' + r.events.map(ev => `${ev.start} — ${ev.title}${ev.location?' @ '+ev.location:''}`).join('\n'))
+        else if (r?.events) addToHistory('asuka', '📅 Nothing on the calendar — free day~')
+        else addToHistory('asuka', 'Couldn\'t reach Calendar — first time needs an Allow click on the macOS popup.')
+        setStatus('Listening...'); return
+      }
+      if (/(morning briefing|catch me up|my briefing|start my (day|morning))/.test(low)) {
+        addToHistory('user', text); setStatus('Preparing your briefing…')
+        const r = await ipcRenderer.invoke('morning-ritual').catch(()=>null)
+        if (r?.briefing) { addToHistory('asuka', '🌅 ' + r.briefing); if (!isHerMuted) await speakText(r.briefing.slice(0, 600)) }
+        else addToHistory('asuka', 'Briefing hit a snag: ' + (r?.error || 'unknown'))
+        setStatus('Listening...'); return
+      }
+      if (/check (my )?(texts|messages|imessage)/.test(low) && !/whatsapp/.test(low)) {
+        addToHistory('user', text); setStatus('Reading your messages…')
+        const r = await ipcRenderer.invoke('imessage-recent', { limit: 8 }).catch(()=>null)
+        if (r?.messages?.length) addToHistory('asuka', '💬 Latest: ' + r.messages.filter(m=>!m.fromMe).slice(0,5).map(m => `${m.from}: "${m.text.slice(0,90)}"`).join('\n'))
+        else if (r?.error === 'no_permission') addToHistory('asuka', '🔒 I need Full Disk Access to read Messages: System Settings → Privacy & Security → Full Disk Access → enable the app → restart me.')
+        else addToHistory('asuka', 'Couldn\'t read messages: ' + (r?.error || 'unknown'))
+        setStatus('Listening...'); return
+      }
+      if (/check (my )?whatsapp|whatsapp messages/.test(low)) {
+        addToHistory('user', text); setStatus('Checking WhatsApp…')
+        const r = await ipcRenderer.invoke('whatsapp-recent', { limit: 10 }).catch(()=>null)
+        if (r?.chats?.length) addToHistory('asuka', '🟢 ' + r.chats.map(c => `${c.chat}${c.unread?` (${c.unread})`:''}: ${c.last.slice(0,70)}`).join('\n'))
+        else if (r?.error === 'not_connected' || r?.error === 'scan_qr') {
+          await ipcRenderer.invoke('whatsapp-start').catch(()=>{})
+          addToHistory('asuka', '🟢 Linking WhatsApp… a QR code will appear here in a moment — scan it with your phone (WhatsApp → Linked Devices).')
+        }
+        else addToHistory('asuka', 'WhatsApp error: ' + (r?.error || 'unknown'))
+        setStatus('Listening...'); return
+      }
+      if (/check (my )?notifications|what did i miss|any notifications/.test(low)) {
+        addToHistory('user', text); setStatus('Checking notifications…')
+        const r = await ipcRenderer.invoke('notifications-recent', { limit: 12 }).catch(()=>null)
+        if (r?.notifications?.length) addToHistory('asuka', '🔔 ' + r.notifications.slice(0,8).map(n => `${n.app} · ${n.snippets.join(' ').slice(0,70)}`).join('\n'))
+        else if (r?.error === 'no_permission') addToHistory('asuka', '🔒 Needs Full Disk Access — System Settings → Privacy & Security → Full Disk Access → enable the app.')
+        else addToHistory('asuka', 'Couldn\'t read notifications: ' + (r?.error || 'unknown'))
+        setStatus('Listening...'); return
+      }
+      if (/(show|list|check) (my )?notes\b/.test(low)) {
+        addToHistory('user', text); setStatus('Opening your notes…')
+        const r = await ipcRenderer.invoke('notes-list', { limit: 12 }).catch(()=>null)
+        if (r?.notes?.length) addToHistory('asuka', '📝 ' + r.notes.map(n => n.title).join(' · '))
+        else addToHistory('asuka', 'Couldn\'t reach Notes — first time needs an Allow click on the macOS popup: ' + (r?.error || ''))
+        setStatus('Listening...'); return
+      }
       // custom safe word toggles silence both ways
       if (window._safeword && low.includes(window._safeword)) { setDND(!window._dnd); addToHistory('user', text); addToHistory('asuka', window._dnd ? '…🤫' : "I'm back! 🌸"); return }
       // DND / wake by text
@@ -1965,11 +2191,91 @@ VOICE RESPONSE RULES — CRITICAL:
       startMicStreaming()
     })
     ipcRenderer.on('ask-morning-briefing', () => showConfirm('morning', 'Want your morning market briefing?'))
+    // WhatsApp link QR — shows right in her chat history
+    ipcRenderer.on('butler-wa-qr', (e, dataUrl) => {
+      if (!dataUrl) return
+      addToHistory('asuka', '🟢 Scan this with your phone: WhatsApp → Settings → Linked Devices → Link a Device')
+      const hist = document.getElementById('history-list') || document.getElementById('chat-messages')
+      if (hist) { const img = document.createElement('img'); img.src = dataUrl; img.style.cssText = 'width:200px;height:200px;border-radius:10px;background:#fff;padding:6px;margin:6px 0;'; hist.appendChild(img); hist.scrollTop = hist.scrollHeight }
+    })
+    ipcRenderer.on('butler-wa-ready', () => addToHistory('asuka', '🟢 WhatsApp linked! Ask me to check it anytime~'))
+    ipcRenderer.on('video-lesson-progress', (e, msg) => { try { setStatus(msg) } catch(err) {} })
     ipcRenderer.on('ask-news-briefing',    () => showConfirm('news', 'Want the latest crypto news?'))
 
     // ── Confirm bar ───────────────────────────────────────────────────────
     function showConfirm(type, text) { awaitingConfirm = type; confirmText.textContent = text; confirmBar.classList.add('open') }
     function hideConfirm() { awaitingConfirm = null; confirmBar.classList.remove('open') }
+
+    // ── 💹 Voice trade confirmation card ──────────────────────────────
+    // Shows the trade visually; resolves {confirmed, summary} or {cancelled}
+    async function showTradeCard({ action, coin, usd_amount, percent }) {
+      coin = String(coin || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+      if (!coin) return { error: 'no coin' }
+      const card = document.getElementById('trade-card')
+      const rows = document.getElementById('tc-rows')
+      const sideEl = document.getElementById('tc-side')
+      // live price
+      let price = null
+      try { const p = await ipcRenderer.invoke('get-crypto-price', coin); price = p?.price ?? p ?? null } catch(e) {}
+      const isBuy = action === 'buy'
+      sideEl.textContent = isBuy ? '🟢 BUY — MARKET' : (action === 'close' ? '🔴 CLOSE POSITION' : '🔴 SELL — MARKET')
+      sideEl.style.color = isBuy ? '#34d399' : '#fb7185'
+      document.getElementById('tc-coin').textContent = coin
+      let lines = []
+      if (price) lines.push(`Price now      ~$${Number(price).toLocaleString()}`)
+      if (isBuy && usd_amount) {
+        lines.push(`Spend          $${Number(usd_amount).toLocaleString()}`)
+        if (price) lines.push(`≈ Quantity     ${(usd_amount/price).toPrecision(5)} ${coin}`)
+      }
+      if (!isBuy) {
+        // show current holding + P&L context if we can
+        try {
+          const bal = await ipcRenderer.invoke('get-spot-balances').catch(()=>null)
+          const h = bal?.balances?.find?.(b => (b.coin||b.asset||'').toUpperCase() === coin)
+          if (h) {
+            const qty = Number(h.qty ?? h.free ?? h.amount ?? 0)
+            lines.push(`You hold       ${qty} ${coin}`)
+            const sellPct = action === 'close' ? 100 : (percent || 100)
+            lines.push(`Selling        ${sellPct}% (${(qty*sellPct/100).toPrecision(5)} ${coin})`)
+            if (price) lines.push(`≈ Value        $${(qty*sellPct/100*price).toLocaleString(undefined,{maximumFractionDigits:2})}`)
+          } else lines.push(`Selling        ${action==='close'?100:(percent||100)}% of holding`)
+        } catch(e) { lines.push(`Selling        ${action==='close'?100:(percent||100)}% of holding`) }
+      }
+      rows.textContent = lines.join('\n')
+      // late-night judgment: 1am–5am gets a gentle callout
+      const _h = new Date().getHours()
+      const warnEl = card.querySelector('div[style*="fbbf24"]')
+      if (warnEl) warnEl.textContent = (_h >= 1 && _h < 5)
+        ? `⚠️ Real order. Also… it's ${_h}am. Are we sure this is a plan and not insomnia? 🌙`
+        : '⚠️ Real order. Double-check before confirming.'
+      card.style.display = 'block'
+      speakText(isBuy ? `Buying ${usd_amount ? usd_amount + ' dollars of ' : ''}${coin} — confirm on the card?` : `${action==='close'?'Closing':'Selling'} your ${coin} — confirm on the card?`).catch(()=>{})
+      return new Promise((resolve) => {
+        const done = () => { card.style.display = 'none'; cBtn.onclick = null; xBtn.onclick = null }
+        const cBtn = document.getElementById('tc-confirm')
+        const xBtn = document.getElementById('tc-cancel')
+        // 60s auto-cancel so a stale card can't execute later
+        const timer = setTimeout(() => { done(); resolve({ cancelled: true }) }, 60000)
+        xBtn.onclick = () => { clearTimeout(timer); done(); resolve({ cancelled: true }) }
+        cBtn.onclick = async () => {
+          clearTimeout(timer); cBtn.textContent = '…'; cBtn.disabled = true
+          try {
+            let res = null, summary = ''
+            if (isBuy) {
+              res = await ipcRenderer.invoke('spot-buy', { coin, amount: usd_amount || 0 })
+              summary = res ? `bought ${res.quantity ?? ''} ${coin} at ~$${res.price?.toLocaleString?.() ?? '?'}` : ''
+            } else {
+              res = await ipcRenderer.invoke('spot-sell', { coin, percent: action === 'close' ? 100 : (percent || 100) })
+              summary = res ? `sold ${action==='close'?'all':''} ${coin} at ~$${res.price?.toLocaleString?.() ?? 'market'}` : ''
+            }
+            cBtn.textContent = '✓ Confirm'; cBtn.disabled = false; done()
+            if (res) { addToHistory('asuka', '💹 ' + summary); resolve({ confirmed: true, summary }) }
+            else { addToHistory('asuka', '⚠️ Order failed — check the dashboard/exchange connection.'); resolve({ error: 'order_failed' }) }
+          } catch(err) { cBtn.textContent = '✓ Confirm'; cBtn.disabled = false; done(); resolve({ error: err.message }) }
+        }
+      })
+    }
+    window.showTradeCard = showTradeCard
 
     confirmYes.addEventListener('click', async () => {
       const type = awaitingConfirm; hideConfirm()
@@ -1996,7 +2302,6 @@ VOICE RESPONSE RULES — CRITICAL:
       else startMicStreaming()
     })
 
-    chatBtn.addEventListener('click', () => chatPanel.classList.toggle('open'))
     dashBtn.addEventListener('click', () => ipcRenderer.send('open-dashboard'))
     document.getElementById('study-btn')?.addEventListener('click', () => ipcRenderer.invoke('open-classroom').catch(()=>{}))
     // whiteboard note: mirror what Asuka is teaching in the classroom, right on the waifu window
@@ -2010,13 +2315,6 @@ VOICE RESPONSE RULES — CRITICAL:
       }
     })
     document.getElementById('wb-note-close')?.addEventListener('click', () => { document.getElementById('wb-note').style.display='none' })
-
-    sendBtn.addEventListener('click', async () => {
-      const msg = userInput.value.trim(); if (!msg) return
-      userInput.value = ''; chatPanel.classList.remove('open')
-      await sendTypedMessage(msg)
-    })
-    userInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendBtn.click() })
 
     // Save session and extract learnings when window closes
     window.addEventListener('beforeunload', async () => {
@@ -2276,6 +2574,7 @@ VOICE RESPONSE RULES — CRITICAL:
       function enterPixelRoom(){
         console.log('🕹️ [6] enterPixelRoom() running, already active:', window._pixelRoomActive)
         if (window._pixelRoomActive) return
+        if (window._layerSandwichActive) exitLayerSandwichRoom()
         window._pixelRoomActive = true
         const cv = document.getElementById('canvas'); if (cv) { cv.style.opacity = '0'; cv.style.pointerEvents = 'none' }
         buildPixelRoom()
@@ -2291,8 +2590,205 @@ VOICE RESPONSE RULES — CRITICAL:
         const cv = document.getElementById('canvas'); if (cv) { cv.style.opacity = '1'; cv.style.pointerEvents = '' }
       }
 
+      // ═══ 🛋️ Layer Sandwich Room: her real room photo + foreground occlusion ═══
+      // Pixel-pose version: Live2D hides, a pixel sprite of her swaps pose per anchor.
+      // Window resizes to small landscape on enter, restores on exit.
+      window._layerSandwichActive = false
+      let _lsPrevBounds = null
+
+      const LS_ANCHORS = {
+        rug:   { leftPct: 50, bottomPct: 8,  heightPct: 34, pose: 'idle_stand',     behind: null },
+        couch: { leftPct: 26, bottomPct: 14, heightPct: 26, pose: 'idle_sit_couch', behind: 'couch' },
+        desk:  { leftPct: 66, bottomPct: 26, heightPct: 24, pose: 'idle_sit_desk',  behind: 'desk' },
+        cat:   { leftPct: 74, bottomPct: 6,  heightPct: 26, pose: 'cat_play_sit',   behind: null },
+      }
+      // ^ TUNE by eye — leftPct/bottomPct/heightPct are % of the room window.
+
+      // ── Skateboarding: she rides back and forth across the floor, always available ──
+      const LS_SKATE_FRAMES = ['skate_1','skate_2','skate_3']
+      let _lsSkateTimer = null, _lsSkateFrame = 0, _lsSkateX = -14, _lsSkateDir = 1
+
+      function lsStartSkate(){
+        lsStopSkate()
+        const ch = document.getElementById('ls-char'); if(!ch) return
+        window._lsCurrentAnchor = 'skate'
+        ch.style.transition = 'none'
+        ch.style.bottom = '5%'
+        ch.style.height = '26%'
+        ch.style.zIndex = '30'
+        _lsSkateX = -14; _lsSkateDir = 1
+        _lsSkateTimer = setInterval(() => {
+          _lsSkateX += _lsSkateDir * 0.8
+          if (_lsSkateX > 108) { _lsSkateDir = -1 }
+          if (_lsSkateX < -14) { _lsSkateDir = 1 }
+          _lsSkateFrame = (_lsSkateFrame + 1) % LS_SKATE_FRAMES.length
+          ch.src = `./assets/room/${LS_SKATE_FRAMES[Math.floor(_lsSkateFrame)]}.png`
+          ch.style.left = _lsSkateX + '%'
+          ch.style.transform = `translateX(-50%) scaleX(${_lsSkateDir})`
+        }, 140)
+        showBubble('🛹 wheee~!', 2000)
+      }
+      function lsStopSkate(){
+        if (_lsSkateTimer) { clearInterval(_lsSkateTimer); _lsSkateTimer = null }
+        const ch = document.getElementById('ls-char')
+        if (ch) { ch.style.transition = 'left 1s cubic-bezier(.4,0,.2,1), bottom 1s cubic-bezier(.4,0,.2,1), height 1s ease'; ch.style.transform = 'translateX(-50%)' }
+      }
+
+      // ── Cat play: alternates between the two cat poses at her spot ──
+      let _lsCatTimer = null
+      function lsStartCatPlay(){
+        lsStopCatPlay()
+        lsGoToAnchor('cat')
+        const poses = ['cat_play_sit','cat_play_lie']
+        let i = 0
+        _lsCatTimer = setInterval(() => {
+          const ch = document.getElementById('ls-char'); if(!ch) return
+          i = (i+1) % poses.length
+          ch.src = `./assets/room/${poses[i]}.png`
+        }, 2600)
+        showBubble('🐈 hehe, gotcha~', 2200)
+      }
+      function lsStopCatPlay(){ if (_lsCatTimer) { clearInterval(_lsCatTimer); _lsCatTimer = null } }
+
+      function lsStopAllActivities(){ lsStopSkate(); lsStopCatPlay() }
+
+      function lsGoToAnchor(name){
+        const cfg = LS_ANCHORS[name]; if(!cfg) return
+        lsStopSkate()
+        if (name !== 'cat') lsStopCatPlay()
+        const ch = document.getElementById('ls-char'); if(!ch) return
+        ch.style.left = cfg.leftPct + '%'
+        ch.style.bottom = cfg.bottomPct + '%'
+        ch.style.height = cfg.heightPct + '%'
+        ch.style.zIndex = cfg.behind ? '3' : '30'   // behind cutout (55) or in front of everything
+        ch.src = `./assets/room/${cfg.pose}.png`
+        window._lsCurrentAnchor = name
+        if (cfg.behind) showBubble(cfg.behind === 'couch' ? '🛋️ comfy~' : '💻 back to work~', 2200)
+      }
+
+      function buildLayerSandwichRoom(){
+        let room = document.getElementById('ls-room')
+        if (room) return room
+        room = document.createElement('div'); room.id = 'ls-room'
+        room.style.cssText = 'position:fixed;inset:0;z-index:1;overflow:hidden;image-rendering:pixelated;'
+        room.innerHTML = `
+          <img src="./assets/room/room-bg.png" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;image-rendering:pixelated;">
+          <img id="ls-char" src="./assets/room/idle_stand.png"
+               style="position:absolute;left:50%;bottom:8%;height:34%;transform:translateX(-50%);z-index:30;image-rendering:pixelated;filter:drop-shadow(0 5px 4px rgba(0,0,0,.45));transition:left 1s cubic-bezier(.4,0,.2,1), bottom 1s cubic-bezier(.4,0,.2,1), height 1s ease;cursor:pointer;pointer-events:auto;">
+          <img id="ls-fg-couch" src="./assets/room/sofa-cutout.png"
+               style="position:absolute;left:13.9%;top:57.6%;width:32.6%;height:28.1%;object-fit:contain;z-index:55;cursor:pointer;image-rendering:pixelated;">
+          <img id="ls-fg-desk" src="./assets/room/desk-cutout.png"
+               style="position:absolute;left:50.5%;top:41.5%;width:35.3%;height:35.5%;object-fit:contain;z-index:55;cursor:pointer;image-rendering:pixelated;">
+        `
+        document.body.appendChild(room)
+        document.getElementById('ls-fg-couch').onclick = () => { lsStopAuto(); lsGoToAnchor(window._lsCurrentAnchor === 'couch' ? 'rug' : 'couch') }
+        document.getElementById('ls-fg-desk').onclick  = () => { lsStopAuto(); lsGoToAnchor(window._lsCurrentAnchor === 'desk'  ? 'rug' : 'desk') }
+        // click her → cycle activities: skate → cat play → back to rug
+        document.getElementById('ls-char').onclick = (e) => {
+          e.stopPropagation(); lsStopAuto()
+          const cur = window._lsCurrentAnchor
+          if (cur === 'skate') lsStartCatPlay()
+          else if (cur === 'cat') lsGoToAnchor('rug')
+          else lsStartSkate()
+        }
+        return room
+      }
+
+      // ── Auto mode: she lives her own life — wanders activities every 25-60s ──
+      // Weighted by portfolio mood (green day → playful, red day → focused at desk)
+      // and time of day (night → couch sleepy, morning → coffee energy).
+      let _lsAutoTimer = null
+      let _lsMood = 'flat'   // 'green' | 'red' | 'flat'
+      async function lsRefreshMood(){
+        try {
+          const s = await ipcRenderer.invoke('get-paper-stats').catch(()=>null)
+          const pnl = s?.todayPnl ?? s?.dayPnl ?? s?.totalPnl ?? 0
+          const prev = _lsMood
+          _lsMood = pnl > 5 ? 'green' : pnl < -5 ? 'red' : 'flat'
+          if (_lsMood !== prev && window._layerSandwichActive) {
+            if (_lsMood === 'green') { setEffect && setEffect('none'); showBubble('portfolio\'s green today~ 💚', 2600) }
+            if (_lsMood === 'red') { setEffect && setEffect('rain'); showBubble('rough day out there… staying focused 🌧️', 2800) }
+          }
+        } catch(e) {}
+      }
+      function lsPickActivity(){
+        const hour = new Date().getHours()
+        let pool
+        if (hour >= 23 || hour < 7) pool = ['couch','couch','couch','rug']            // night: sleepy couch
+        else if (_lsMood === 'green') pool = ['skate','skate','cat','rug','couch']     // green: playful
+        else if (_lsMood === 'red') pool = ['desk','desk','desk','couch','rug']        // red: at work
+        else pool = ['rug','couch','desk','skate','cat']
+        const options = pool.filter(a => a !== window._lsCurrentAnchor)
+        return options[Math.floor(Math.random()*options.length)] || 'rug'
+      }
+      function lsStartAuto(){
+        lsStopAuto()
+        lsRefreshMood()
+        const moodTimer = setInterval(() => { if (window._layerSandwichActive) lsRefreshMood(); else clearInterval(moodTimer) }, 5*60*1000)
+        const tick = () => {
+          if (!window._layerSandwichActive) return
+          const next = lsPickActivity()
+          if (next === 'skate') lsStartSkate()
+          else if (next === 'cat') lsStartCatPlay()
+          else {
+            lsGoToAnchor(next)
+            const hour = new Date().getHours()
+            if ((hour >= 23 || hour < 7) && next === 'couch') showBubble('getting sleepy… 😴', 2400)
+            else if (hour >= 7 && hour < 10 && Math.random() < 0.4) showBubble('☕ morning energy~', 2200)
+          }
+          _lsAutoTimer = setTimeout(tick, 15000 + Math.random()*25000)
+        }
+        _lsAutoTimer = setTimeout(tick, 6000)
+      }
+      function lsStopAuto(){ if (_lsAutoTimer) { clearTimeout(_lsAutoTimer); _lsAutoTimer = null } }
+
+      function enterLayerSandwichRoom(){
+        if (window._layerSandwichActive) return
+        if (window._pixelRoomActive) exitPixelRoom()   // kills pixel sprite, restores window + Live2D
+        // ── self-check: report any missing room assets in console + on screen ──
+        try {
+          const fs2 = require('fs'), path2 = require('path')
+          const need = ['room-bg.png','sofa-cutout.png','desk-cutout.png','idle_stand.png','idle_sit_couch.png','idle_sit_desk.png','skate_1.png','skate_2.png','skate_3.png','cat_play_sit.png','cat_play_lie.png']
+          const missing = need.filter(f => !fs2.existsSync(path2.join(__dirname,'assets','room',f)))
+          if (missing.length) {
+            console.error('🛋️ MISSING room assets:', missing.join(', '))
+            alert('My Room missing files in assets/room/:\n' + missing.join('\n'))
+          } else { console.log('🛋️ all room assets found ✓') }
+        } catch(e) { console.warn('room asset check failed', e) }
+        window._layerSandwichActive = true
+        if (pixelMode) exitPixel()   // plain free-roam pixel mode also owns click-through — must exit it
+        try { ipcRenderer.send('pixel-mode', false) } catch(e) {}   // belt & braces: force window interactive
+        // hide Live2D — pixel sprite takes over
+        const cv = document.getElementById('canvas')
+        if (cv) { cv.style.opacity = '0'; cv.style.pointerEvents = 'none' }
+        // resize to small landscape — delayed so it wins over pixel-mode-off bounds restore
+        setTimeout(() => {
+          try {
+            _lsPrevBounds = { w: window.outerWidth, h: window.outerHeight, x: window.screenX, y: window.screenY }
+            window.resizeTo(900, 620)
+          } catch(e) { console.warn('ls resize failed', e) }
+        }, 180)
+        buildLayerSandwichRoom()
+        lsGoToAnchor('rug')
+        lsStartAuto()
+        showBubble('this is my room~ 🌿', 2400)
+      }
+
+      function exitLayerSandwichRoom(){
+        if (!window._layerSandwichActive) return
+        window._layerSandwichActive = false
+        lsStopAuto(); lsStopAllActivities()
+        const room = document.getElementById('ls-room'); if (room) room.remove()
+        const cv = document.getElementById('canvas')
+        if (cv) { cv.style.opacity = '1'; cv.style.pointerEvents = '' }
+        try {
+          if (_lsPrevBounds) { window.resizeTo(_lsPrevBounds.w, _lsPrevBounds.h); window.moveTo(_lsPrevBounds.x, _lsPrevBounds.y); _lsPrevBounds = null }
+        } catch(e) {}
+      }
+
       let _lastToggle = 0
       const toggle = (e)=>{
+        if(window._layerSandwichActive || window._pixelRoomActive) return   // rooms own the stage — no pixel-pet toggle
         if(noDragIds.includes(e.target?.id)||e.target?.closest?.('#chat-panel')||e.target?.closest?.('#ask-bar'))return
         const now = Date.now(); if(now - _lastToggle < 400) return; _lastToggle = now
         pixelMode?exitPixel():enterPixel()
@@ -2384,6 +2880,13 @@ VOICE RESPONSE RULES — CRITICAL:
       }, 4000)
 
       window._pixelSay=(txt)=>showBubble(txt,3000)
+
+      // ── Scoping fix: setScene() lives outside initPixelPet(), so these
+      // room-entry functions must be exposed on window to be callable from it.
+      window.enterPixelRoom = enterPixelRoom
+      window.exitPixelRoom = exitPixelRoom
+      window.enterLayerSandwichRoom = enterLayerSandwichRoom
+      window.exitLayerSandwichRoom = exitLayerSandwichRoom
     }
     // run after DOM is ready so the pixel-pet canvas element exists
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPixelPet)
@@ -2412,6 +2915,17 @@ VOICE RESPONSE RULES — CRITICAL:
 </div>
 
 <!-- ══ Ask bar: type anything, attach anything ══ -->
+<!-- ── » Side drawer: recent chat + docs beside her ── -->
+<div id="sd-toggle" title="Recent chat & docs" style="position:fixed;right:0;top:42%;z-index:9500;width:26px;height:56px;border-radius:10px 0 0 10px;background:rgba(15,18,26,0.92);border:1px solid rgba(255,255,255,0.14);border-right:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#cbd5e1;font-size:15px;font-weight:800;user-select:none;">«</div>
+<div id="side-drawer" style="position:fixed;top:8%;bottom:14%;right:-300px;width:280px;z-index:9400;background:rgba(12,15,22,0.97);border:1px solid rgba(255,255,255,0.12);border-right:none;border-radius:14px 0 0 14px;box-shadow:-10px 0 40px rgba(0,0,0,0.5);display:flex;flex-direction:column;transition:right .28s cubic-bezier(.4,0,.2,1);font-family:system-ui;overflow:hidden;">
+  <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.09);flex-shrink:0;">
+    <div class="sd-tab active" data-tab="chat" style="flex:1;text-align:center;padding:10px;font-size:11px;font-weight:700;color:#e2e8f0;cursor:pointer;border-bottom:2px solid #2dd4ff;">💬 Chat</div>
+    <div class="sd-tab" data-tab="docs" style="flex:1;text-align:center;padding:10px;font-size:11px;font-weight:700;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;">📂 Docs</div>
+  </div>
+  <div id="sd-chat" style="flex:1;overflow-y:auto;padding:10px;font-size:11.5px;line-height:1.5;"></div>
+  <div id="sd-docs" style="flex:1;overflow-y:auto;padding:10px;display:none;"></div>
+</div>
+
 <div id="ask-bar" style="position:fixed;left:10px;right:10px;bottom:12px;z-index:9000;display:flex;flex-direction:column;gap:6px;">
   <div id="ab-chip" style="display:none;align-self:flex-start;background:rgba(10,132,255,.18);border:1px solid rgba(10,132,255,.4);border-radius:10px;padding:5px 10px;font-size:11px;color:#cfe6ff;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
     <span id="ab-chip-name"></span> <span id="ab-chip-x" style="cursor:pointer;margin-left:6px;opacity:.8;">✕</span>
@@ -2426,6 +2940,50 @@ VOICE RESPONSE RULES — CRITICAL:
 <script>
 console.log('%c[ASK-BAR SCRIPT REACHED]', 'color:lime;font-size:16px')
 window.__askBarLoaded = true
+;(function(){
+  // ── » side drawer logic ──
+  try {
+    const sdToggle = document.getElementById('sd-toggle')
+    const sdDrawer = document.getElementById('side-drawer')
+    let sdOpen = false
+    function sdRenderChat(){
+      let hist = []
+      try { hist = JSON.parse(localStorage.getItem('asukaHistory') || '[]') } catch(e) {}
+      const box = document.getElementById('sd-chat')
+      box.innerHTML = hist.slice(-40).map(m =>
+        `<div style="margin-bottom:9px;"><div style="font-size:9px;color:${m.role==='user'?'#2dd4ff':'#f3a8d0'};font-weight:700;letter-spacing:.5px;">${m.role==='user'?'YOU':'ASUKA'} · ${m.time||''}</div><div style="color:#d7dae0;">${String(m.text).replace(/</g,'&lt;')}</div></div>`
+      ).join('') || '<div style="color:#64748b;font-size:11px;">No messages yet~</div>'
+      box.scrollTop = box.scrollHeight
+    }
+    async function sdRenderDocs(){
+      const box = document.getElementById('sd-docs')
+      const works = await ipcRenderer.invoke('list-works').catch(()=>[]) || []
+      const icons = { doc:'📄', text:'✍️', sheet:'📊', gdoc:'📝' }
+      box.innerHTML = works.length ? works.map((w,i) =>
+        `<div class="sd-doc" data-i="${i}" style="padding:9px 10px;margin-bottom:6px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:9px;cursor:${w.path?'pointer':'default'};">
+          <div style="font-size:11.5px;font-weight:600;color:#e2e8f0;">${icons[w.kind]||'📄'} ${String(w.title||'Untitled').replace(/</g,'&lt;')}</div>
+          <div style="font-size:9px;color:#64748b;margin-top:2px;">${w.at ? new Date(w.at).toLocaleString() : ''}${w.path ? ' · tap to open' : ''}</div>
+        </div>`).join('') : '<div style="color:#64748b;font-size:11px;">Nothing made yet — ask her to write or build something~</div>'
+      box.querySelectorAll('.sd-doc').forEach(el => el.onclick = () => {
+        const w = works[+el.dataset.i]
+        if (w?.path) ipcRenderer.invoke('open-file-path', w.path).catch(()=>{})
+      })
+    }
+    sdToggle.addEventListener('click', () => {
+      sdOpen = !sdOpen
+      sdDrawer.style.right = sdOpen ? '0px' : '-300px'
+      sdToggle.textContent = sdOpen ? '»' : '«'
+      sdToggle.style.right = sdOpen ? '280px' : '0'
+      if (sdOpen) { sdRenderChat(); sdRenderDocs() }
+    })
+    document.querySelectorAll('.sd-tab').forEach(t => t.onclick = () => {
+      document.querySelectorAll('.sd-tab').forEach(x => { x.classList.remove('active'); x.style.color='#64748b'; x.style.borderBottomColor='transparent' })
+      t.classList.add('active'); t.style.color='#e2e8f0'; t.style.borderBottomColor='#2dd4ff'
+      document.getElementById('sd-chat').style.display = t.dataset.tab==='chat' ? 'block' : 'none'
+      document.getElementById('sd-docs').style.display = t.dataset.tab==='docs' ? 'block' : 'none'
+    })
+  } catch(err) { console.error('side drawer init:', err) }
+})()
 ;(function(){
   function initAskBar(){
   const { ipcRenderer } = require('electron')
@@ -2503,7 +3061,8 @@ window.__askBarLoaded = true
       const r = await ipcRenderer.invoke('list-scenes').catch(()=>({scenes:[]}))
       const scenes = r?.scenes || []
       const pixelTile = `<div class="wpp" id="wpp-pixelroom" style="cursor:pointer;border:1px solid rgba(77,225,193,.35);border-radius:9px;padding:3px;text-align:center;background:rgba(77,225,193,.08);"><div style="width:100%;height:46px;border-radius:7px;background:linear-gradient(135deg,#2b2a4a,#3a3358);display:flex;align-items:center;justify-content:center;font-size:20px;">🕹️</div><div style="font-size:9px;color:#4de1c1;margin-top:2px;">Pixel Room</div></div>`
-      grid.innerHTML = pixelTile + (scenes.length ? scenes.map(s => {
+      const lsTile = `<div class="wpp" id="wpp-layersandwich" style="cursor:pointer;border:1px solid rgba(167,139,250,.35);border-radius:9px;padding:3px;text-align:center;background:rgba(167,139,250,.08);"><div style="width:100%;height:46px;border-radius:7px;background:linear-gradient(135deg,#2a2f22,#3d4a2e);display:flex;align-items:center;justify-content:center;font-size:20px;">🛋️</div><div style="font-size:9px;color:#a78bfa;margin-top:2px;">My Room</div></div>`
+      grid.innerHTML = pixelTile + lsTile + (scenes.length ? scenes.map(s => {
         const src = 'file://' + s.path.replace(/'/g, "\\'")
         const thumb = s.video
           ? `<video src="${src}" muted style="width:100%;height:46px;object-fit:cover;border-radius:7px;"></video>`
@@ -2511,7 +3070,8 @@ window.__askBarLoaded = true
         return `<div class="wpp" data-name="${s.name}" style="cursor:pointer;border:1px solid rgba(255,255,255,.1);border-radius:9px;padding:3px;text-align:center;">${thumb}<div style="font-size:9px;color:#a0a0a8;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.name}${s.video?' 🎬':''}</div></div>`
       }).join('') : '<div style="grid-column:1/-1;color:#6a6a72;font-size:11px;text-align:center;padding:8px;">Drop images/videos into assets/scenes/</div>')
       document.getElementById('wpp-pixelroom').onclick = () => { setScene('__pixelroom__'); pop.style.display='none' }
-      grid.querySelectorAll('.wpp:not(#wpp-pixelroom)').forEach(el => el.onclick = () => { try { setScene(el.dataset.name) } catch(e){}
+      document.getElementById('wpp-layersandwich').onclick = () => { setScene('__layersandwich__'); pop.style.display='none' }
+      grid.querySelectorAll('.wpp:not(#wpp-pixelroom):not(#wpp-layersandwich)').forEach(el => el.onclick = () => { try { setScene(el.dataset.name) } catch(e){}
         grid.querySelectorAll('.wpp').forEach(x=>x.style.borderColor='rgba(255,255,255,.1)'); el.style.borderColor='#0a84ff' })
     }
     btn.addEventListener('click', () => {

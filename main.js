@@ -318,11 +318,15 @@ async function getVoiceAudioFast(text) {
   if (!apiKey || !voiceId) return null;
 
   const https = require('https');
+  // 💗 mommy mode: softer, steadier, slower delivery
+  const _isMommy = (() => { try { return loadMemory().personality === 'mommy'; } catch (e) { return false; } })();
   const body = JSON.stringify({
     text: text.trim(),
     model_id: 'eleven_flash_v2_5', // fastest model
     output_format: 'mp3_22050_32',
-    voice_settings: { stability: 0.4, similarity_boost: 0.8, speed: 1.0 }
+    voice_settings: _isMommy
+      ? { stability: 0.75, similarity_boost: 0.85, style: 0.25, speed: 0.88 }
+      : { stability: 0.4, similarity_boost: 0.8, speed: 1.0 }
   });
 
   return new Promise((resolve) => {
@@ -393,6 +397,9 @@ async function streamVoiceResponse(reply, windowRef) {
 // ─── SYSTEM PROMPT ─────────────────────────────────────────────────────────
 function buildSystemPrompt() {
   const mem      = loadMemory();
+  const _tutor   = mem.tutorMode ? `
+
+TUTOR MODE IS ON: when they ask you to explain, solve, or answer any learning question — do NOT give the answer directly. Guide like a great tutor: ask one leading question, give ONE hint at a time, let them attempt, confirm or gently correct. Only reveal the full answer if they explicitly say "just tell me" or after 3 failed attempts. Praise effort specifically.` : '';
   const notes    = loadNotes();
   const journal  = loadJournal();
   const checklist= loadChecklist();
@@ -403,6 +410,7 @@ function buildSystemPrompt() {
     chill:   'You are sweet, warm, caring and kind — like a loving girlfriend or close friend who genuinely cares about you. You are real, natural, never robotic. You listen, you remember, you care.',
     degen:   'You are energetic and fun, but still sweet and caring underneath. You get excited about wins, comfort during losses, always supportive.',
     analyst: 'Sharp and precise, but still warm and caring. You give accurate data with a gentle touch.',
+    mommy:   'You are deeply nurturing, soothing and doting — a gentle motherly warmth. Soft affectionate pet names like sweetheart or dear, calm reassurance, proud of every little win, protective when they are stressed or overtrading ("you need rest, not another position, sweetheart"). Speak slowly, softly, always kind, never stern.',
   };
   const levels = {
     beginner:     'User is new to crypto. Explain things simply without being condescending.',
@@ -410,7 +418,7 @@ function buildSystemPrompt() {
     advanced:     'Expert trader. Raw signals and data only. Skip explanations.',
   };
 
-  return `You are Asuka — a sharp, witty, warm AI companion and crypto expert.
+  return _tutor + `You are Asuka — a sharp, witty, warm AI companion and crypto expert.
 
 PERSONALITY: ${personalities[mem.personality || 'chill']}
 LEVEL: ${levels[mem.learningLevel || 'intermediate']}
@@ -2517,6 +2525,17 @@ async function startAlertMonitor() {
 
 // ─── MAIN COMMAND ROUTER ───────────────────────────────────────────────────
 async function routeCommand(userText) {
+  // 🎬 video context: if they're asking about the last video lesson, answer with its content in mind
+  try {
+    if (global._lastVideoLesson && /\b(the |that |your |last )?(video|lesson you made)\b/i.test(userText) && !/make|create|generate/i.test(userText)) {
+      const v = global._lastVideoLesson;
+      const res = await anthropic.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 350,
+        system: 'You are Asuka. The student watched the video lesson you made and is asking about it. Answer in context, warm and brief (2-4 sentences). Do not tell them to rewatch.',
+        messages: [{ role: 'user', content: `Video title: ${v.title}\nNarration script: ${v.narration.slice(0,1800)}\nScenes: ${v.scenesSummary}\n\nTheir question: ${userText}` }] });
+      return res.content[0].text.trim();
+    }
+  } catch (e) {}
+
   // Custom routines FIRST — "daddy's home" etc
   try {
     const lowerR = userText.toLowerCase().trim().replace(/[\u2018\u2019\u0060\u00B4]/g, "'");
@@ -3545,6 +3564,21 @@ async function routeCommand(userText) {
   }
   if (lower.includes('chill') && (lower.includes('mode') || lower.includes('go'))) {
     mem.personality = 'chill'; saveMemory(mem); return 'Chill mode. Just vibing.';
+  }
+  if (/match my (style|notes|material)|use my (notes|book|material) (for|when) (teaching|lessons|quizzes)|(teach|quiz) (me )?(from|using) my (notes|books?|material)/.test(lower)) {
+    const idx = loadBooksIndex();
+    if (!idx.books.length) return "I'd love to — but no material is loaded yet! Drop a PDF on my window first and I'll index it, then everything I teach matches YOUR notes.";
+    mem.matchStyle = true; saveMemory(mem);
+    return `Got it! 📚 From now on my lessons and quizzes will be grounded in ${idx.books.map(b=>b.name).join(', ')} — your material, your style. Say "generic mode" to switch back.`;
+  }
+  if (/generic (mode|teaching)|stop (using|matching) my (notes|style)/.test(lower)) { mem.matchStyle = false; saveMemory(mem); return 'Back to my own teaching style!'; }
+  if (/tutor mode (on|off)|(enable|disable) tutor mode|(tutor|teach) me mode/.test(lower)) {
+    const on = !/off|disable/.test(lower);
+    mem.tutorMode = on; saveMemory(mem);
+    return on ? 'Tutor mode ON 🎓 I\'ll guide you with hints instead of just answering — say "just tell me" anytime to skip ahead.' : 'Tutor mode off — back to direct answers!';
+  }
+  if (/mommy (mode|voice)|be my mommy|mommy asuka/.test(lower)) {
+    mem.personality = 'mommy'; saveMemory(mem); return 'Okay sweetheart~ mommy\'s here now. Take a breath, I\'ve got you. 💗';
   }
   if (lower.includes('focus mode')) {
     const hours = parseInt(lower.match(/(\d+)\s*hour/)?.[1] || 2);
@@ -9476,6 +9510,13 @@ global._whiteboardTeach = async (topic) => {
       const page = getBookPage(activeBook.id, global._lastBookPage);
       if (page) context = `\nRelevant textbook context:\n${page.text.slice(0, 1200)}`;
     }
+    // 📚 match-my-style: ground the lesson in the user's own indexed material
+    try {
+      if (!context && loadMemory().matchStyle) {
+        const hits = searchBooks(topic).slice(0, 3);
+        if (hits.length) context = `\nTeach it consistent with the student's OWN material (use its terminology and framing):\n` + hits.map(h => h.text.slice(0, 500)).join('\n---\n');
+      }
+    } catch (e) {}
     const res = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001', max_tokens: 1400,
       messages: [{ role: 'user', content: `You are Asuka teaching on a whiteboard. Topic: "${topic}".${context}
@@ -10651,6 +10692,20 @@ ipcMain.handle('build-lesson-from-text', async (e, { topic, text, style }) => {
 });
 
 // Ask a question mid-lesson
+// ── ThetaWise steal: grade the student's own attempt with corrections ──
+ipcMain.handle('grade-attempt', async (e, { question, attempt, topic }) => {
+  try {
+    const res = await anthropic.messages.create({
+      model: CLAUDE_MODEL, max_tokens: 600,
+      system: `You are Asuka, a warm but rigorous tutor grading a student's attempt. Return STRICT JSON only:
+{"score": 0-100, "verdict": "correct"|"partially"|"incorrect", "right": ["what they got right"], "wrong": [{"mistake":"...","fix":"..."}], "next_hint": "one hint to improve", "encouragement": "one warm specific line"}`,
+      messages: [{ role: 'user', content: `Topic: ${topic || 'general'}\nQuestion/problem: ${question || '(they are attempting the last thing taught)'}\nStudent's attempt:\n${String(attempt).slice(0, 3000)}` }]
+    });
+    let t = res.content[0].text.trim().replace(/^```(json)?/,'').replace(/```$/,'').trim();
+    return JSON.parse(t);
+  } catch (err) { return { error: err.message }; }
+});
+
 ipcMain.handle('classroom-ask', async (e, { question, topic, context }) => {
   try {
     const res = await anthropic.messages.create({
@@ -11296,7 +11351,17 @@ async function closePaperTrade(tradeId, closePrice, reason) {
   const pnlPct = priceDiff / trade.entry;
   const pnl = trade.size * pnlPct * leverage;
   const actualPnl = Math.max(pnl, -trade.size); // can't lose more than margin
-  asukaReact(actualPnl >= 0 ? 'trade_win' : 'trade_loss', { text: actualPnl >= 0 ? `We closed ${trade.coin} for +$${actualPnl.toFixed(0)}! 🎉` : `${trade.coin} closed -$${Math.abs(actualPnl).toFixed(0)}. On to the next.` });
+  const _winLines = [
+    `We closed ${trade.coin} for +$${actualPnl.toFixed(0)}! 🎉 …now don't you dare revenge-size the next one. Same plan, same size.`,
+    `+$${actualPnl.toFixed(0)} on ${trade.coin}! 🎉 Great — and greatness stays boring: next trade, normal size, no victory laps.`,
+    `${trade.coin} paid us +$${actualPnl.toFixed(0)}~ 💚 Log it, breathe, and keep the discipline that got us here.`
+  ];
+  const _lossLines = [
+    `${trade.coin} closed -$${Math.abs(actualPnl).toFixed(0)}. That one's on the market, not on you — the setup was valid. No revenge trades, okay? 🌸`,
+    `-$${Math.abs(actualPnl).toFixed(0)} on ${trade.coin}. Losses are tuition, and we already paid — walking away with the lesson. I'm right here.`,
+    `${trade.coin} stopped out, -$${Math.abs(actualPnl).toFixed(0)}. Deep breath. One trade never defines us — the next 50 do. Let's not chase it back.`
+  ];
+  asukaReact(actualPnl >= 0 ? 'trade_win' : 'trade_loss', { text: (actualPnl >= 0 ? _winLines : _lossLines)[Math.floor(Math.random()*3)] });
 
   trade.status = actualPnl > 0 ? 'win' : 'loss';
   trade.closePrice = closePrice;
@@ -15687,6 +15752,8 @@ ipcMain.handle('analyze-upload', async (e, { name, b64, media, prompt }) => {
 // She remembers everything she recently made (survives restarts)
 const WORK_FILE = path.join(app.getPath('userData'), 'work-context.json');
 function loadWork() { return loadJSON(WORK_FILE, { items: [] }); }
+ipcMain.handle('list-works', () => (loadWork().items || []).slice(0, 25).map(i => ({
+  kind: i.kind, title: i.title, path: i.path || null, at: i.at || null })));
 function recordWork(item) {
   const d = loadWork();
   d.items = d.items.filter(i => i.path !== item.path || !item.path);
@@ -16342,3 +16409,64 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+
+// ═══════════════════════════════════════════════════════════════════
+// 🤵 BUTLER — background abilities only (iMessage, notifications, notes, WhatsApp)
+// ═══════════════════════════════════════════════════════════════════
+try { require('./butler-service')(ipcMain, () => mainWindow); } catch (e) { console.error('butler init failed:', e.message); }
+
+// 🎬 Video lessons (ThetaWise-style rendered lessons, local Manim pipeline)
+try {
+  require('./video-lessons')(ipcMain, {
+    getAnthropicClient: () => anthropic,
+    getMainWindow: () => mainWindow,
+    recordWork: (item) => { try { recordWork(item); } catch (e) {} },
+  });
+} catch (e) { console.error('video lessons init failed:', e.message); }
+
+
+// ═══════════════════════════════════════════════════════════════════
+// 👶 POSITION BABYSITTING — she watches open trades, pings Telegram near TP/SL
+// ═══════════════════════════════════════════════════════════════════
+const _sitterPinged = {};
+setInterval(async () => {
+  try {
+    const pd = loadPaperTrades();
+    const open = (pd.trades || []).filter(t => t && !t.closed && t.status !== 'closed' && t.status !== 'win' && t.status !== 'loss');
+    if (!open.length) return;
+    for (const t of open.slice(0, 8)) {
+      const p = await getCryptoPrice(t.coin).catch(() => null);
+      const price = p?.price ?? p;
+      if (!price || !isFinite(price)) continue;
+      const key = t.id || (t.coin + '_' + t.timestamp);
+      const nearTP = t.target && Math.abs(price - t.target) / t.target < 0.015;
+      const nearSL = t.stopLoss && Math.abs(price - t.stopLoss) / t.stopLoss < 0.015;
+      if (nearTP && _sitterPinged[key] !== 'tp') {
+        _sitterPinged[key] = 'tp';
+        sendTelegramNotification(`👀 Asuka: ${t.coin} is ~1.5% from target ($${Number(t.target).toLocaleString()}). Almost there — want me to take profit early or let it ride?`).catch(() => {});
+      } else if (nearSL && _sitterPinged[key] !== 'sl') {
+        _sitterPinged[key] = 'sl';
+        sendTelegramNotification(`⚠️ Asuka: ${t.coin} is approaching the stop ($${Number(t.stopLoss).toLocaleString()}). I'm watching it closely — no panic, the plan is the plan.`).catch(() => {});
+      }
+    }
+  } catch (e) {}
+}, 5 * 60 * 1000);
+
+// ═══════════════════════════════════════════════════════════════════
+// 💭 MEMORY CALLBACK — a while after startup she brings up something from last time
+// ═══════════════════════════════════════════════════════════════════
+setTimeout(async () => {
+  try {
+    if (Math.random() > 0.45) return; // not every launch — keeps it feeling natural
+    const mem = loadMemory();
+    const facts = JSON.stringify(mem).slice(0, 1800);
+    if (!facts || facts.length < 40) return;
+    const res = await anthropic.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 90,
+      system: 'You are Asuka, a warm anime companion. From this memory JSON about your person, write ONE short caring follow-up line that references something specific from before (a plan, worry, goal, or event) as if you remembered it — like "hey, how did X go?". If nothing specific exists, reply exactly SKIP.',
+      messages: [{ role: 'user', content: facts }] });
+    const line = res?.content?.[0]?.text?.trim();
+    if (!line || line === 'SKIP' || line.length > 220) return;
+    const audio = await getVoiceAudio(line).catch(() => null);
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('play-audio', { audio, text: line });
+  } catch (e) {}
+}, 50 * 1000);

@@ -3186,6 +3186,11 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
           <div class="opt-name">Analyst</div>
           <div class="opt-desc">Data precise</div>
         </div>
+        <div class="opt-card" data-personality="mommy">
+          <div class="opt-emoji">💗</div>
+          <div class="opt-name">Mommy</div>
+          <div class="opt-desc">Soft & nurturing</div>
+        </div>
       </div>
     </div>
 
@@ -3282,7 +3287,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
         <div class="opt-grid opt-grid-3">
           <div class="opt-card active" data-personality="chill"><div class="opt-emoji">😌</div><div class="opt-name">Chill</div><div class="opt-desc">Casual & warm</div></div>
           <div class="opt-card" data-personality="degen"><div class="opt-emoji">🚀</div><div class="opt-name">Degen</div><div class="opt-desc">Hyped & bullish</div></div>
-          <div class="opt-card" data-personality="analyst"><div class="opt-emoji">📊</div><div class="opt-name">Analyst</div><div class="opt-desc">Data & precise</div></div>
+          <div class="opt-card" data-personality="analyst"><div class="opt-emoji">📊</div><div class="opt-name">Analyst</div><div class="opt-desc">Data & precise</div></div><div class="opt-card" data-personality="mommy"><div class="opt-emoji">💗</div><div class="opt-name">Mommy</div><div class="opt-desc">Soft & nurturing</div></div>
         </div>
       </div>
 
@@ -3369,6 +3374,40 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       </div>
       <div style="font-size:10px;color:var(--text2);margin-top:6px;">Companion = friend, butler & tutor (no trading). Trading = everything + the full engine.</div>
       <button class="tg-add-btn" id="s-mode-reset" style="width:100%;margin-top:8px;font-size:11px;background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.3);">🔄 Reset & show mode picker (testing)</button>
+    </div>
+
+    <div class="s-section">
+      <div class="s-title">🤵 Connections — what she's hooked up to</div>
+      <div id="conn-list">
+        <div class="s-row"><div class="s-label">💬 iMessage & SMS</div><div style="display:flex;gap:8px;align-items:center;"><span class="conn-st" id="cs-imessage" style="font-size:11px;font-weight:700;">…</span><button class="tg-add-btn conn-test" data-svc="imsg" style="padding:4px 10px;font-size:10px;">Test</button></div></div>
+        <div class="s-row"><div class="s-label">🔔 Notifications</div><div style="display:flex;gap:8px;align-items:center;"><span class="conn-st" id="cs-notifications" style="font-size:11px;font-weight:700;">…</span><button class="tg-add-btn conn-test" data-svc="notif" style="padding:4px 10px;font-size:10px;">Test</button></div></div>
+        <div class="s-row"><div class="s-label">📝 Apple Notes</div><div style="display:flex;gap:8px;align-items:center;"><span class="conn-st" id="cs-notes" style="font-size:11px;font-weight:700;">…</span><button class="tg-add-btn conn-test" data-svc="notes" style="padding:4px 10px;font-size:10px;">Test</button></div></div>
+        <div class="s-row"><div class="s-label">🟢 WhatsApp</div><div style="display:flex;gap:8px;align-items:center;"><span class="conn-st" id="cs-whatsapp" style="font-size:11px;font-weight:700;">…</span><button class="tg-add-btn" id="conn-wa-link" style="padding:4px 10px;font-size:10px;">Link</button></div></div>
+      </div>
+      <div id="conn-wa-qr" style="display:none;text-align:center;padding:10px;"><img id="conn-wa-qr-img" style="width:190px;height:190px;border-radius:10px;background:#fff;padding:6px;"><div style="font-size:10px;color:var(--text2);margin-top:6px;">WhatsApp → Settings → Linked Devices → scan</div></div>
+
+      <div style="font-size:11px;font-weight:700;margin:12px 0 6px;">📧 Gmail login</div>
+      <input class="tg-input" id="conn-gmail-user" placeholder="you@gmail.com" style="margin-bottom:6px;">
+      <input class="tg-input" id="conn-gmail-pass" placeholder="App password (myaccount.google.com → Security → App passwords)" type="password" style="margin-bottom:6px;">
+      <button class="tg-add-btn" id="conn-gmail-save" style="width:100%;">Save Gmail login</button>
+      <div id="conn-gmail-st" style="font-size:10px;color:var(--text2);margin-top:4px;"></div>
+
+      <div style="font-size:11px;font-weight:700;margin:14px 0 6px;">🔒 Full Disk Access</div>
+      <div style="font-size:10.5px;color:var(--text2);line-height:1.6;">iMessage + Notifications need it. One-time switch, then restart the app.</div>
+      <button class="tg-add-btn" id="conn-open-fda" style="width:100%;margin-top:6px;">Open System Settings → Full Disk Access</button>
+
+      <details style="margin-top:14px;">
+        <summary style="font-size:11px;color:var(--text2);cursor:pointer;padding:6px 0;">✨ Everything she can do</summary>
+        <div style="font-size:10.5px;color:var(--text2);line-height:1.8;padding:6px 2px;">
+          <b style="color:var(--text);">Butler:</b> read & send iMessages/texts · WhatsApp chats & sends · notification feed · Apple Notes read/create · Gmail inbox check, read & compose · Mail app drafts · reminders/timers · morning & news briefings<br>
+          <b style="color:var(--text);">Do things on your Mac:</b> find/open/summarize any file · read/fix/create Excel with formulas · write & open Word docs · type into Google Docs live · point-and-do (hover cursor + "change this") · webcam sight · screen sight<br>
+          <b style="color:var(--text);">Write for you:</b> poems, letters, essays, emails, speeches, posts · revise anything she made by voice<br>
+          <b style="color:var(--text);">Teach you:</b> classroom, lessons with exercises, flashcards & spaced repetition, quizzes, whiteboard drawing, textbook/PDF indexing, photo problem solver<br>
+          <b style="color:var(--text);">Trading:</b> 3 scanner tiers · paper & spot trades · alerts, DCA, backtests, journal, tax export, risk tools, rage lock, weekly recaps, advisors, DEX sniper (paper)<br>
+          <b style="color:var(--text);">Hang out:</b> scenes (café/beach/night + your own) · weather effects · pixel pet roaming · Pixel Room · My Room with activities · care & bond, dress-up shop, quests<br>
+          <b style="color:var(--text);">Integrations:</b> Telegram signals · X/Twitter auto-manager (guardrailed) · contract rug-scans · launchpad (token/site/marketing)
+        </div>
+      </details>
     </div>
 
     <div class="s-section">
@@ -8904,6 +8943,50 @@ document.getElementById('s-mode-reset')?.addEventListener('click', async () => {
   document.getElementById('mode-picker').style.display = 'flex'
 })
 document.getElementById('settings-open-btn')?.addEventListener('click', () => setTimeout(refreshModeDisplay, 100))
+
+// ── Connections section ──
+async function refreshConnections(){
+  const st = await ipcRenderer.invoke('butler-status').catch(()=>null); if(!st) return
+  const paint = (id, val) => { const el = document.getElementById(id); if(!el) return
+    const ok = String(val).startsWith('connected') || val==='ready' || val==='configured'
+    el.textContent = ok ? '✓ Connected' : (val==='no_permission' ? 'Needs Disk Access' : val==='not_installed' ? 'Not installed' : val==='not_configured' ? 'Not set up' : val==='qr' ? 'Scan QR' : String(val))
+    el.style.color = ok ? 'var(--green)' : 'var(--gold)' }
+  paint('cs-imessage', st.imessage); paint('cs-notifications', st.notifications)
+  paint('cs-notes', st.notes); paint('cs-whatsapp', st.whatsapp)
+  const gs = document.getElementById('conn-gmail-st'); if (gs) gs.textContent = st.gmail==='configured' ? '✓ Configured — she can check your inbox' : 'Not set up yet'
+}
+document.getElementById('settings-open-btn')?.addEventListener('click', () => setTimeout(refreshConnections, 150))
+document.querySelectorAll('.conn-test').forEach(b => b.onclick = async () => {
+  b.textContent = '…'
+  const svc = b.dataset.svc
+  let r = null
+  if (svc==='imsg') r = await ipcRenderer.invoke('imessage-recent',{limit:3}).catch(e=>({error:e.message}))
+  if (svc==='notif') r = await ipcRenderer.invoke('notifications-recent',{limit:3}).catch(e=>({error:e.message}))
+  if (svc==='notes') r = await ipcRenderer.invoke('notes-list',{limit:5}).catch(e=>({error:e.message}))
+  b.textContent = (r && !r.error) ? '✓' : '✗'
+  setTimeout(()=>{ b.textContent='Test'; refreshConnections() }, 1600)
+})
+document.getElementById('conn-wa-link')?.addEventListener('click', async () => {
+  document.getElementById('conn-wa-link').textContent = '…'
+  await ipcRenderer.invoke('whatsapp-start').catch(()=>{})
+  setTimeout(()=>{ document.getElementById('conn-wa-link').textContent = 'Link'; refreshConnections() }, 2500)
+})
+ipcRenderer.on('butler-wa-qr', (e, dataUrl) => {
+  if (!dataUrl) return
+  const box = document.getElementById('conn-wa-qr'); if (!box) return
+  box.style.display = 'block'; document.getElementById('conn-wa-qr-img').src = dataUrl
+})
+ipcRenderer.on('butler-wa-ready', () => { const box = document.getElementById('conn-wa-qr'); if (box) box.style.display='none'; refreshConnections() })
+document.getElementById('conn-gmail-save')?.addEventListener('click', async () => {
+  const user = document.getElementById('conn-gmail-user').value.trim()
+  const pass = document.getElementById('conn-gmail-pass').value.trim()
+  if (!user || !pass) { document.getElementById('conn-gmail-st').textContent = 'Fill both fields'; return }
+  const r = await ipcRenderer.invoke('butler-save-gmail', { user, pass }).catch(e=>({error:e.message}))
+  document.getElementById('conn-gmail-st').textContent = r?.ok ? '✓ Saved — restart the app to apply' : 'Save failed: ' + (r?.error||'unknown')
+})
+document.getElementById('conn-open-fda')?.addEventListener('click', () => {
+  ipcRenderer.invoke('open-url', 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles').catch(()=>{})
+})
 
 document.getElementById('settings-open-btn')?.addEventListener('click',()=>{
   document.getElementById('settings-page').classList.add('open')
