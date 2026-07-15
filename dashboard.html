@@ -1521,6 +1521,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
 
 <!-- END PAGE 1 -->
 </div>
+</div>
 
 <!-- PAGE 2 — TELEGRAM INTELLIGENCE -->
 <div class="page" id="page-2">
@@ -2188,6 +2189,24 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       Balance: <span id="pt-balance" style="color:var(--accent);font-weight:600;">$100,000</span>
     </div>
     <canvas id="equity-spark" width="600" height="56" style="width:100%;height:56px;margin-bottom:10px;border-radius:10px;background:rgba(15,23,42,0.5);border:1px solid rgba(148,163,184,0.07);"></canvas>
+
+    <!-- 💰 Capital Allocation -->
+    <div class="tg-section" style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:12px;font-weight:700;">💰 Capital Allocation</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span style="font-size:10px;color:var(--text2);">Reserve: <b id="alloc-reserve" style="color:var(--gold);">—</b></span>
+          <button class="tg-add-btn" id="alloc-edit" style="padding:3px 10px;font-size:10px;">Edit</button>
+        </div>
+      </div>
+      <div style="font-size:9.5px;color:var(--text3);margin-bottom:8px;">Each system trades only its own bucket. Full bucket = that system pauses, others keep going.</div>
+      <div id="alloc-rows"></div>
+      <div id="alloc-editbar" style="display:none;margin-top:8px;">
+        <div id="alloc-warn" style="font-size:10px;color:var(--red);display:none;margin:4px 0;">Over 100% — will be scaled down proportionally.</div>
+        <button class="tg-add-btn" id="alloc-save" style="width:100%;">Save allocation</button>
+        <div id="alloc-st" style="font-size:10px;color:var(--text2);margin-top:4px;"></div>
+      </div>
+    </div>
 
     <!-- Usage Stats -->
     <div class="tg-section" style="margin-bottom:8px;">
@@ -3980,6 +3999,7 @@ document.getElementById('wallet-add-confirm')?.addEventListener('click',async()=
 const pagesWrapper = document.getElementById('pages-wrapper')
 
 // Map page numbers to element IDs
+console.log('%cDASH BUILD 2026-07-14-FINAL', 'color:#2dd4ff;font-weight:bold');
 const PAGE_IDS = { 1: 'page-1', 2: 'page-2', 3: 'trading-page', 5: 'page-5', 6: 'page-6', 7: 'page-7' }
 
 function navigateToPage(pageNum) {
@@ -3991,12 +4011,20 @@ function navigateToPage(pageNum) {
     t.classList.toggle('active', parseInt(t.dataset.page) === pageNum)
   })
 
-  // Show correct page using ID map
-  document.querySelectorAll('.page').forEach(p => p.style.display = 'none')
+  // Show correct page using ID map — atomic: never hide unless we can show
   const pageId = PAGE_IDS[pageNum] || ('page-' + pageNum)
   if (pageNum === 7) { try { loadAdvisorTab() } catch(e){} }
   const pageEl = document.getElementById(pageId)
-  if (pageEl) pageEl.style.display = 'flex'
+  if (pageEl) {
+    document.querySelectorAll('.page').forEach(p => p.style.display = 'none')
+    pageEl.style.display = 'flex'
+  } else {
+    console.error('navigateToPage: no element for page', pageNum, '→', pageId)
+  }
+  // self-heal: if somehow nothing is visible, force page-1
+  if (![...document.querySelectorAll('.page')].some(p => p.style.display === 'flex')) {
+    const fb = document.getElementById('page-1'); if (fb) fb.style.display = 'flex'
+  }
 
   // Load page content
   if (pageNum === 2) setTimeout(loadTelegramUI, 300)
@@ -5567,6 +5595,7 @@ function loadScalpTab() {
 }
 
 function renderDayTrades(stats) {
+  if (!stats || !Array.isArray(stats.trades)) stats = { ...(stats||{}), trades: [] }
   const open = stats.trades.filter(t => t.status === 'open' && t.isDayTrade)
   const closed = stats.trades.filter(t => t.status !== 'open' && t.isDayTrade)
   const wins = closed.filter(t => t.pnl > 0)
@@ -5584,6 +5613,7 @@ function renderDayTrades(stats) {
 }
 
 function renderMainTrades(stats) {
+  if (!stats || !Array.isArray(stats.trades)) stats = { ...(stats||{}), trades: [] }
   const open = stats.trades.filter(t => t.status === 'open' && !t.isDayTrade && !t.isScalp)
   const closed = stats.trades.filter(t => t.status !== 'open' && !t.isDayTrade && !t.isScalp)
   const wins = closed.filter(t => t.pnl > 0)
@@ -5613,6 +5643,7 @@ function renderMainTrades(stats) {
 }
 
 function renderScalpTrades(stats) {
+  if (!stats || !Array.isArray(stats.trades)) stats = { ...(stats||{}), trades: [] }
   const open = stats.trades.filter(t => t.status === 'open' && t.isScalp)
   const closed = stats.trades.filter(t => t.status !== 'open' && t.isScalp)
   const wins = closed.filter(t => t.pnl > 0)
@@ -5835,7 +5866,8 @@ document.getElementById('open-classroom-btn')?.addEventListener('click', () => i
 async function loadStudyLibrary() {
   const el = document.getElementById('study-library-list')
   if (!el) return
-  const lib = await ipcRenderer.invoke('get-lesson-library').catch(()=>({lessons:[]}))
+  const lib = (await ipcRenderer.invoke('get-lesson-library').catch(()=>null)) || {}
+  if (!Array.isArray(lib.lessons)) lib.lessons = []
   const badge = document.getElementById('lib-count-badge')
   if(!badge) return
   if (badge) badge.textContent = `${lib.lessons.length} saved`
@@ -6974,17 +7006,19 @@ document.querySelectorAll('.ls-post').forEach(b => b.addEventListener('click', a
 // ── Project Wizard ────────────────────────────────────────────────────────
 let _wzImageData = null
 function wzCtx() {
+  const v = id => (document.getElementById(id)?.value || '').trim()
+  const vr = id => document.getElementById(id)?.value || ''
   return {
-    name: document.getElementById('wz-name').value.trim(),
-    symbol: document.getElementById('wz-symbol').value.trim(),
-    tagline: document.getElementById('wz-tagline').value.trim(),
-    description: document.getElementById('wz-description').value.trim(),
-    chain: document.getElementById('wz-chain').value,
-    supply: document.getElementById('wz-supply').value.trim(),
-    twitter: document.getElementById('wz-twitter').value.trim(),
-    telegram: document.getElementById('wz-telegram').value.trim(),
+    name: v('wz-name'),
+    symbol: v('wz-symbol'),
+    tagline: v('wz-tagline'),
+    description: v('wz-description'),
+    chain: vr('wz-chain'),
+    supply: v('wz-supply'),
+    twitter: v('wz-twitter'),
+    telegram: v('wz-telegram'),
     telegramChatId: document.getElementById('wz-tg-chatid')?.value.trim() || '',
-    siteUrl: document.getElementById('wz-site-url').value.trim(),
+    siteUrl: v('wz-site-url'),
     customBrief: document.getElementById('wz-brief')?.value.trim() || ''
   }
 }
@@ -7508,7 +7542,7 @@ async function updateAsukaScore() {
     el.textContent = `${coin} ${r.score}`
     el.style.color = r.score >= 65 ? '#34d399' : r.score <= 35 ? '#ef4444' : '#fbbf24'
     el.style.textShadow = `0 0 12px ${r.score >= 65 ? 'rgba(52,211,153,0.4)' : r.score <= 35 ? 'rgba(239,68,68,0.4)' : 'rgba(251,191,36,0.4)'}`
-    document.getElementById('ov-score-chip').title = r.summary || 'Asuka Score'
+    { const _e=document.getElementById('ov-score-chip'); if(_e) _e.title = r.summary || 'Asuka Score' }
   } catch(e) {}
 }
 setTimeout(updateAsukaScore, 3000)
@@ -8774,7 +8808,7 @@ async function loadPortfolio() {
   if (window.countMoney) window.countMoney(document.getElementById('port-value'), totalValue);
   else setEl('port-value','textContent',`$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
   { const _e=document.getElementById('port-value'); if(_e) _e.style.opacity = anyStale ? '0.6' : '1' }
-  document.getElementById('port-value').title = anyStale ? 'Refreshing — showing last known values' : '';
+  { const _e=document.getElementById('port-value'); if(_e) _e.title = anyStale ? 'Refreshing — showing last known values' : ''; }
 
   // Render tokens
   if (allTokens.length) {
@@ -8945,6 +8979,64 @@ document.getElementById('s-mode-reset')?.addEventListener('click', async () => {
 document.getElementById('settings-open-btn')?.addEventListener('click', () => setTimeout(refreshModeDisplay, 100))
 
 // ── Connections section ──
+const ALLOC_META = { daily:['📅','Daily RSI'], main:['🎯','Main scanner'], scalp:['⚡','Scalp'], manual:['🎤','Manual'], other:['📡','Signals/Copy'] }
+let _allocEdit = false
+async function renderAllocations(){
+  const [alloc, usage] = await Promise.all([
+    ipcRenderer.invoke('get-allocations').catch(()=>null),
+    ipcRenderer.invoke('get-bucket-usage').catch(()=>null)
+  ])
+  if (!alloc) return
+  const rows = document.getElementById('alloc-rows'); if (!rows) return
+  rows.innerHTML = Object.keys(ALLOC_META).map(k => {
+    const [ico, name] = ALLOC_META[k]
+    const b = usage?.buckets?.[k]
+    const usedPct = b && b.cap > 0 ? Math.min(100, Math.round(b.used / b.cap * 100)) : 0
+    const pnl = b ? (b.pnl >= 0 ? '+' : '') + '$' + b.pnl.toFixed(0) : ''
+    const wr = b && (b.wins + b.losses) ? Math.round(b.wins/(b.wins+b.losses)*100) + '% WR' : ''
+    const edit = _allocEdit ? `<input type="range" min="0" max="100" step="5" value="${alloc[k]}" data-alloc="${k}" style="flex:1;">
+        <input type="number" min="0" max="100" value="${alloc[k]}" data-allocn="${k}" style="width:48px;padding:3px;font-size:11px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--text);text-align:center;"><span style="font-size:10px;color:var(--text2);">%</span>`
+      : `<span style="font-size:11px;font-weight:700;color:var(--text);">${alloc[k]}%</span>`
+    return `<div style="padding:6px 0;border-bottom:1px solid var(--border2);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <div style="font-size:11.5px;flex:1;white-space:nowrap;">${ico} ${name} <span style="font-size:9.5px;color:${b&&b.pnl>=0?'var(--green)':'var(--red)'};">${pnl}</span> <span style="font-size:9px;color:var(--text3);">${wr}</span></div>
+        ${edit}
+      </div>
+      ${b ? `<div style="height:4px;background:var(--bg3);border-radius:4px;margin-top:5px;overflow:hidden;"><div style="height:100%;width:${usedPct}%;background:${usedPct>90?'var(--red)':'var(--accent)'};border-radius:4px;"></div></div>
+      <div style="font-size:9px;color:var(--text3);margin-top:2px;">$${Math.round(b.used).toLocaleString()} / $${Math.round(b.cap).toLocaleString()} in use${b.openCount?` · ${b.openCount} open`:''}</div>` : ''}
+    </div>`
+  }).join('')
+  const sync = () => {
+    let sum = 0
+    document.querySelectorAll('[data-allocn]').forEach(n => sum += Number(n.value)||0)
+    const res = document.getElementById('alloc-reserve'); if (res) res.textContent = Math.max(0, 100 - sum) + '%'
+    const w = document.getElementById('alloc-warn'); if (w) w.style.display = sum > 100 ? 'block' : 'none'
+  }
+  if (_allocEdit) {
+    document.querySelectorAll('[data-alloc]').forEach(r => r.oninput = () => { document.querySelector(`[data-allocn="${r.dataset.alloc}"]`).value = r.value; sync() })
+    document.querySelectorAll('[data-allocn]').forEach(n => n.oninput = () => { const r = document.querySelector(`[data-alloc="${n.dataset.allocn}"]`); if (r) r.value = n.value; sync() })
+  }
+  sync()
+}
+document.getElementById('alloc-edit')?.addEventListener('click', () => {
+  _allocEdit = !_allocEdit
+  document.getElementById('alloc-edit').textContent = _allocEdit ? 'Cancel' : 'Edit'
+  document.getElementById('alloc-editbar').style.display = _allocEdit ? 'block' : 'none'
+  renderAllocations()
+})
+document.getElementById('alloc-save')?.addEventListener('click', async () => {
+  const out = {}
+  document.querySelectorAll('[data-allocn]').forEach(n => out[n.dataset.allocn] = Number(n.value)||0)
+  const r = await ipcRenderer.invoke('save-allocations', out).catch(()=>null)
+  document.getElementById('alloc-st').textContent = r ? '✓ Saved — applies to each system\'s next entry' : 'Save failed'
+  _allocEdit = false
+  document.getElementById('alloc-edit').textContent = 'Edit'
+  document.getElementById('alloc-editbar').style.display = 'none'
+  renderAllocations()
+})
+try { renderAllocations() } catch(e) { console.error('alloc render:', e) }
+try { setInterval(() => { try { renderAllocations() } catch(e){} }, 30000) } catch(e) {}
+
 async function refreshConnections(){
   const st = await ipcRenderer.invoke('butler-status').catch(()=>null); if(!st) return
   const paint = (id, val) => { const el = document.getElementById(id); if(!el) return
@@ -9008,7 +9100,7 @@ document.getElementById('back-from-settings')?.addEventListener('click',()=>{
   const activeTab = document.querySelector('.page-tab.active')
   const pageNum = activeTab ? parseInt(activeTab.dataset.page) : 1
   const pageId = PAGE_IDS?.[pageNum] || ('page-' + pageNum)
-  const pageEl = document.getElementById(pageId)
+  const pageEl = document.getElementById(pageId) || document.getElementById('page-1')
   if (pageEl) {
     document.querySelectorAll('.page').forEach(p => p.style.display = 'none')
     pageEl.style.display = 'flex'
@@ -9561,7 +9653,7 @@ function setEl(id, prop, val){ const e=document.getElementById(id); if(e) e[prop
   window.loadQuests = async function() {
     const ipc = require('electron').ipcRenderer
     const q = await ipc.invoke('quests-get').catch(()=>null)
-    const el = document.getElementById('quest-list'); if (!el || !q) return
+    const el = document.getElementById('quest-list'); if (!el || !q || !Array.isArray(q.quests)) return
     el.innerHTML = q.quests.map(x => `<div style="padding:4px 0;">${x.done ? '✅' : '⬜'} ${x.label}</div>`).join('')
     const btn = document.getElementById('quest-claim')
     if(!btn) return
@@ -9610,7 +9702,7 @@ function setEl(id, prop, val){ const e=document.getElementById(id); if(e) e[prop
   window.loadHerTab = async function() {
     const ipc = require('electron').ipcRenderer
     const r = await ipc.invoke('companion-get').catch(()=>null)
-    if (!r) return
+    if (!r || !r.companion || !r.tier) return
     const c = r.companion
     setEl('her-tier','textContent',`${r.tier.emoji} ${r.tier.name} · ${r.bondXP} XP`)
     const span = r.nextTier ? (r.nextTier.xp - (r.tier.xp||0)) : 1
@@ -9672,7 +9764,7 @@ function setEl(id, prop, val){ const e=document.getElementById(id); if(e) e[prop
     const ipc = require('electron').ipcRenderer
     const $ = id => document.getElementById(id)
     async function loadXM(){
-      const d = await ipc.invoke('xmgr-get').catch(()=>null); if(!d) return
+      const d = await ipc.invoke('xmgr-get').catch(()=>null); if(!d || !d.project) return
       if(!$('xm-enabled')) return   // tab not present — bail safely
       const set = (id,prop,val)=>{ const el=$(id); if(el) el[prop]=val }
       set('xm-enabled','checked',d.enabled); set('xm-enabled-lbl','textContent',d.enabled?'On':'Off')
@@ -9706,7 +9798,8 @@ function setEl(id, prop, val){ const e=document.getElementById(id); if(e) e[prop
       const out = $('xm-preview-out'); out.style.display='block'; out.textContent='Writing…'
       const r = await ipc.invoke('xmgr-test-post', { context:'a genuine community post, no price talk' }).catch(()=>null)
       if(!r){ out.textContent='Error'; return }
-      out.innerHTML = `<b>Preview:</b> ${r.text}<br><span style="color:${r.guardrail.ok?'#4de1c1':'#ff6b6b'}">${r.guardrail.ok?'✅ passes safety filter':'🚫 blocked: '+r.guardrail.reason}</span>`
+      const gr = r.guardrail || { ok: false, reason: 'no guardrail result' }
+      out.innerHTML = `<b>Preview:</b> ${r.text || ''}<br><span style="color:${gr.ok?'#4de1c1':'#ff6b6b'}">${gr.ok?'✅ passes safety filter':'🚫 blocked: '+gr.reason}</span>`
     })
     // load when auto-desk tab opens
     document.querySelectorAll('[data-tab="autodesk"]').forEach(b=>b.addEventListener('click', ()=>setTimeout(loadXM,200)))

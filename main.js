@@ -3572,6 +3572,15 @@ async function routeCommand(userText) {
     return `Got it! 📚 From now on my lessons and quizzes will be grounded in ${idx.books.map(b=>b.name).join(', ')} — your material, your style. Say "generic mode" to switch back.`;
   }
   if (/generic (mode|teaching)|stop (using|matching) my (notes|style)/.test(lower)) { mem.matchStyle = false; saveMemory(mem); return 'Back to my own teaching style!'; }
+  if (/how('?s| is| are) (each|every|the) system|system performance|bucket (status|usage)|allocation status|which system (makes|is making)/.test(lower)) {
+    const u = bucketUsage();
+    const names = { daily: '📅 Daily RSI', main: '🎯 Main', scalp: '⚡ Scalp', manual: '🎤 Manual', other: '📡 Signals/Copy' };
+    const lines = Object.entries(u.buckets).map(([k, b]) => {
+      const wr = (b.wins + b.losses) ? Math.round(b.wins / (b.wins + b.losses) * 100) : null;
+      return `${names[k]} (${b.pct}%): ${b.pnl >= 0 ? '+' : ''}$${b.pnl.toFixed(0)}${wr !== null ? ` · ${wr}% WR` : ''} · $${Math.round(b.used).toLocaleString()}/$${Math.round(b.cap).toLocaleString()} in use${b.openCount ? ` (${b.openCount} open)` : ''}`;
+    });
+    return `💰 System report:\n${lines.join('\n')}\n🏦 Reserve: ${u.reservePct}% untouched.`;
+  }
   if (/tutor mode (on|off)|(enable|disable) tutor mode|(tutor|teach) me mode/.test(lower)) {
     const on = !/off|disable/.test(lower);
     mem.tutorMode = on; saveMemory(mem);
@@ -11146,6 +11155,69 @@ ipcMain.on('open-shop', () => {
 });
 ipcMain.handle('close-shop', () => { if (shopWindow && !shopWindow.isDestroyed()) shopWindow.close(); return { ok: true }; });
 
+// ═══════════════════════════════════════════════════════════════════
+// 💰 CAPITAL ALLOCATION — user decides where money goes, per system
+// Buckets are % of capital; sum ≤ 100, remainder = untouchable reserve.
+// ═══════════════════════════════════════════════════════════════════
+const ALLOC_DEFAULTS = { daily: 20, main: 35, scalp: 10, manual: 20, other: 10 }; // reserve = 5
+
+function getAllocations() {
+  const s = loadSettings();
+  const a = { ...ALLOC_DEFAULTS, ...(s.allocations || {}) };
+  // clamp: each 0-100, sum ≤ 100
+  let sum = 0;
+  for (const k of Object.keys(ALLOC_DEFAULTS)) { a[k] = Math.max(0, Math.min(100, Number(a[k]) || 0)); sum += a[k]; }
+  if (sum > 100) { const f = 100 / sum; for (const k of Object.keys(ALLOC_DEFAULTS)) a[k] = Math.round(a[k] * f); }
+  a.reserve = Math.max(0, 100 - Object.keys(ALLOC_DEFAULTS).reduce((t, k) => t + a[k], 0));
+  return a;
+}
+
+function classifySystem(t) {
+  const c = String(t.caller || '').toLowerCase();
+  const g = String(t.groupName || '').toLowerCase();
+  if (t.dailyTier || g.includes('daily')) return 'daily';
+  if (c.includes('scalp')) return 'scalp';
+  if (c.includes('independent') || c.includes('asuka (main)')) return 'main';
+  if (c.includes('voice') || c.includes('manual') || c.includes('you')) return 'manual';
+  return 'other'; // telegram callers, copy-trades, advisors
+}
+
+function bucketUsage() {
+  const pd = loadPaperTrades();
+  const total = 100000; // paper capital base
+  const alloc = getAllocations();
+  const buckets = {};
+  for (const k of Object.keys(ALLOC_DEFAULTS)) buckets[k] = { pct: alloc[k], cap: total * alloc[k] / 100, used: 0, openCount: 0, pnl: 0, wins: 0, losses: 0 };
+  for (const t of (pd.trades || [])) {
+    const sys = classifySystem(t);
+    const b = buckets[sys]; if (!b) continue;
+    const open = !t.closed && t.status !== 'closed' && t.status !== 'win' && t.status !== 'loss';
+    if (open) { b.used += Number(t.size) || 0; b.openCount++; }
+    else { const pnl = Number(t.pnl) || 0; b.pnl += pnl; if (pnl > 0) b.wins++; else if (pnl < 0) b.losses++; }
+  }
+  return { total, reservePct: alloc.reserve, buckets };
+}
+
+// gate: can this system spend `size` more?
+function allocationAllows(signal, size) {
+  try {
+    const sys = classifySystem(signal);
+    const u = bucketUsage();
+    const b = u.buckets[sys];
+    if (!b) return { ok: true };
+    if (b.pct <= 0) return { ok: false, sys, reason: `${sys} bucket is set to 0% — allocation disabled` };
+    if (b.used + Number(size || 0) > b.cap) return { ok: false, sys, reason: `${sys} bucket full: $${Math.round(b.used).toLocaleString()} / $${Math.round(b.cap).toLocaleString()} in use` };
+    return { ok: true, sys };
+  } catch (e) { return { ok: true }; } // never let allocation errors block trading entirely
+}
+
+ipcMain.handle('get-allocations', () => getAllocations());
+ipcMain.handle('save-allocations', (e, alloc) => {
+  const s = loadSettings(); s.allocations = alloc || {}; saveSettings(s); return getAllocations();
+});
+ipcMain.handle('get-bucket-usage', () => bucketUsage());
+ipcMain.handle('check-manual-allocation', (e, { usd }) => allocationAllows({ caller: 'manual' }, usd));
+
 async function openPaperTrade(signal) {
   // ── Security: global daily loss limit (settings.dailyLossLimit, 0/unset = off) ──
   try {
@@ -11192,6 +11264,17 @@ async function openPaperTrade(signal) {
   if (isTradingPaused()) {
     console.log("⏸️ Trading paused — daily loss limit or manual pause");
     return null;
+  }
+
+  // 💰 Allocation gate — per-system capital budget (user-set in Settings)
+  {
+    const projectedSize = Number(signal.size) || Number(signal.amount) || 1000;
+    const gateR = allocationAllows(signal, projectedSize);
+    if (!gateR.ok) {
+      console.log(`💰 Trade blocked by allocation: ${gateR.reason}`);
+      sendTelegramNotification(`💰 Asuka: blocked a ${gateR.sys} trade — ${gateR.reason}. Adjust allocation in Settings for more room.`).catch(() => {});
+      return null;
+    }
   }
 
   // Check max concurrent positions

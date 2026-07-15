@@ -2242,6 +2242,14 @@ VOICE RESPONSE RULES — CRITICAL:
         } catch(e) { lines.push(`Selling        ${action==='close'?100:(percent||100)}% of holding`) }
       }
       rows.textContent = lines.join('\n')
+      // 💰 manual allocation check — warn if this order exceeds the manual bucket
+      let _allocBlocked = false
+      if (isBuy && usd_amount) {
+        try {
+          const g = await ipcRenderer.invoke('check-manual-allocation', { usd: usd_amount })
+          if (g && g.ok === false) { _allocBlocked = true; rows.textContent += `\n\n💰 ${g.reason}` }
+        } catch(e) {}
+      }
       // late-night judgment: 1am–5am gets a gentle callout
       const _h = new Date().getHours()
       const warnEl = card.querySelector('div[style*="fbbf24"]')
