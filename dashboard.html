@@ -818,7 +818,7 @@
 
   #main {
     display: grid;
-    grid-template-columns: 200px 1fr 240px 240px;
+    grid-template-columns: 220px 1fr 300px;
     height: 100%;
     overflow: hidden;
     gap: 1px;
@@ -1514,6 +1514,32 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       <div id="waifu-speech"></div>
     </div>
     <div id="edit-btn">Edit Character</div>
+  </div>
+
+  <!-- 2: PORTFOLIO / P&L -->
+  <div class="col" id="col-portfolio" style="overflow-y:auto;">
+    <div class="col-header">Portfolio</div>
+    <div style="padding:16px;">
+      <div style="font-size:11px;color:var(--text2);">Total Value</div>
+      <div id="p1-total" style="font-size:26px;font-weight:800;font-family:'JetBrains Mono',monospace;margin:2px 0 4px;">$0.00</div>
+      <div id="p1-daypnl" style="font-size:13px;font-weight:700;">—</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border2);">
+      <div style="background:var(--bg);padding:12px 14px;"><div style="font-size:10px;color:var(--text2);">Win Rate</div><div id="p1-winrate" style="font-size:17px;font-weight:700;font-family:'JetBrains Mono',monospace;">0%</div></div>
+      <div style="background:var(--bg);padding:12px 14px;"><div style="font-size:10px;color:var(--text2);">Open</div><div id="p1-open" style="font-size:17px;font-weight:700;font-family:'JetBrains Mono',monospace;">0</div></div>
+      <div style="background:var(--bg);padding:12px 14px;"><div style="font-size:10px;color:var(--text2);">Total P&L</div><div id="p1-totalpnl" style="font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace;">$0</div></div>
+      <div style="background:var(--bg);padding:12px 14px;"><div style="font-size:10px;color:var(--text2);">Regime</div><div id="p1-regime" style="font-size:13px;font-weight:700;">—</div></div>
+    </div>
+    <div class="col-header" style="margin-top:8px;">Holdings</div>
+    <div id="p1-holdings" style="padding:6px 14px 16px;font-size:12px;"><div style="color:var(--text3);font-size:11px;">Loading…</div></div>
+  </div>
+
+  <!-- 3: WATCHLIST / WALLETS -->
+  <div class="col" id="col-watch" style="overflow-y:auto;">
+    <div class="col-header">Watchlist</div>
+    <div id="p1-watchlist" style="padding:6px 14px;font-size:12px;"><div style="color:var(--text3);font-size:11px;">No alerts set</div></div>
+    <div class="col-header" style="margin-top:8px;">Tracked Wallets</div>
+    <div id="p1-wallets" style="padding:6px 14px 16px;font-size:12px;"><div style="color:var(--text3);font-size:11px;">None tracked</div></div>
   </div>
 
 
@@ -3749,7 +3775,66 @@ async function initWaifu() {
 }
 
 // ── Load ──
+async function loadPage1() {
+  // Portfolio total + P&L from paper stats + spot balances
+  try {
+    const stats = await ipcRenderer.invoke('get-paper-stats').catch(()=>null)
+    if (stats) {
+      const bal = Number(stats.balance ?? 0)
+      setEl('p1-total','textContent', '$' + bal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}))
+      const tp = Number(stats.totalPnl ?? 0)
+      const tpEl = document.getElementById('p1-totalpnl')
+      if (tpEl) { tpEl.textContent = (tp>=0?'+':'') + '$' + tp.toFixed(0); tpEl.style.color = tp>=0?'var(--green)':'var(--red)' }
+      const dp = Number(stats.todayPnl ?? stats.dayPnl ?? stats.totalPnl ?? 0)
+      const dpEl = document.getElementById('p1-daypnl')
+      if (dpEl) { dpEl.textContent = (dp>=0?'▲ +':'▼ ') + '$' + Math.abs(dp).toFixed(2) + ' today'; dpEl.style.color = dp>=0?'var(--green)':'var(--red)' }
+      setEl('p1-winrate','textContent', (stats.winRate ?? 0) + '%')
+      setEl('p1-open','textContent', String(stats.openCount ?? stats.open ?? (stats.trades? stats.trades.filter(t=>!t.closed).length : 0)))
+    }
+  } catch(e) {}
+
+  // Market regime
+  try {
+    const mkt = await ipcRenderer.invoke('get-market-overview').catch(()=>null)
+    if (mkt) { const r = mkt.regime || mkt.marketRegime || (mkt.fearGreed!=null ? (mkt.fearGreed<30?'Fear':mkt.fearGreed>70?'Greed':'Neutral') : '—'); setEl('p1-regime','textContent', r) }
+  } catch(e) {}
+
+  // Holdings from spot balances
+  try {
+    const b = await ipcRenderer.invoke('get-spot-balances').catch(()=>null)
+    const list = (b && (b.balances || b.holdings || b)) || []
+    const arr = Array.isArray(list) ? list.filter(h => Number(h.qty ?? h.free ?? h.amount ?? 0) > 0) : []
+    const el = document.getElementById('p1-holdings')
+    if (el) el.innerHTML = arr.length ? arr.slice(0,10).map(h => {
+      const sym = (h.coin || h.asset || '?').toUpperCase()
+      const qty = Number(h.qty ?? h.free ?? h.amount ?? 0)
+      return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border2);"><span style="font-weight:600;">${sym}</span><span style="font-family:'JetBrains Mono',monospace;color:var(--text2);">${qty.toPrecision(4)}</span></div>`
+    }).join('') : '<div style="color:var(--text3);font-size:11px;">No holdings yet</div>'
+  } catch(e) {}
+
+  // Watchlist from price alerts
+  try {
+    const a = await ipcRenderer.invoke('get-price-alerts').catch(()=>null)
+    const alerts = (a && (a.alerts || a)) || []
+    const el = document.getElementById('p1-watchlist')
+    if (el && Array.isArray(alerts)) el.innerHTML = alerts.length ? alerts.slice(0,12).map(al =>
+      `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border2);"><span style="font-weight:600;">${(al.coin||al.symbol||'?').toUpperCase()}</span><span style="font-family:'JetBrains Mono',monospace;color:var(--text2);">$${Number(al.price??al.target??0).toLocaleString()}</span></div>`
+    ).join('') : '<div style="color:var(--text3);font-size:11px;">No alerts set</div>'
+  } catch(e) {}
+
+  // Tracked wallets
+  try {
+    const w = await ipcRenderer.invoke('get-wallet-data').catch(()=>null)
+    const wallets = (w && (w.wallets || w)) || []
+    const el = document.getElementById('p1-wallets')
+    if (el && Array.isArray(wallets)) el.innerHTML = wallets.length ? wallets.slice(0,8).map(wl =>
+      `<div style="padding:5px 0;border-bottom:1px solid var(--border2);"><div style="font-weight:600;font-size:11px;">${wl.label||'Wallet'}</div><div style="font-family:'JetBrains Mono',monospace;color:var(--text3);font-size:10px;">${(wl.address||'').slice(0,6)}…${(wl.address||'').slice(-4)}</div></div>`
+    ).join('') : '<div style="color:var(--text3);font-size:11px;">None tracked</div>'
+  } catch(e) {}
+}
+
 async function loadData() {
+  try { loadPage1() } catch(e) { console.error("loadPage1:", e) }
   memory   = await ipcRenderer.invoke('get-memory')   || {}
   settings = await ipcRenderer.invoke('get-settings') || {}
   alerts   = await ipcRenderer.invoke('get-alerts')   || []
@@ -3999,7 +4084,7 @@ document.getElementById('wallet-add-confirm')?.addEventListener('click',async()=
 const pagesWrapper = document.getElementById('pages-wrapper')
 
 // Map page numbers to element IDs
-console.log('%cDASH BUILD 2026-07-14-FINAL', 'color:#2dd4ff;font-weight:bold');
+console.log('%cDASH BUILD 2026-07-14-P1', 'color:#2dd4ff;font-weight:bold');
 const PAGE_IDS = { 1: 'page-1', 2: 'page-2', 3: 'trading-page', 5: 'page-5', 6: 'page-6', 7: 'page-7' }
 
 function navigateToPage(pageNum) {
