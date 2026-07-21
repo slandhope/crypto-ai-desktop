@@ -5,7 +5,15 @@ const path = require('path');
 const os = require('os');
 
 const PORT = 3001;
-const DATA_DIR = path.join(os.homedir(), 'Library', 'Application Support', 'crypto-ai-desktop', 'asuka-data');
+// DATA_DIR: use the local ./asuka-data folder (shared with scanner-server on EC2).
+// Falls back to the Mac app-support path if that's where the data lives (desktop use).
+const DATA_DIR = (() => {
+  const local = path.join(__dirname, 'asuka-data');
+  const mac = path.join(os.homedir(), 'Library', 'Application Support', 'crypto-ai-desktop', 'asuka-data');
+  try { if (require('fs').existsSync(local)) return local; } catch (e) {}
+  try { if (require('fs').existsSync(mac)) return mac; } catch (e) {}
+  return local; // default: create/use local on the server
+})();
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const TRADES_FILE = path.join(DATA_DIR, 'paper-trades.json');
 const LESSONS_FILE = path.join(DATA_DIR, 'trading-lessons.json');
@@ -205,10 +213,6 @@ const server = http.createServer((req, res) => {
         const password = (parsed.password || '').trim();
         const state = getDevState();
         const stored = (state.password || DEFAULT_PASSWORD).trim();
-        console.log('🔑 Auth attempt:');
-        console.log('   Received:', JSON.stringify(password));
-        console.log('   Stored:  ', JSON.stringify(stored));
-        console.log('   Match:   ', password === stored);
         if (password === stored) {
           res.writeHead(200);
           res.end(JSON.stringify({ success: true, token: stored }));
@@ -1393,7 +1397,7 @@ async function addCosmetic() {
 </body>
 </html>`; }
 
-server.listen(PORT, '127.0.0.1', () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('  ⚙️  CRYPTO.AI Dev Panel');
   console.log('  → http://localhost:' + PORT);
