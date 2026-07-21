@@ -1518,7 +1518,10 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
 
   <!-- 2: PORTFOLIO / P&L -->
   <div class="col" id="col-portfolio" style="overflow-y:auto;">
-    <div class="col-header">Portfolio</div>
+    <div class="col-header" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Portfolio</span>
+      <span id="p1-conn-btn" style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:999px;background:rgba(45,212,255,0.12);color:var(--accent);cursor:pointer;text-transform:none;letter-spacing:0;">🔗 Connect</span>
+    </div>
     <div style="padding:16px;">
       <div style="font-size:11px;color:var(--text2);">Total Value</div>
       <div id="p1-total" style="font-size:26px;font-weight:800;font-family:'JetBrains Mono',monospace;margin:2px 0 4px;">$0.00</div>
@@ -1539,6 +1542,17 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     <div class="col-header">Watchlist</div>
     <div id="p1-watchlist" style="padding:6px 14px;font-size:12px;"><div style="color:var(--text3);font-size:11px;">No alerts set</div></div>
     <div class="col-header" style="margin-top:8px;">Tracked Wallets</div>
+    <div style="padding:8px 14px;">
+      <select id="p1-wallet-type" style="width:100%;padding:7px;font-size:11px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);margin-bottom:6px;">
+        <option value="trust">🛡️ Trust Wallet</option>
+        <option value="metamask">🦊 MetaMask</option>
+        <option value="phantom">👻 Phantom (SOL)</option>
+        <option value="other">🔗 Other wallet</option>
+      </select>
+      <input id="p1-wallet-addr" placeholder="Paste wallet address (0x… or SOL)" style="width:100%;padding:7px;font-size:11px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);margin-bottom:6px;">
+      <button id="p1-wallet-add" style="width:100%;padding:8px;font-size:11px;font-weight:700;background:var(--accent);border:none;border-radius:8px;color:#fff;cursor:pointer;">+ Add Wallet</button>
+      <div id="p1-wallet-msg" style="font-size:10px;color:var(--text3);margin-top:4px;"></div>
+    </div>
     <div id="p1-wallets" style="padding:6px 14px 16px;font-size:12px;"><div style="color:var(--text3);font-size:11px;">None tracked</div></div>
   </div>
 
@@ -3484,6 +3498,8 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       <div class="s-title">Exchange (Read Only)</div>
       <div class="s-row"><div class="s-label">Binance API Key</div><input class="s-input" id="s-binance-key" placeholder="Read only key" /></div>
       <div class="s-row"><div class="s-label">Binance Secret</div><input class="s-input" id="s-binance-secret" type="password" placeholder="••••••••" /></div>
+      <div class="s-row" style="justify-content:space-between;align-items:center;"><button class="s-btn s-btn-primary" id="binance-connect-btn" style="padding:7px 16px;">Connect & Test</button><span id="binance-conn-status" style="font-size:11px;font-weight:700;color:var(--text2);">Not connected</span></div>
+      <div style="font-size:10px;color:var(--text3);line-height:1.5;padding:0 2px 4px;">Use a key with <b>trading enabled but withdrawals DISABLED</b>. We verify this — a withdrawal-enabled key gets flagged.</div>
       <div class="s-row"><div class="s-label">Bybit API Key</div><input class="s-input" id="s-bybit-key" placeholder="Read only key" /></div>
     </div>
     <div class="s-section">
@@ -3775,6 +3791,67 @@ async function initWaifu() {
 }
 
 // ── Load ──
+
+// ── Page-1 wallet add (Trust Wallet / MetaMask / Phantom / other) ──
+document.getElementById('p1-wallet-add')?.addEventListener('click', async () => {
+  const addr = (document.getElementById('p1-wallet-addr')?.value || '').trim()
+  const type = document.getElementById('p1-wallet-type')?.value || 'other'
+  const msg = document.getElementById('p1-wallet-msg')
+  const setMsg = (t, ok) => { if (msg) { msg.textContent = t; msg.style.color = ok ? 'var(--green)' : 'var(--red)' } }
+  if (!addr) { setMsg('Paste an address first', false); return }
+  const isEth = /^0x[a-fA-F0-9]{40}$/.test(addr)
+  const isSol = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr) && !addr.startsWith('0x')
+  if (!isEth && !isSol) { setMsg('That doesn\'t look like a valid wallet address', false); return }
+  const names = { trust: 'Trust Wallet', metamask: 'MetaMask', phantom: 'Phantom', other: 'Wallet' }
+  try {
+    const s = await ipcRenderer.invoke('get-settings').catch(()=>({})) || {}
+    const tracked = Array.isArray(s.trackedWallets) ? s.trackedWallets : []
+    if (tracked.some(w => (w.address||'').toLowerCase() === addr.toLowerCase())) { setMsg('Already added', false); return }
+    tracked.push({ address: addr, label: `${names[type]} ${tracked.length+1}`, wallet: type, chain: isEth ? 'ETH' : 'SOL', addedAt: Date.now() })
+    s.trackedWallets = tracked
+    await ipcRenderer.invoke('save-settings', s)
+    document.getElementById('p1-wallet-addr').value = ''
+    setMsg('✓ Added — now tracking', true)
+    loadPage1()
+  } catch (e) { setMsg('Failed: ' + e.message, false) }
+})
+
+
+// ── 🔗 Connect modal ──
+async function refreshConnStatus(){
+  const st = await ipcRenderer.invoke('get-connection-status').catch(()=>null)
+  const bEl = document.getElementById('conn-binance-st')
+  if (bEl && st) { const c = st.binance==='connected'; bEl.textContent = c?'✓ Connected':(st.binance==='keys_saved_unverified'?'saved (unverified)':'not connected'); bEl.style.background = c?'rgba(52,211,153,0.15)':'var(--bg3)'; bEl.style.color = c?'var(--green)':'var(--text2)' }
+  // reflect on the pill
+  const pill = document.getElementById('p1-conn-btn')
+  if (pill && st) { const anyConn = st.binance==='connected' || st.wallet==='connected'; pill.textContent = anyConn ? '🔗 Connected' : '🔗 Connect'; pill.style.color = anyConn?'var(--green)':'var(--accent)'; pill.style.background = anyConn?'rgba(52,211,153,0.12)':'rgba(45,212,255,0.12)' }
+}
+document.getElementById('p1-conn-btn')?.addEventListener('click', () => { document.getElementById('connect-modal').style.display='flex'; refreshConnStatus() })
+document.getElementById('connect-close')?.addEventListener('click', () => document.getElementById('connect-modal').style.display='none')
+document.getElementById('connect-modal')?.addEventListener('click', (e)=>{ if(e.target.id==='connect-modal') e.target.style.display='none' })
+document.getElementById('conn-bsave')?.addEventListener('click', async () => {
+  const msg = document.getElementById('conn-bmsg'); msg.style.color='var(--text2)'; msg.textContent='Connecting…'
+  const r = await ipcRenderer.invoke('connect-binance', { apiKey: document.getElementById('conn-bkey').value.trim(), secret: document.getElementById('conn-bsecret').value.trim(), testnet: document.getElementById('conn-btestnet').checked }).catch(e=>({ok:false,error:e.message}))
+  if (r?.ok && r.verified) { msg.style.color='var(--green)'; msg.textContent='✓ Connected! Balance: $'+r.balance }
+  else if (r?.ok) { msg.style.color='var(--gold)'; msg.textContent='⚠️ '+(r.note||'saved but not verified') }
+  else { msg.style.color='var(--red)'; msg.textContent='✗ '+(r?.error||'failed') }
+  refreshConnStatus()
+})
+let _connProvider = 'walletconnect'
+document.querySelectorAll('.conn-w-provider').forEach(b => b.onclick = () => {
+  _connProvider = b.dataset.p
+  document.querySelectorAll('.conn-w-provider').forEach(x=>x.style.borderColor='var(--border)')
+  b.style.borderColor='var(--accent)'
+  document.getElementById('conn-wmsg').innerHTML = `<span style="color:var(--text3)">Open ${b.dataset.p==='metamask'?'MetaMask':'Trust'} → copy your address → paste below → Connect. (Extensions can't auto-inject into desktop apps, so we link by address — approval-per-trade.)</span>`
+})
+document.getElementById('conn-wsave')?.addEventListener('click', async () => {
+  const msg = document.getElementById('conn-wmsg'); msg.style.color='var(--text2)'; msg.textContent='Linking…'
+  const r = await ipcRenderer.invoke('connect-wallet', { address: document.getElementById('conn-waddr').value.trim(), provider: _connProvider }).catch(e=>({ok:false,error:e.message}))
+  if (r?.ok) { msg.style.color='var(--green)'; msg.textContent='✓ Wallet linked: '+r.address.slice(0,6)+'…'+r.address.slice(-4) }
+  else { msg.style.color='var(--red)'; msg.textContent='✗ '+(r?.error||'failed') }
+  refreshConnStatus()
+})
+
 async function loadPage1() {
   // Portfolio total + P&L from paper stats + spot balances
   try {
@@ -3822,14 +3899,21 @@ async function loadPage1() {
     ).join('') : '<div style="color:var(--text3);font-size:11px;">No alerts set</div>'
   } catch(e) {}
 
-  // Tracked wallets
+  // Tracked wallets (from saved settings — Trust Wallet etc.)
   try {
-    const w = await ipcRenderer.invoke('get-wallet-data').catch(()=>null)
-    const wallets = (w && (w.wallets || w)) || []
+    const s = await ipcRenderer.invoke('get-settings').catch(()=>null) || {}
+    const wallets = Array.isArray(s.trackedWallets) ? s.trackedWallets : []
+    const icons = { trust:'🛡️', metamask:'🦊', phantom:'👻', other:'🔗' }
     const el = document.getElementById('p1-wallets')
-    if (el && Array.isArray(wallets)) el.innerHTML = wallets.length ? wallets.slice(0,8).map(wl =>
-      `<div style="padding:5px 0;border-bottom:1px solid var(--border2);"><div style="font-weight:600;font-size:11px;">${wl.label||'Wallet'}</div><div style="font-family:'JetBrains Mono',monospace;color:var(--text3);font-size:10px;">${(wl.address||'').slice(0,6)}…${(wl.address||'').slice(-4)}</div></div>`
-    ).join('') : '<div style="color:var(--text3);font-size:11px;">None tracked</div>'
+    if (el) el.innerHTML = wallets.length ? wallets.slice(0,10).map((wl,i) =>
+      `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2);"><div><div style="font-weight:600;font-size:11px;">${icons[wl.wallet]||'🔗'} ${wl.label||'Wallet'}</div><div style="font-family:'JetBrains Mono',monospace;color:var(--text3);font-size:10px;">${(wl.address||'').slice(0,6)}…${(wl.address||'').slice(-4)}</div></div><span class="p1-wdel" data-i="${i}" style="color:var(--text3);cursor:pointer;font-size:14px;padding:0 4px;">×</span></div>`
+    ).join('') : '<div style="color:var(--text3);font-size:11px;">None tracked yet</div>'
+    if (el) el.querySelectorAll('.p1-wdel').forEach(x => x.onclick = async () => {
+      const s2 = await ipcRenderer.invoke('get-settings').catch(()=>({})) || {}
+      const tw = Array.isArray(s2.trackedWallets) ? s2.trackedWallets : []
+      tw.splice(parseInt(x.dataset.i), 1); s2.trackedWallets = tw
+      await ipcRenderer.invoke('save-settings', s2); loadPage1()
+    })
   } catch(e) {}
 }
 
@@ -4084,7 +4168,7 @@ document.getElementById('wallet-add-confirm')?.addEventListener('click',async()=
 const pagesWrapper = document.getElementById('pages-wrapper')
 
 // Map page numbers to element IDs
-console.log('%cDASH BUILD 2026-07-14-P1', 'color:#2dd4ff;font-weight:bold');
+console.log('%cDASH BUILD 2026-07-14-WALLET', 'color:#2dd4ff;font-weight:bold');
 const PAGE_IDS = { 1: 'page-1', 2: 'page-2', 3: 'trading-page', 5: 'page-5', 6: 'page-6', 7: 'page-7' }
 
 function navigateToPage(pageNum) {
@@ -9174,6 +9258,10 @@ document.getElementById('settings-open-btn')?.addEventListener('click',()=>{
   if (s.moralisKey)   setEl('s-moralis','value',s.moralisKey)
   if (s.youtubeKey)   setEl('s-youtube','value',s.youtubeKey)
   if (s.etherscanKey) setEl('s-etherscan','value',s.etherscanKey)
+  if (s.binanceKey)   setEl('s-binance-key','value',s.binanceKey)
+  if (s.binanceSecret) setEl('s-binance-secret','value',s.binanceSecret)
+  if (s.bybitKey)     setEl('s-bybit-key','value',s.bybitKey)
+  if (s.binanceKey && s.binanceSecret) { const st=document.getElementById('binance-conn-status'); if(st){st.textContent='Saved — click to re-test'; st.style.color='var(--text2)'} }
   if (mem.alarmTime)  setEl('s-alarm','value',mem.alarmTime)
   if (mem.sleepHour)  setEl('s-sleep','value',mem.sleepHour)
   if (mem.waterReminderMinutes) setEl('s-water','value',mem.waterReminderMinutes)
@@ -9197,6 +9285,7 @@ document.getElementById('settings-save-btn')?.addEventListener('click',async()=>
   settings.youtubeKey=document.getElementById('s-youtube').value
   settings.etherscanKey=document.getElementById('s-etherscan').value
   settings.binanceKey=document.getElementById('s-binance-key').value
+  settings.binanceSecret=document.getElementById('s-binance-secret').value
   settings.bybitKey=document.getElementById('s-bybit-key').value
   memory.alarmTime=document.getElementById('s-alarm').value
   memory.sleepHour=parseInt(document.getElementById('s-sleep').value)||null
@@ -9208,6 +9297,21 @@ document.getElementById('settings-save-btn')?.addEventListener('click',async()=>
   setEl('waifu-speech','textContent',msg)
   await playAudio(await ipcRenderer.invoke('get-voice',msg))
   setEl('waifu-speech','textContent','')
+})
+document.getElementById('binance-connect-btn')?.addEventListener('click', async () => {
+  const st = document.getElementById('binance-conn-status')
+  const key = document.getElementById('s-binance-key').value.trim()
+  const sec = document.getElementById('s-binance-secret').value.trim()
+  if (!key || !sec) { st.textContent = 'Enter key + secret first'; st.style.color = 'var(--gold)'; return }
+  st.textContent = 'Saving & testing…'; st.style.color = 'var(--text2)'
+  // save first so the backend can read them
+  settings.binanceKey = key; settings.binanceSecret = sec
+  await ipcRenderer.invoke('save-settings', settings).catch(()=>{})
+  const r = await ipcRenderer.invoke('test-binance').catch(e => ({ ok:false, error:e.message }))
+  if (r && r.ok) {
+    if (r.canWithdraw) { st.innerHTML = '⚠️ Connected — but this key CAN WITHDRAW. Make a new key with withdrawals off.'; st.style.color = 'var(--red)' }
+    else { st.innerHTML = '✓ Connected' + (r.balance!=null ? ' · $'+r.balance.toLocaleString(undefined,{maximumFractionDigits:2}) : '') + ' · withdrawal-safe'; st.style.color = 'var(--green)' }
+  } else { st.textContent = '✗ ' + (r?.error || 'Connection failed'); st.style.color = 'var(--red)' }
 })
 document.getElementById('export-btn')?.addEventListener('click',()=>ipcRenderer.invoke('export-data'))
 
@@ -9893,5 +9997,42 @@ function setEl(id, prop, val){ const e=document.getElementById(id); if(e) e[prop
   })()
 
 </script>
+
+<!-- 🔗 Connect Wallet / Exchange modal -->
+<div id="connect-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:var(--bg1);border:1px solid var(--border);border-radius:18px;width:min(92vw,440px);max-height:88vh;overflow-y:auto;padding:22px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div style="font-size:17px;font-weight:700;font-family:'Fraunces',serif;">🔗 Connect</div>
+      <div id="connect-close" style="cursor:pointer;color:var(--text2);font-size:20px;">✕</div>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Exchange (trades your funds)</div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:700;">🅱️ Binance</div>
+        <span id="conn-binance-st" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--bg3);color:var(--text2);">checking…</span>
+      </div>
+      <input class="s-input" id="conn-bkey" placeholder="API Key" style="margin-bottom:6px;font-size:12px;">
+      <input class="s-input" id="conn-bsecret" type="password" placeholder="API Secret" style="margin-bottom:6px;font-size:12px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);margin-bottom:8px;cursor:pointer;"><input type="checkbox" id="conn-btestnet" checked> Testnet (practice — recommended first)</label>
+      <button class="tg-add-btn" id="conn-bsave" style="width:100%;">Connect Binance</button>
+      <div style="font-size:9.5px;color:var(--text3);margin-top:6px;line-height:1.5;">⚠️ Create a key with <b style="color:var(--gold);">trading enabled, withdrawals DISABLED</b>. We never move funds off your exchange.</div>
+      <div id="conn-bmsg" style="font-size:10px;margin-top:5px;"></div>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Wallet (MetaMask / Trust / any)</div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;">
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <button class="tg-add-btn conn-w-provider" data-p="metamask" style="flex:1;font-size:11px;">🦊 MetaMask</button>
+        <button class="tg-add-btn conn-w-provider" data-p="trust" style="flex:1;font-size:11px;">🛡️ Trust</button>
+      </div>
+      <input class="s-input" id="conn-waddr" placeholder="Paste your wallet address (0x… or Solana)" style="margin-bottom:6px;font-size:12px;">
+      <button class="tg-add-btn" id="conn-wsave" style="width:100%;">Connect Wallet</button>
+      <div style="font-size:9.5px;color:var(--text3);margin-top:6px;line-height:1.5;">Approval-per-trade — no keys stored. You approve every transaction in your own wallet. Paste your public address to link it.</div>
+      <div id="conn-wmsg" style="font-size:10px;margin-top:5px;"></div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

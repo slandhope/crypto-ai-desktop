@@ -13,9 +13,13 @@ const Anthropic = require('@anthropic-ai/sdk');
 const express = require('express');
 
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  apiKey: process.env.ANTHROPIC_API_KEY,   // fallback; real value can come from the vault
   defaultHeaders: { 'anthropic-beta': 'prompt-caching-2024-07-31' },
 });
+const { getSecret } = require('./secrets');          // 🔐 key vault
+const credits = require('./credits');                // 🎟️ credit engine
+// pull the real Claude key from the vault at boot (Secrets Manager → .env fallback)
+(async () => { try { const k = await getSecret('ANTHROPIC_API_KEY'); if (k) anthropic.apiKey = k; } catch (e) {} })();
 
 // ── storage: local data dir (server has no Electron userData) ──
 const DATA_DIR = path.join(__dirname, 'asuka-data');
@@ -2949,6 +2953,55 @@ api.get('/dev/stats', requireAdmin, (req, res) => {
 
 // ── login-gated control panel (served at /dev) ──
 api.get('/dev', (req, res) => res.type('html').send(DEV_PANEL_HTML));
+
+// ═══════════════════════════════════════════════════════════════════
+// 🎟️ CREDITS + 🤖 AI-PROXY — app AI calls route here so we can meter them.
+// The user's app sends: x-user-id header (real id once Google login lands).
+// Every AI call: check credits → call Claude with the vault key → charge.
+// ═══════════════════════════════════════════════════════════════════
+function userIdOf(req) {
+  return req.headers['x-user-id'] || req.query.userId || 'anon';   // temp until login
+}
+
+// balance + config (read) — app shows the user their credits
+api.get('/credits/balance', (req, res) => {
+  try { res.json(credits.balance(userIdOf(req))); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+api.get('/credits/config', (req, res) => {
+  try { const c = credits.getConfig(); res.json({ tiers: c.tiers, actionCosts: c.actionCosts, topupPacks: c.topupPacks }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// after a successful purchase (wired to payment later) — add topup / set tier
+api.post('/credits/topup', requireAdmin, (req, res) => {
+  try { res.json(credits.addTopup(req.body.userId, Number(req.body.credits) || 0)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+api.post('/credits/set-tier', requireAdmin, (req, res) => {
+  try { res.json(credits.setTier(req.body.userId, req.body.tier)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 🤖 the proxy: app → here → Claude. Charges credits per call.
+api.post('/ai/chat', async (req, res) => {
+  const uid = userIdOf(req);
+  const { messages, system, model, action, units } = req.body || {};
+  const act = action || 'chat';
+  const pre = credits.check(uid, act, units || 1);
+  if (!pre.ok) return res.status(402).json({ error: pre.reason, message: pre.message, balance: credits.balance(uid) });
+  try {
+    const resp = await anthropic.messages.create({
+      model: model || 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      system: system || undefined,
+      messages: messages || [{ role: 'user', content: 'Hello' }],
+    });
+    credits.charge(uid, act, units || 1);   // only charge on success
+    res.json({ content: resp.content, balance: credits.balance(uid) });
+  } catch (e) {
+    res.status(500).json({ error: 'ai_failed', detail: e.message });   // no charge on failure
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 api.listen(PORT, () => console.log(`🌐 API on :${PORT}`));

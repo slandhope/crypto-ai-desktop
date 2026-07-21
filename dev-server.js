@@ -23,6 +23,8 @@ const COST_LOG_FILE = path.join(DATA_DIR, 'api-cost-log.json');
 const ANALYTICS_FILE = path.join(DATA_DIR, 'coin-analytics.json');
 const MASTER_COINS_FILE = path.join(DATA_DIR, 'master-coins.json');
 const TIERS_FILE = path.join(DATA_DIR, 'tiers-config.json');
+const CREDITS_CONFIG_FILE = path.join(__dirname, 'credits-config.json');
+const USER_CREDITS_FILE = path.join(DATA_DIR, 'user-credits.json');
 const ADVISORS_FILE = path.join(DATA_DIR, 'advisors.json');
 const CUSTOM_COSMETICS_FILE = path.join(DATA_DIR, 'custom-cosmetics.json');
 const DEFAULT_TIERS = [
@@ -409,6 +411,48 @@ const server = http.createServer((req, res) => {
       saveJSON(TIERS_FILE, DEFAULT_TIERS);
       res.setHeader('Content-Type', 'application/json');
       res.writeHead(200); res.end(JSON.stringify({ success:true, tiers:DEFAULT_TIERS }));
+      return;
+    }
+
+    // ── 🎟️ CREDIT ECONOMY (live-editable from panel) ──
+    if (pathname === '/api/credits-config' && req.method === 'GET') {
+      res.setHeader('Content-Type', 'application/json');
+      res.writeHead(200); res.end(JSON.stringify(loadJSON(CREDITS_CONFIG_FILE, {})));
+      return;
+    }
+    if (pathname === '/api/credits-config' && req.method === 'POST') {
+      res.setHeader('Content-Type', 'application/json');
+      try {
+        const cfg = JSON.parse(body);
+        // light validation — keep it from being saved broken
+        if (!cfg.tiers || !cfg.actionCosts) { res.writeHead(200); res.end(JSON.stringify({ success:false, error:'need tiers + actionCosts' })); return; }
+        saveJSON(CREDITS_CONFIG_FILE, cfg);
+        console.log('🎟️ Credit economy updated from panel');
+        res.writeHead(200); res.end(JSON.stringify({ success:true, config:cfg }));
+      } catch(e) { res.writeHead(200); res.end(JSON.stringify({ success:false, error:e.message })); }
+      return;
+    }
+    if (pathname === '/api/credits-users' && req.method === 'GET') {
+      // summary of all users' credit state
+      res.setHeader('Content-Type', 'application/json');
+      const users = loadJSON(USER_CREDITS_FILE, {});
+      const ids = Object.keys(users);
+      const byTier = {};
+      for (const id of ids) { const t = users[id].tier || 'premium'; byTier[t] = (byTier[t]||0)+1; }
+      res.writeHead(200); res.end(JSON.stringify({ totalUsers: ids.length, byTier, users }));
+      return;
+    }
+    if (pathname === '/api/credits-grant' && req.method === 'POST') {
+      // manually grant credits to a user (support / comp)
+      res.setHeader('Content-Type', 'application/json');
+      try {
+        const { userId, credits: amt } = JSON.parse(body);
+        const users = loadJSON(USER_CREDITS_FILE, {});
+        const u = users[userId] || { tier:'premium', dailyUsed:0, topup:0, day:new Date().toISOString().slice(0,10), spentToday:0 };
+        u.topup = (u.topup||0) + (Number(amt)||0);
+        users[userId] = u; saveJSON(USER_CREDITS_FILE, users);
+        res.writeHead(200); res.end(JSON.stringify({ success:true, userId, newTopup:u.topup }));
+      } catch(e) { res.writeHead(200); res.end(JSON.stringify({ success:false, error:e.message })); }
       return;
     }
     if (pathname === '/api/add-cosmetic' && req.method === 'POST') {
