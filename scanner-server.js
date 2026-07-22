@@ -18,6 +18,7 @@ const anthropic = new Anthropic({
 });
 const { getSecret } = require('./secrets');          // 🔐 key vault
 const credits = require('./credits');                // 🎟️ credit engine
+const { authRequired, authOptional, userIdOf } = require('./auth');  // 🔑 real login
 // pull the real Claude key from the vault at boot (Secrets Manager → .env fallback)
 (async () => { try { const k = await getSecret('ANTHROPIC_API_KEY'); if (k) anthropic.apiKey = k; } catch (e) {} })();
 
@@ -2959,12 +2960,8 @@ api.get('/dev', (req, res) => res.type('html').send(DEV_PANEL_HTML));
 // The user's app sends: x-user-id header (real id once Google login lands).
 // Every AI call: check credits → call Claude with the vault key → charge.
 // ═══════════════════════════════════════════════════════════════════
-function userIdOf(req) {
-  return req.headers['x-user-id'] || req.query.userId || 'anon';   // temp until login
-}
-
 // balance + config (read) — app shows the user their credits
-api.get('/credits/balance', (req, res) => {
+api.get('/credits/balance', authOptional, (req, res) => {
   try { res.json(credits.balance(userIdOf(req))); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 api.get('/credits/config', (req, res) => {
@@ -2983,7 +2980,7 @@ api.post('/credits/set-tier', requireAdmin, (req, res) => {
 });
 
 // 🤖 the proxy: app → here → Claude. Charges credits per call.
-api.post('/ai/chat', async (req, res) => {
+api.post('/ai/chat', authRequired, async (req, res) => {
   const uid = userIdOf(req);
   const { messages, system, model, action, units } = req.body || {};
   const act = action || 'chat';
@@ -3001,6 +2998,46 @@ api.post('/ai/chat', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: 'ai_failed', detail: e.message });   // no charge on failure
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// ☁️ STATE SYNC — Asuka's soul, one record per user, shared PC ↔ phone.
+// Stores memory, bond, tier, coins, level, streaks, personality, lessons.
+// GET  /state        → the user's full state (creates empty on first call)
+// PUT  /state        → replace (last-write-wins with client timestamp)
+// PATCH /state       → merge a few fields (bond +1, coins -50, etc.)
+// ═══════════════════════════════════════════════════════════════════
+const STATE_DIR = path.join(DATA_DIR, 'user-state');
+if (!fs.existsSync(STATE_DIR)) fs.mkdirSync(STATE_DIR, { recursive: true });
+function stateFile(uid) { return path.join(STATE_DIR, encodeURIComponent(uid) + '.json'); }
+function loadState(uid) { try { return JSON.parse(fs.readFileSync(stateFile(uid), 'utf8')); } catch (e) {
+  return { memory: {}, bond: 0, tier: 'premium', coins: 0, level: 1, streaks: {}, personality: 'default', lessons: {}, updatedAt: 0 }; } }
+function saveState(uid, s) { fs.writeFileSync(stateFile(uid), JSON.stringify(s)); }
+
+api.get('/state', authRequired, (req, res) => {
+  try { res.json(loadState(req.user.userId)); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+api.put('/state', authRequired, (req, res) => {
+  try {
+    const incoming = req.body || {};
+    const cur = loadState(req.user.userId);
+    // last-write-wins: only accept if client state is newer (or force)
+    if (!incoming.force && incoming.updatedAt && cur.updatedAt && incoming.updatedAt < cur.updatedAt) {
+      return res.status(409).json({ error: 'stale', server: cur });   // client should re-pull
+    }
+    const next = { ...incoming, updatedAt: Date.now() };
+    delete next.force;
+    saveState(req.user.userId, next);
+    res.json({ ok: true, state: next });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+api.patch('/state', authRequired, (req, res) => {
+  try {
+    const cur = loadState(req.user.userId);
+    const merged = { ...cur, ...(req.body || {}), updatedAt: Date.now() };
+    saveState(req.user.userId, merged);
+    res.json({ ok: true, state: merged });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 const PORT = process.env.PORT || 3000;
