@@ -2961,8 +2961,8 @@ api.get('/dev', (req, res) => res.type('html').send(DEV_PANEL_HTML));
 // Every AI call: check credits → call Claude with the vault key → charge.
 // ═══════════════════════════════════════════════════════════════════
 // balance + config (read) — app shows the user their credits
-api.get('/credits/balance', authOptional, (req, res) => {
-  try { res.json(credits.balance(userIdOf(req))); } catch (e) { res.status(500).json({ error: e.message }); }
+api.get('/credits/balance', authOptional, async (req, res) => {
+  try { res.json(await credits.balance(userIdOf(req))); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 api.get('/credits/config', (req, res) => {
   try { const c = credits.getConfig(); res.json({ tiers: c.tiers, actionCosts: c.actionCosts, topupPacks: c.topupPacks }); }
@@ -2970,12 +2970,12 @@ api.get('/credits/config', (req, res) => {
 });
 
 // after a successful purchase (wired to payment later) — add topup / set tier
-api.post('/credits/topup', requireAdmin, (req, res) => {
-  try { res.json(credits.addTopup(req.body.userId, Number(req.body.credits) || 0)); }
+api.post('/credits/topup', requireAdmin, async (req, res) => {
+  try { res.json(await credits.addTopup(req.body.userId, Number(req.body.credits) || 0)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-api.post('/credits/set-tier', requireAdmin, (req, res) => {
-  try { res.json(credits.setTier(req.body.userId, req.body.tier)); }
+api.post('/credits/set-tier', requireAdmin, async (req, res) => {
+  try { res.json(await credits.setTier(req.body.userId, req.body.tier)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -2984,8 +2984,8 @@ api.post('/ai/chat', authRequired, async (req, res) => {
   const uid = userIdOf(req);
   const { messages, system, model, action, units } = req.body || {};
   const act = action || 'chat';
-  const pre = credits.check(uid, act, units || 1);
-  if (!pre.ok) return res.status(402).json({ error: pre.reason, message: pre.message, balance: credits.balance(uid) });
+  const pre = await credits.check(uid, act, units || 1);
+  if (!pre.ok) return res.status(402).json({ error: pre.reason, message: pre.message, balance: await credits.balance(uid) });
   try {
     const resp = await anthropic.messages.create({
       model: model || 'claude-haiku-4-5-20251001',
@@ -2993,8 +2993,8 @@ api.post('/ai/chat', authRequired, async (req, res) => {
       system: system || undefined,
       messages: messages || [{ role: 'user', content: 'Hello' }],
     });
-    credits.charge(uid, act, units || 1);   // only charge on success
-    res.json({ content: resp.content, balance: credits.balance(uid) });
+    await credits.charge(uid, act, units || 1);   // only charge on success
+    res.json({ content: resp.content, balance: await credits.balance(uid) });
   } catch (e) {
     res.status(500).json({ error: 'ai_failed', detail: e.message });   // no charge on failure
   }

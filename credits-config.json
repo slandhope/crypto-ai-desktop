@@ -1,32 +1,10 @@
 {
-  "_comment": "The entire credit economy. Every number here is editable live from the dev panel — no redeploy. dailyCredits refresh each day; topup credits stack on top and do not expire.",
   "resetTimezone": "UTC",
   "tiers": {
-    "premium": { "label": "Premium", "priceMonthly": 20, "dailyCredits": 500 },
-    "super":   { "label": "Super",   "priceMonthly": 40, "dailyCredits": 1500 },
-    "ultra":   { "label": "Ultra",   "priceMonthly": 80, "dailyCredits": 4000 }
+    "premium": { "label": "Premium", "dailyCredits": 500, "priceMonthly": 20 },
+    "super":   { "label": "Super",   "dailyCredits": 1500, "priceMonthly": 40 },
+    "ultra":   { "label": "Ultra",   "dailyCredits": 4000, "priceMonthly": 80 }
   },
-  "actionCosts": {
-    "chat": 10,
-    "voice_minute": 50,
-    "video": 200,
-    "website": 60,
-    "lesson": 40,
-    "image": 30
-  },
-  "topupPacks": [
-    { "id": "pack_1k",  "credits": 1000,  "priceUsd": 3 },
-    { "id": "pack_5k",  "credits": 5000,  "priceUsd": 12 },
-    { "id": "pack_15k", "credits": 15000, "priceUsd": 30 }
-  ],
-  "fairUseHardCeiling": {
-    "_comment": "Absolute daily spend ceiling per tier even if they buy topups — stops a scripted-abuse blowout. Set high; normal users never see it.",
-    "premium": 20000,
-    "super": 40000,
-    "ultra": 100000
-  },
-  "promo": {
-    "_comment": "Set multiplier > 1 for a bonus-credits event (e.g. 2 = double daily credits). 1 = normal.",
-    "dailyMultiplier": 1
-  }
+  "actionCosts": { "chat": 10, "voice_minute": 50, "video": 200 },
+  "topupPacks": [ { "credits": 1000, "price": 3 }, { "credits": 5000, "price": 12 }, { "credits": 15000, "price": 30 } ]
 }

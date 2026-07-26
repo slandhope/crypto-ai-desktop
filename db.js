@@ -68,4 +68,25 @@ async function patchAsukaState(userId, patch) {
   return saveAsukaState(userId, { ...cur, ...patch });
 }
 
-module.exports = { pool, initDB, upsertUser, getAsukaState, saveAsukaState, patchAsukaState };
+// ── credits (per-user balance in user_credits table) ──
+async function getCreditRow(userId) {
+  const r = await pool.query('SELECT * FROM user_credits WHERE user_id=$1', [userId]);
+  if (!r.rows.length) return { user_id: userId, tier: 'premium', daily_used: 0, day: null, topup: 0, spent_today: 0 };
+  return r.rows[0];
+}
+async function saveCreditRow(userId, c) {
+  await pool.query(
+    `INSERT INTO user_credits (user_id, tier, daily_used, day, topup, spent_today, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,NOW())
+     ON CONFLICT (user_id) DO UPDATE SET
+       tier=$2, daily_used=$3, day=$4, topup=$5, spent_today=$6, updated_at=NOW()`,
+    [userId, c.tier||'premium', c.daily_used||0, c.day||null, c.topup||0, c.spent_today||0]
+  );
+}
+async function allCreditRows() {
+  const r = await pool.query('SELECT user_id, tier FROM user_credits');
+  return r.rows;
+}
+
+module.exports = { pool, initDB, upsertUser, getAsukaState, saveAsukaState, patchAsukaState,
+  getCreditRow, saveCreditRow, allCreditRows };
