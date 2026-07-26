@@ -3051,6 +3051,20 @@ api.patch('/state', authRequired, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── 🌱 Clarity wellness routes (Asuka-powered, replaces Groq coach) ──
+async function callAsuka(system, userMsg, maxTokens = 1000) {
+  const res = await anthropic.messages.create({
+    model: 'claude-3-5-haiku-20241022',
+    max_tokens: maxTokens,
+    system,
+    messages: [{ role: 'user', content: userMsg }],
+  });
+  return (res.content || []).map(b => b.text || '').join('');
+}
+try {
+  require('./clarity-routes').register(api, { authRequired, callAsuka });
+} catch (e) { console.error('clarity-routes register failed:', e.message); }
+
 const PORT = process.env.PORT || 3000;
 api.listen(PORT, () => console.log(`🌐 API on :${PORT}`));
 
