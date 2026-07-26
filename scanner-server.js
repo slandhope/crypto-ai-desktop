@@ -3003,40 +3003,40 @@ api.post('/ai/chat', authRequired, async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════
 // ☁️ STATE SYNC — Asuka's soul, one record per user, shared PC ↔ phone.
 // Stores memory, bond, tier, coins, level, streaks, personality, lessons.
-// GET  /state        → the user's full state (creates empty on first call)
+// Now backed by POSTGRES (asuka_state table) via db.js — synced PC ↔ phone.
+// GET  /state        → the user's full state (empty defaults on first call)
 // PUT  /state        → replace (last-write-wins with client timestamp)
 // PATCH /state       → merge a few fields (bond +1, coins -50, etc.)
 // ═══════════════════════════════════════════════════════════════════
-const STATE_DIR = path.join(DATA_DIR, 'user-state');
-if (!fs.existsSync(STATE_DIR)) fs.mkdirSync(STATE_DIR, { recursive: true });
-function stateFile(uid) { return path.join(STATE_DIR, encodeURIComponent(uid) + '.json'); }
-function loadState(uid) { try { return JSON.parse(fs.readFileSync(stateFile(uid), 'utf8')); } catch (e) {
-  return { memory: {}, bond: 0, tier: 'premium', coins: 0, level: 1, streaks: {}, personality: 'default', lessons: {}, updatedAt: 0 }; } }
-function saveState(uid, s) { fs.writeFileSync(stateFile(uid), JSON.stringify(s)); }
+const db = require('./db');
+db.initDB();   // ensure tables exist on boot
 
-api.get('/state', authRequired, (req, res) => {
-  try { res.json(loadState(req.user.userId)); } catch (e) { res.status(500).json({ error: e.message }); }
-});
-api.put('/state', authRequired, (req, res) => {
+api.get('/state', authRequired, async (req, res) => {
   try {
-    const incoming = req.body || {};
-    const cur = loadState(req.user.userId);
-    // last-write-wins: only accept if client state is newer (or force)
-    if (!incoming.force && incoming.updatedAt && cur.updatedAt && incoming.updatedAt < cur.updatedAt) {
-      return res.status(409).json({ error: 'stale', server: cur });   // client should re-pull
-    }
-    const next = { ...incoming, updatedAt: Date.now() };
-    delete next.force;
-    saveState(req.user.userId, next);
-    res.json({ ok: true, state: next });
+    await db.upsertUser(req.user.userId, req.user.email, req.user.name);
+    const state = await db.getAsukaState(req.user.userId);
+    res.json(state);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-api.patch('/state', authRequired, (req, res) => {
+api.put('/state', authRequired, async (req, res) => {
   try {
-    const cur = loadState(req.user.userId);
-    const merged = { ...cur, ...(req.body || {}), updatedAt: Date.now() };
-    saveState(req.user.userId, merged);
-    res.json({ ok: true, state: merged });
+    const incoming = req.body || {};
+    await db.upsertUser(req.user.userId, req.user.email, req.user.name);
+    const cur = await db.getAsukaState(req.user.userId);
+    // last-write-wins: reject if client state is older than server (unless force)
+    if (!incoming.force && incoming.updatedAt && cur.updatedAt && incoming.updatedAt < cur.updatedAt) {
+      return res.status(409).json({ error: 'stale', server: cur });
+    }
+    const next = { ...incoming }; delete next.force;
+    const saved = await db.saveAsukaState(req.user.userId, next);
+    res.json({ ok: true, state: saved });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+api.patch('/state', authRequired, async (req, res) => {
+  try {
+    await db.upsertUser(req.user.userId, req.user.email, req.user.name);
+    const saved = await db.patchAsukaState(req.user.userId, req.body || {});
+    res.json({ ok: true, state: saved });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
