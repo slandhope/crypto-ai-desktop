@@ -119,6 +119,17 @@ function loadSettings() {
 // ── saveSettings ──
 function saveSettings(s) { saveJSON(SETTINGS_FILE, s); }
 
+// ── tradingEnabled ── (carried over from main.js; was undefined after extraction)
+// Trading/scanning runs unless the app is explicitly in companion-only mode.
+function tradingEnabled() {
+  try {
+    const s = loadSettings();
+    if (s.companionMode === true) return false;      // explicit companion-only
+    if (s.tradingEnabled === false) return false;    // explicit off
+    return true;                                     // default: trading on
+  } catch (e) { return true; }
+}
+
 // ── loadMemory ──
 function loadMemory() {
   return loadJSON(MEMORY_FILE, {
