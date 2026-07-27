@@ -17,6 +17,7 @@ const anthropic = new Anthropic({
   defaultHeaders: { 'anthropic-beta': 'prompt-caching-2024-07-31' },
 });
 const { getSecret } = require('./secrets');          // 🔐 key vault
+const https = require('https');                       // for voice proxy
 const credits = require('./credits');                // 🎟️ credit engine
 const { authRequired, authOptional, userIdOf } = require('./auth');  // 🔑 real login
 // pull the real Claude key from the vault at boot (Secrets Manager → .env fallback)
@@ -3008,6 +3009,55 @@ api.post('/ai/chat', authRequired, async (req, res) => {
     res.json({ content: resp.content, balance: await credits.balance(uid) });
   } catch (e) {
     res.status(500).json({ error: 'ai_failed', detail: e.message });   // no charge on failure
+  }
+});
+
+// ── 🔊 VOICE PROXY — metered ElevenLabs TTS, server-side key ──
+// App sends { text, personality? } → we synthesize with OUR key, charge
+// voice credits, return base64 mp3. Keeps the voice key off every device.
+api.post('/ai/voice', authRequired, async (req, res) => {
+  const uid = userIdOf(req);
+  const { text, personality } = req.body || {};
+  if (!text || !text.trim()) return res.status(400).json({ error: 'no_text' });
+
+  // voice billed per ~word-block; ~1 unit per 200 chars, min 1
+  const units = Math.max(1, Math.ceil(text.length / 200));
+  const pre = await credits.check(uid, 'voice_minute', units);
+  if (!pre.ok) return res.status(402).json({ error: pre.reason, message: pre.message, balance: await credits.balance(uid) });
+
+  try {
+    const apiKey = await getSecret('ELEVENLABS_API_KEY').catch(() => process.env.ELEVENLABS_API_KEY);
+    const voiceId = process.env.VOICE_ID || 'TmK7x2BFDD7TOVlR69J2';
+    if (!apiKey) return res.status(500).json({ error: 'voice_unavailable' });
+
+    const isMommy = personality === 'mommy';
+    const body = JSON.stringify({
+      text: text.trim().slice(0, 800),
+      model_id: 'eleven_flash_v2_5',
+      output_format: 'mp3_22050_32',
+      voice_settings: isMommy
+        ? { stability: 0.75, similarity_boost: 0.85, style: 0.25, speed: 0.88 }
+        : { stability: 0.4, similarity_boost: 0.8, speed: 1.0 },
+    });
+
+    const audio = await new Promise((resolve, reject) => {
+      const r = https.request({
+        hostname: 'api.elevenlabs.io', path: `/v1/text-to-speech/${voiceId}`, method: 'POST',
+        headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+        timeout: 10000,
+      }, (r2) => {
+        const chunks = [];
+        r2.on('data', c => chunks.push(c));
+        r2.on('end', () => r2.statusCode === 200 ? resolve(Buffer.concat(chunks).toString('base64')) : reject(new Error('el status ' + r2.statusCode)));
+      });
+      r.on('error', reject); r.on('timeout', () => { r.destroy(); reject(new Error('voice timeout')); });
+      r.write(body); r.end();
+    });
+
+    await credits.charge(uid, 'voice_minute', units);   // charge only on success
+    res.json({ audio, balance: await credits.balance(uid) });
+  } catch (e) {
+    res.status(500).json({ error: 'voice_failed', detail: e.message });   // no charge on failure
   }
 });
 

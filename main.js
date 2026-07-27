@@ -314,46 +314,33 @@ function splitSentences(text) {
 // Generate audio for ONE sentence — optimized for speed
 async function getVoiceAudioFast(text) {
   if (!text?.trim()) return null;
-  const apiKey = process.env.ELEVENLABS_API_KEY;
-  const voiceId = process.env.VOICE_ID;
-  if (!apiKey || !voiceId) return null;
-
-  const https = require('https');
-  // 💗 mommy mode: softer, steadier, slower delivery
-  const _isMommy = (() => { try { return loadMemory().personality === 'mommy'; } catch (e) { return false; } })();
-  const body = JSON.stringify({
-    text: text.trim(),
-    model_id: 'eleven_flash_v2_5', // fastest model
-    output_format: 'mp3_22050_32',
-    voice_settings: _isMommy
-      ? { stability: 0.75, similarity_boost: 0.85, style: 0.25, speed: 0.88 }
-      : { stability: 0.4, similarity_boost: 0.8, speed: 1.0 }
-  });
-
-  return new Promise((resolve) => {
-    const req = https.request({
-      hostname: 'api.elevenlabs.io',
-      path: `/v1/text-to-speech/${voiceId}`,
-      method: 'POST',
-      headers: {
-        'xi-api-key': apiKey,
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body),
-      },
-      timeout: 8000,
-    }, (res) => {
-      const chunks = [];
-      res.on('data', c => chunks.push(c));
-      res.on('end', () => {
-        if (res.statusCode === 200) resolve(Buffer.concat(chunks).toString('base64'));
-        else { console.error('ElevenLabs status:', res.statusCode); resolve(null); }
+  // route through the backend voice proxy (metered, key stays server-side)
+  try {
+    const token = await asukaAuth.getIdToken();
+    if (!token) return null;
+    const _isMommy = (() => { try { return loadMemory().personality === 'mommy'; } catch (e) { return false; } })();
+    const base = process.env.ASUKA_API_BASE || 'http://13.51.141.42:3000';
+    const url = new URL(base + '/ai/voice');
+    const lib = url.protocol === 'https:' ? require('https') : require('http');
+    const body = JSON.stringify({ text: text.trim().slice(0, 800), personality: _isMommy ? 'mommy' : 'default' });
+    return await new Promise((resolve) => {
+      const req = lib.request({
+        hostname: url.hostname, port: url.port || (url.protocol === 'https:' ? 443 : 80), path: url.pathname, method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'Content-Length': Buffer.byteLength(body) },
+        timeout: 12000,
+      }, (res) => {
+        let data = '';
+        res.on('data', c => data += c);
+        res.on('end', () => {
+          try { const j = JSON.parse(data); resolve(j.audio || null); }
+          catch (e) { console.error('voice proxy parse:', res.statusCode); resolve(null); }
+        });
       });
+      req.on('error', (e) => { console.error('voice proxy error:', e.message); resolve(null); });
+      req.on('timeout', () => { req.destroy(); resolve(null); });
+      req.write(body); req.end();
     });
-    req.on('error', (e) => { console.error('ElevenLabs error:', e.message); resolve(null); });
-    req.on('timeout', () => { req.destroy(); resolve(null); });
-    req.write(body);
-    req.end();
-  });
+  } catch (e) { console.error('voice proxy failed:', e.message); return null; }
 }
 
 // Legacy function — still used for alerts/notifications (full audio)
@@ -16503,9 +16490,12 @@ function createLoginWindow() {
 // after successful login: close login, boot the real app
 function proceedAfterLogin() {
   try { if (loginWindow && !loginWindow.isDestroyed()) loginWindow.close(); } catch (e) {}
-  // pull her brain from the cloud before booting, so she's up to date
-  try { require('./sync-client').pullOnLogin().finally(() => bootMainApp()); }
-  catch (e) { bootMainApp(); }
+  // boot her right away — never let the network block her appearing
+  bootMainApp();
+  // pull her cloud brain in the background; if it arrives, it updates local files
+  try {
+    require('./sync-client').pullOnLogin().catch(() => {});
+  } catch (e) {}
 }
 
 ipcMain.handle('auth-google-login', async () => {
@@ -16584,6 +16574,8 @@ app.whenReady().then(async () => {
   const token = await asukaAuth.getIdToken().catch(() => null);
   if (token && asukaAuth.isLoggedIn()) {
     bootMainApp();               // already signed in — skip login
+    // pull her cloud brain in the background (same as after a fresh login)
+    try { asukaSync.pullOnLogin().catch(() => {}); } catch (e) {}
   } else {
     createLoginWindow();         // first time — show login
   }
