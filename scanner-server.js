@@ -3017,7 +3017,7 @@ api.post('/ai/chat', authRequired, async (req, res) => {
 // voice credits, return base64 mp3. Keeps the voice key off every device.
 api.post('/ai/voice', authRequired, async (req, res) => {
   const uid = userIdOf(req);
-  const { text, personality } = req.body || {};
+  const { text, personality, character, voiceId: reqVoiceId } = req.body || {};
   if (!text || !text.trim()) return res.status(400).json({ error: 'no_text' });
 
   // voice billed per ~word-block; ~1 unit per 200 chars, min 1
@@ -3027,7 +3027,11 @@ api.post('/ai/voice', authRequired, async (req, res) => {
 
   try {
     const apiKey = await getSecret('ELEVENLABS_API_KEY').catch(() => process.env.ELEVENLABS_API_KEY);
-    const voiceId = process.env.VOICE_ID || 'TmK7x2BFDD7TOVlR69J2';
+    // pick the voice: explicit voiceId → per-character env (VOICE_ID_<CHARACTER>) → default
+    let voiceId = reqVoiceId
+      || (character && process.env['VOICE_ID_' + String(character).toUpperCase()])
+      || process.env.VOICE_ID
+      || 'TmK7x2BFDD7TOVlR69J2';
     if (!apiKey) return res.status(500).json({ error: 'voice_unavailable' });
 
     const isMommy = personality === 'mommy';
