@@ -2994,14 +2994,14 @@ api.post('/credits/set-tier', requireAdmin, async (req, res) => {
 // 🤖 the proxy: app → here → Claude. Charges credits per call.
 api.post('/ai/chat', authRequired, async (req, res) => {
   const uid = userIdOf(req);
-  const { messages, system, model, action, units } = req.body || {};
+  const { messages, system, model, action, units, max_tokens } = req.body || {};
   const act = action || 'chat';
   const pre = await credits.check(uid, act, units || 1);
   if (!pre.ok) return res.status(402).json({ error: pre.reason, message: pre.message, balance: await credits.balance(uid) });
   try {
     const resp = await anthropic.messages.create({
       model: model || 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
+      max_tokens: max_tokens || 1024,
       system: system || undefined,
       messages: messages || [{ role: 'user', content: 'Hello' }],
     });
