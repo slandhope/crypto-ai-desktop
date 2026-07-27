@@ -52,7 +52,7 @@ async function verifyAnyToken(token) {
     try {
       const p = await verifier.verify(token);
       return { email: p.email || null, name: p.name || p['cognito:username'] || null, via: 'cognito' };
-    } catch (e) { /* fall through to Google */ }
+    } catch (e) { if (process.env.AUTH_DEBUG) console.warn('🔑 cognito verify failed:', e.message); }
   }
   // 2. Google native (mobile)
   if (GOOGLE_CLIENT_IDS.length) {
@@ -60,7 +60,7 @@ async function verifyAnyToken(token) {
       const ticket = await googleClient.verifyIdToken({ idToken: token, audience: GOOGLE_CLIENT_IDS });
       const p = ticket.getPayload();
       return { email: p.email || null, name: p.name || null, via: 'google' };
-    } catch (e) { /* not a valid Google token either */ }
+    } catch (e) { if (process.env.AUTH_DEBUG) console.warn('🔑 google verify failed:', e.message); }
   }
   return null;
 }
@@ -75,7 +75,8 @@ async function resolveUser(req) {
   const token = extractToken(req);
   if (!token) return null;
   const v = await verifyAnyToken(token);
-  if (!v || !v.email) return null;               // require email to unify identity
+  if (!v) { if (process.env.AUTH_DEBUG) console.warn('🔑 token not verified by any provider'); return null; }
+  if (!v.email) { if (process.env.AUTH_DEBUG) console.warn('🔑 token verified but NO email claim — via', v.via); return null; }
   return {
     userId: idFromEmail(v.email),                // SAME id on desktop + mobile (keyed by email)
     email: v.email,
