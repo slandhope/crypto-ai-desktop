@@ -4569,9 +4569,34 @@ ipcMain.handle('grok-stop', async () => {
 ipcMain.on('log', (e, ...args) => console.log('[APP]', ...args));
 
 ipcMain.handle('get-gemini-key', async () => {
-  const key = process.env.GEMINI_API_KEY;
-  if (key) console.log('Gemini API key loaded:', key.slice(0, 10) + '...');
-  return key || null;
+  // SECURITY: no longer hands out the raw Gemini key. Instead fetches a
+  // short-lived ephemeral token from the backend (metered, key stays server-side).
+  // The renderer uses this token like an API key to connect to Gemini Live directly.
+  try {
+    const token = await asukaAuth.getIdToken();
+    if (!token) return null;
+    const base = process.env.ASUKA_API_BASE || 'http://13.51.141.42:3000';
+    const url = new URL(base + '/ai/gemini-token');
+    const lib = url.protocol === 'https:' ? require('https') : require('http');
+    const body = JSON.stringify({ model: 'gemini-2.0-flash-live-001' });
+    return await new Promise((resolve) => {
+      const req = lib.request({
+        hostname: url.hostname, port: url.port || (url.protocol === 'https:' ? 443 : 80), path: url.pathname, method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'Content-Length': Buffer.byteLength(body) },
+        timeout: 10000,
+      }, (res) => {
+        let data = '';
+        res.on('data', c => data += c);
+        res.on('end', () => {
+          try { const j = JSON.parse(data); if (j.token) { console.log('Gemini ephemeral token issued'); resolve(j.token); } else { console.error('gemini token:', j.message || j.error); resolve(null); } }
+          catch (e) { resolve(null); }
+        });
+      });
+      req.on('error', (e) => { console.error('gemini token error:', e.message); resolve(null); });
+      req.on('timeout', () => { req.destroy(); resolve(null); });
+      req.write(body); req.end();
+    });
+  } catch (e) { console.error('gemini token failed:', e.message); return null; }
 });
 ipcMain.handle('get-system-prompt', async () => buildSystemPrompt() + buildMemoryContext());
 

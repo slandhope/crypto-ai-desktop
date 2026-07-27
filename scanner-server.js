@@ -3012,7 +3012,42 @@ api.post('/ai/chat', authRequired, async (req, res) => {
   }
 });
 
-// ── 🔊 VOICE PROXY — metered ElevenLabs TTS, server-side key ──
+// ── 🎙️ GEMINI LIVE — mint a short-lived ephemeral token (metered) ──
+// The app asks for a token, we mint one with OUR key, LOCKED to a model
+// + config (so a stolen token can't be abused), charge a credit, return it.
+// The app then connects DIRECTLY to Gemini with the token (low latency,
+// our key never leaves the server).
+api.post('/ai/gemini-token', authRequired, async (req, res) => {
+  const uid = userIdOf(req);
+  // starting a live session costs like a video action (editable in config)
+  const pre = await credits.check(uid, 'video', 1);
+  if (!pre.ok) return res.status(402).json({ error: pre.reason, message: pre.message, balance: await credits.balance(uid) });
+  try {
+    const key = await getSecret('GEMINI_API_KEY').catch(() => process.env.GEMINI_API_KEY);
+    if (!key) return res.status(500).json({ error: 'gemini_unavailable' });
+    const { GoogleGenAI } = require('@google/genai');
+    const client = new GoogleGenAI({ apiKey: key, httpOptions: { apiVersion: 'v1alpha' } });
+    const model = (req.body && req.body.model) || 'gemini-2.0-flash-live-001';
+    const token = await client.authTokens.create({
+      config: {
+        uses: 1,
+        expireTime: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        newSessionExpireTime: new Date(Date.now() + 60 * 1000).toISOString(),
+        // 🔒 LOCK the token to this model + audio config so a stolen token
+        // can't be repurposed (the vulnerability from the security advisory)
+        liveConnectConstraints: {
+          model,
+          config: { sessionResumption: {}, responseModalities: ['AUDIO'] },
+        },
+        httpOptions: { apiVersion: 'v1alpha' },
+      },
+    });
+    await credits.charge(uid, 'video', 1);
+    res.json({ token: token.name, expiresAt: token.expireTime, balance: await credits.balance(uid) });
+  } catch (e) {
+    res.status(500).json({ error: 'gemini_token_failed', detail: e.message });
+  }
+});
 // App sends { text, personality? } → we synthesize with OUR key, charge
 // voice credits, return base64 mp3. Keeps the voice key off every device.
 api.post('/ai/voice', authRequired, async (req, res) => {
