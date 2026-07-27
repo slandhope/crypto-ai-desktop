@@ -3048,6 +3048,72 @@ api.post('/ai/gemini-token', authRequired, async (req, res) => {
     res.status(500).json({ error: 'gemini_token_failed', detail: e.message });
   }
 });
+// ── 🎤 TRANSCRIBE PROXY — metered STT (Deepgram primary, OpenAI fallback) ──
+// App sends { audioBase64 } → we transcribe with OUR keys, charge, return text.
+api.post('/ai/transcribe', authRequired, async (req, res) => {
+  const uid = userIdOf(req);
+  const { audioBase64 } = req.body || {};
+  if (!audioBase64) return res.status(400).json({ error: 'no_audio' });
+  const pre = await credits.check(uid, 'chat', 1);   // transcription ~ chat cost (editable)
+  if (!pre.ok) return res.status(402).json({ error: pre.reason, message: pre.message, balance: await credits.balance(uid) });
+  try {
+    const audio = Buffer.from(audioBase64, 'base64');
+    // 1. Deepgram (primary)
+    const dgKey = await getSecret('DEEPGRAM_API_KEY').catch(() => process.env.DEEPGRAM_API_KEY);
+    if (dgKey) {
+      try {
+        const dg = await new Promise((resolve, reject) => {
+          const r = https.request({ method: 'POST', hostname: 'api.deepgram.com', path: '/v1/listen?model=nova-2&smart_format=true',
+            headers: { 'Authorization': 'Token ' + dgKey, 'Content-Type': 'audio/webm', 'Content-Length': audio.length }, timeout: 15000 },
+            (r2) => { let o=''; r2.on('data',c=>o+=c); r2.on('end',()=>resolve(o)); });
+          r.on('error', reject); r.on('timeout', () => { r.destroy(); reject(new Error('dg timeout')); });
+          r.write(audio); r.end();
+        });
+        const j = JSON.parse(dg);
+        const text = j?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
+        if (text) { await credits.charge(uid, 'chat', 1); return res.json({ text, balance: await credits.balance(uid) }); }
+      } catch (e) { /* fall through to OpenAI */ }
+    }
+    // 2. OpenAI Whisper (fallback) — via multipart
+    const oaKey = await getSecret('OPENAI_API_KEY').catch(() => process.env.OPENAI_API_KEY);
+    if (oaKey) {
+      const form = new FormData();
+      form.append('file', new Blob([audio], { type: 'audio/webm' }), 'audio.webm');
+      form.append('model', 'whisper-1');
+      const r = await fetch('https://api.openai.com/v1/audio/transcriptions', { method: 'POST', headers: { 'Authorization': 'Bearer ' + oaKey }, body: form });
+      if (r.ok) { const j = await r.json(); if (j.text) { await credits.charge(uid, 'chat', 1); return res.json({ text: j.text, balance: await credits.balance(uid) }); } }
+    }
+    res.status(502).json({ error: 'transcription_failed' });
+  } catch (e) {
+    res.status(500).json({ error: 'transcribe_failed', detail: e.message });
+  }
+});
+
+// ── 🎨 IMAGE PROXY — metered Gemini image generation, server-side key ──
+api.post('/ai/image', authRequired, async (req, res) => {
+  const uid = userIdOf(req);
+  const { prompt } = req.body || {};
+  if (!prompt) return res.status(400).json({ error: 'no_prompt' });
+  const pre = await credits.check(uid, 'video', 1);
+  if (!pre.ok) return res.status(402).json({ error: pre.reason, message: pre.message, balance: await credits.balance(uid) });
+  try {
+    const key = await getSecret('GEMINI_API_KEY').catch(() => process.env.GEMINI_API_KEY);
+    if (!key) return res.status(500).json({ error: 'image_unavailable' });
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=' + key, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } }),
+    });
+    if (!r.ok) return res.status(502).json({ error: 'image_model_failed' });
+    const data = await r.json();
+    const parts = (((data.candidates || [])[0] || {}).content || {}).parts || [];
+    const part = parts.find(p => p.inlineData && p.inlineData.data);
+    if (!part) return res.status(502).json({ error: 'no_image_returned' });
+    await credits.charge(uid, 'video', 1);
+    res.json({ imageBase64: part.inlineData.data, balance: await credits.balance(uid) });
+  } catch (e) {
+    res.status(500).json({ error: 'image_failed', detail: e.message });
+  }
+});
 // App sends { text, personality? } → we synthesize with OUR key, charge
 // voice credits, return base64 mp3. Keeps the voice key off every device.
 api.post('/ai/voice', authRequired, async (req, res) => {

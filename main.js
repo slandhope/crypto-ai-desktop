@@ -20,7 +20,7 @@ process.stderr.write = (chunk, ...args) => {
 };
 
 
-const groq      = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const groq      = makeGroqShim({ getIdToken: () => asukaAuth.getIdToken() });   // 🔐 routed через backend
 
 // ── Security: redact API keys/secrets from anything logged ──
 (() => {
@@ -30,13 +30,10 @@ const groq      = new Groq({ apiKey: process.env.GROQ_API_KEY });
     : x;
   for (const k of ['log','error','warn','info']) { const orig = console[k].bind(console); console[k] = (...a) => orig(...a.map(scrub)); }
 })();
-const anthropic = new Anthropic({ 
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  defaultHeaders: {
-    'anthropic-beta': 'prompt-caching-2024-07-31'
-  }
-});
-const openai    = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// 🔐 Anthropic calls now route through the metered backend (no key in app)
+const { makeAnthropicShim, makeGroqShim } = require('./ai-proxy-client');
+const anthropic = makeAnthropicShim({ getIdToken: () => asukaAuth.getIdToken() });
+// OpenAI client removed — transcription now routes through the backend proxy
 
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 const TTS_MODEL    = 'tts-1';
@@ -5012,81 +5009,16 @@ ipcMain.handle('process-voice-input-text', async (e, text, cameraFrame) => {
 // ─── DEEPGRAM STREAMING STT ───────────────────────────────────────────────
 const https = require('https');
 
-// Stream audio to Deepgram and get transcript
+// Deepgram STT now runs server-side via /ai/transcribe. This stub remains
+// only so any stray caller still resolves (returns null → proxy path used).
 async function transcribeWithDeepgram(audioBuffer) {
-  return new Promise((resolve, reject) => {
-    const apiKey = process.env.DEEPGRAM_API_KEY;
-    if (!apiKey) return resolve(null);
-
-    const req = https.request({
-      hostname: 'api.deepgram.com',
-      path: '/v1/listen?model=nova-2&language=en&smart_format=true&punctuate=true',
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${apiKey}`,
-        'Content-Type': 'audio/webm',
-        'Content-Length': audioBuffer.length,
-      },
-      timeout: 8000,
-    }, (res) => {
-      let raw = '';
-      res.on('data', c => raw += c);
-      res.on('end', () => {
-        try {
-          const data = JSON.parse(raw);
-          const transcript = data?.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim();
-          resolve(transcript || null);
-        } catch(e) { resolve(null); }
-      });
-    });
-    req.on('error', () => resolve(null));
-    req.on('timeout', () => { req.destroy(); resolve(null); });
-    req.write(audioBuffer);
-    req.end();
-  });
+  return null;
 }
 
 // ElevenLabs streaming TTS — returns audio faster
 async function getVoiceAudioStreaming(text) {
-  if (!text) return null;
-  const apiKey = process.env.ELEVENLABS_API_KEY;
-  const voiceId = process.env.VOICE_ID;
-  if (!apiKey || !voiceId) return getVoiceAudio(text);
-
-  return new Promise((resolve) => {
-    const body = JSON.stringify({
-      text,
-      model_id: 'eleven_flash_v2_5',
-      output_format: 'mp3_22050_32',
-      voice_settings: { stability: 0.4, similarity_boost: 0.8 }
-    });
-
-    const req = https.request({
-      hostname: 'api.elevenlabs.io',
-      path: `/v1/text-to-speech/${voiceId}`,
-      method: 'POST',
-      headers: {
-        'xi-api-key': apiKey,
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body),
-      },
-      timeout: 10000,
-    }, (res) => {
-      const chunks = [];
-      res.on('data', c => chunks.push(c));
-      res.on('end', () => {
-        if (res.statusCode === 200) {
-          resolve(Buffer.concat(chunks).toString('base64'));
-        } else {
-          resolve(null);
-        }
-      });
-    });
-    req.on('error', () => resolve(null));
-    req.on('timeout', () => { req.destroy(); resolve(null); });
-    req.write(body);
-    req.end();
-  });
+  // routes through the backend voice proxy (metered, key server-side)
+  return getVoiceAudioFast(text);
 }
 
 // Fast voice pipeline — Deepgram STT + Claude + ElevenLabs streaming
@@ -5095,25 +5027,13 @@ ipcMain.handle('process-voice-input', async (e, audioInput) => {
     const buf = Buffer.from(audioInput, 'base64');
     if (buf.length < 2000) return { success: false, error: 'Too short' };
 
-    // Try Deepgram first (faster), fall back to OpenAI Whisper
-    let userText = await transcribeWithDeepgram(buf);
-
-    if (!userText && process.env.OPENAI_API_KEY) {
-      // Fallback to OpenAI Whisper only if key exists
-      const tempPath = path.join(app.getPath('temp'), `input_${Date.now()}.webm`);
-      fs.writeFileSync(tempPath, buf);
-      try {
-        const t = await openai.audio.transcriptions.create({
-          file: fs.createReadStream(tempPath),
-          model: 'whisper-1',
-          language: 'en',
-          response_format: 'text',
-        });
-        userText = typeof t === 'string' ? t.trim() : t?.text?.trim();
-      } finally {
-        try { fs.unlinkSync(tempPath); } catch(e) {}
-      }
-    }
+    // transcribe via the metered backend proxy (Deepgram+Whisper keys stay server-side)
+    let userText = null;
+    try {
+      const { backendPost } = require('./ai-proxy-client');
+      const tr = await backendPost('/ai/transcribe', { audioBase64: buf.toString('base64') }, () => asukaAuth.getIdToken());
+      userText = tr && tr.text ? tr.text.trim() : null;
+    } catch (e) { console.error('transcribe proxy:', e.message); }
 
     if (!userText) return { success: false, error: 'No speech detected' };
 
@@ -10074,22 +9994,16 @@ setTimeout(runCoinProjects, 90 * 1000);
 // ─── AI COIN ART — logo + meme via Gemini image model (premium) ─────────────
 async function genCoinArt(form) {
   try {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) return { success: false, error: 'Add GEMINI_API_KEY to generate art' };
     if (!fs.existsSync(LAUNCH_SITES_DIR)) fs.mkdirSync(LAUNCH_SITES_DIR, { recursive: true });
     const prompt = `A clean, bold crypto token logo for "${form.name}" ($${form.symbol}). ${form.tagline || ''}. Circular coin emblem, vibrant, memorable, centered on transparent or dark background, no text artifacts, high contrast, suitable as a profile picture. Style: modern crypto meme branding.`;
-    const res = await fetchT('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=' + key, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } })
-    }, 30000).catch(() => null);
-    if (!res || !res.ok) return { success: false, error: 'Image model unavailable (check GEMINI_API_KEY access to image generation)' };
-    const data = await res.json();
-    const part = data?.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
-    if (!part) return { success: false, error: 'No image returned — your Gemini key may not have image access' };
-    const buf = Buffer.from(part.inlineData.data, 'base64');
+    // route through metered backend image proxy (Gemini key stays server-side)
+    const { backendPost } = require('./ai-proxy-client');
+    const resp = await backendPost('/ai/image', { prompt }, () => asukaAuth.getIdToken()).catch(e => ({ error: e.message }));
+    if (!resp || !resp.imageBase64) return { success: false, error: (resp && resp.error) ? resp.error : 'Image generation unavailable' };
+    const buf = Buffer.from(resp.imageBase64, 'base64');
     const file = path.join(LAUNCH_SITES_DIR, `${(form.symbol||'coin').toLowerCase()}-logo-${Date.now()}.png`);
     fs.writeFileSync(file, buf);
-    const dataUri = 'data:image/png;base64,' + part.inlineData.data;
+    const dataUri = 'data:image/png;base64,' + resp.imageBase64;
     return { success: true, path: file, dataUri };
   } catch(e) { return { success: false, error: e.message }; }
 }
