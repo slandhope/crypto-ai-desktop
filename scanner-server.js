@@ -3137,14 +3137,14 @@ api.post('/ai/voice', authRequired, async (req, res) => {
     console.log('🔊 voice req → keyTail:', apiKey ? apiKey.slice(-4) : 'NONE', '| voiceId:', voiceId, '| personality:', personality, '| character:', character);
 
     const isMommy = personality === 'mommy';
-    const body = JSON.stringify({
+    const payload = {
       text: text.trim().slice(0, 800),
       model_id: 'eleven_flash_v2_5',
       output_format: 'mp3_22050_32',
-      voice_settings: isMommy
-        ? { stability: 0.75, similarity_boost: 0.85, style: 0.25, speed: 0.88 }
-        : { stability: 0.4, similarity_boost: 0.8, speed: 1.0 },
-    });
+    };
+    // only add voice_settings when we actually want non-default delivery
+    if (isMommy) payload.voice_settings = { stability: 0.75, similarity_boost: 0.85 };
+    const body = JSON.stringify(payload);
 
     const audio = await new Promise((resolve, reject) => {
       const r = https.request({
