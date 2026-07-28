@@ -2899,7 +2899,7 @@ const TIERS = {
 const DEV_PANEL_HTML = (() => { try { return fs.readFileSync(path.join(__dirname, 'dev-panel.html'), 'utf8'); } catch (e) { return '<h1>dev-panel.html missing</h1>'; } })();
 
 const api = express();
-api.use(express.json());
+api.use(express.json({ limit: '25mb' }));   // audio/image base64 payloads need headroom
 api.get('/health', (req, res) => res.json({ ok: true, brain: 'asuka', up: process.uptime() }));
 api.get('/signals', (req, res) => { try { res.json(loadDailySignals()); } catch (e) { res.json({ signals: [] }); } });
 api.get('/trades', (req, res) => { try { res.json(loadPaperTrades()); } catch (e) { res.json({ trades: [] }); } });
@@ -3134,6 +3134,7 @@ api.post('/ai/voice', authRequired, async (req, res) => {
       || process.env.VOICE_ID
       || 'TmK7x2BFDD7TOVlR69J2';
     if (!apiKey) return res.status(500).json({ error: 'voice_unavailable' });
+    console.log('🔊 voice req → keyTail:', apiKey ? apiKey.slice(-4) : 'NONE', '| voiceId:', voiceId, '| personality:', personality, '| character:', character);
 
     const isMommy = personality === 'mommy';
     const body = JSON.stringify({
@@ -3153,7 +3154,10 @@ api.post('/ai/voice', authRequired, async (req, res) => {
       }, (r2) => {
         const chunks = [];
         r2.on('data', c => chunks.push(c));
-        r2.on('end', () => r2.statusCode === 200 ? resolve(Buffer.concat(chunks).toString('base64')) : reject(new Error('el status ' + r2.statusCode)));
+        r2.on('end', () => {
+          if (r2.statusCode === 200) resolve(Buffer.concat(chunks).toString('base64'));
+          else { const errBody = Buffer.concat(chunks).toString('utf8').slice(0, 200); console.error('🔊 EL error', r2.statusCode, '→', errBody); reject(new Error('el status ' + r2.statusCode)); }
+        });
       });
       r.on('error', reject); r.on('timeout', () => { r.destroy(); reject(new Error('voice timeout')); });
       r.write(body); r.end();
