@@ -21,8 +21,10 @@
 
   try {
     const vrmDir = path.join(appDir, 'assets', 'vrm');
-    const modelPath = path.join(vrmDir, 'asuka.glb');
-    if (!fs.existsSync(modelPath)) { fail('Put asuka.glb in assets/vrm/'); return; }
+    const novaPath = path.join(vrmDir, 'nova', 'model.fbx');
+    const glbPath = path.join(vrmDir, 'asuka.glb');
+    const modelPath = fs.existsSync(novaPath) ? novaPath : glbPath;
+    if (!fs.existsSync(modelPath)) { fail('Missing assets/vrm/nova/model.fbx'); return; }
 
     const all = fs.existsSync(vrmDir) ? fs.readdirSync(vrmDir) : [];
     const animPriority = (n) => {

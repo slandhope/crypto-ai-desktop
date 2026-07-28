@@ -74,6 +74,7 @@ function request(method, path, body) {
       res.on('end', () => { try { resolve({ status: res.statusCode, body: out ? JSON.parse(out) : null }); } catch (e) { resolve({ status: res.statusCode, body: null }); } });
     });
     req.on('error', reject);
+    req.setTimeout(8000, () => { req.destroy(new Error('sync request timed out')); });
     if (data) req.write(data);
     req.end();
   });
@@ -81,6 +82,7 @@ function request(method, path, body) {
 
 // pull cloud state into local files (called right after login)
 async function pullOnLogin() {
+  console.log('☁️ sync: checking cloud for Asuka state...');
   try {
     const res = await request('GET', '/state');
     if (res.status === 200 && res.body) {
@@ -94,8 +96,10 @@ async function pullOnLogin() {
         await pushNow();
         console.log('☁️ local newer — pushed to cloud');
       }
+    } else {
+      console.warn('☁️ sync: unexpected response', res.status, JSON.stringify(res.body || '').slice(0, 120));
     }
-  } catch (e) { console.warn('sync pull skipped:', e.message); }
+  } catch (e) { console.warn('☁️ sync pull skipped:', e.message); }
 }
 
 // push local → cloud immediately

@@ -20,7 +20,8 @@ process.stderr.write = (chunk, ...args) => {
 };
 
 
-const groq      = makeGroqShim({ getIdToken: () => asukaAuth.getIdToken() });   // 🔐 routed через backend
+const { makeAnthropicShim, makeGroqShim } = require('./ai-proxy-client');
+const groq      = makeGroqShim({ getIdToken: () => asukaAuth.getIdToken() });   // 🔐 routed via backend
 
 // ── Security: redact API keys/secrets from anything logged ──
 (() => {
@@ -31,7 +32,7 @@ const groq      = makeGroqShim({ getIdToken: () => asukaAuth.getIdToken() });   
   for (const k of ['log','error','warn','info']) { const orig = console[k].bind(console); console[k] = (...a) => orig(...a.map(scrub)); }
 })();
 // 🔐 Anthropic calls now route through the metered backend (no key in app)
-const { makeAnthropicShim, makeGroqShim } = require('./ai-proxy-client');
+// 🔐 Anthropic calls route through the metered backend (shim required above)
 const anthropic = makeAnthropicShim({ getIdToken: () => asukaAuth.getIdToken() });
 // OpenAI client removed — transcription now routes through the backend proxy
 
@@ -329,8 +330,12 @@ async function getVoiceAudioFast(text) {
         let data = '';
         res.on('data', c => data += c);
         res.on('end', () => {
-          try { const j = JSON.parse(data); resolve(j.audio || null); }
-          catch (e) { console.error('voice proxy parse:', res.statusCode); resolve(null); }
+          try {
+            const j = JSON.parse(data);
+            if (j.audio) { console.log('🔊 voice proxy OK:', j.audio.length, 'chars of audio'); resolve(j.audio); }
+            else { console.error('🔊 voice proxy no audio — status', res.statusCode, '→', JSON.stringify(j).slice(0, 120)); resolve(null); }
+          }
+          catch (e) { console.error('🔊 voice proxy parse fail — status', res.statusCode, '→', data.slice(0, 120)); resolve(null); }
         });
       });
       req.on('error', (e) => { console.error('voice proxy error:', e.message); resolve(null); });
@@ -4721,6 +4726,41 @@ ipcMain.handle('connect-binance', async (e, { apiKey, secret, testnet }) => {
   } catch (err) { return { ok: false, error: err.message }; }
 });
 
+// Settings page: verify saved Binance keys + confirm they can't withdraw
+ipcMain.handle('test-binance', async () => {
+  try {
+    const s = loadSettings();
+    const apiKey = (s.binanceKey || process.env.BINANCE_API_KEY || process.env.BINANCE_TESTNET_API_KEY || '').trim();
+    const secret = (s.binanceSecret || process.env.BINANCE_SECRET || process.env.BINANCE_TESTNET_SECRET || '').trim();
+    if (!apiKey || !secret) return { ok: false, error: 'No API key/secret saved' };
+
+    // keep env in sync so the request helpers can use them
+    process.env.BINANCE_TESTNET_API_KEY = apiKey;
+    process.env.BINANCE_TESTNET_SECRET = secret;
+
+    // 1) can we authenticate + read a balance?
+    let balance = null;
+    try {
+      const r = await withTimeout(binanceTestnetRequest('GET', '/fapi/v2/balance', {}), 7000, 'Binance verify');
+      if (Array.isArray(r)) {
+        const usdt = r.find(b => b.asset === 'USDT');
+        balance = usdt ? Number(usdt.balance) : 0;
+      }
+    } catch (e) {
+      return { ok: false, error: e.message || 'Could not reach Binance with these keys' };
+    }
+
+    // 2) safety: does this key have withdrawal permission? (it shouldn't)
+    let canWithdraw = false;
+    try {
+      const perm = await withTimeout(binanceTestnetRequest('GET', '/sapi/v1/account/apiRestrictions', {}), 6000, 'Binance perms');
+      if (perm && typeof perm.enableWithdrawals === 'boolean') canWithdraw = perm.enableWithdrawals;
+    } catch (e) { /* endpoint unavailable on testnet — leave as false/unknown */ }
+
+    return { ok: true, balance, canWithdraw };
+  } catch (err) { return { ok: false, error: err.message }; }
+});
+
 ipcMain.handle('get-connection-status', async () => {
   const out = { binance: 'not_connected', wallet: 'not_connected', walletAddress: null };
   try { if (process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY) {
@@ -8765,6 +8805,25 @@ async function checkPriceAlerts() {
 setInterval(checkPriceAlerts, 3 * 60 * 1000);
 
 // ─── FEAR & GREED widget data + "should I buy the dip" sentiment ────────────
+// dashboard page-1 asks for a compact market snapshot
+ipcMain.handle('get-market-overview', async () => {
+  try {
+    const [fg, regime] = await Promise.all([
+      getFearGreed().catch(() => null),
+      detectMarketRegime().catch(() => null),
+    ]);
+    const r = typeof regime === 'string' ? regime : (regime && regime.regime) || null;
+    const fgNum = (fg && (fg.value ?? fg.fgNum ?? fg)) ?? null;
+    return {
+      regime: r ? String(r).charAt(0).toUpperCase() + String(r).slice(1) : '—',
+      marketRegime: r,
+      fearGreed: typeof fgNum === 'number' ? fgNum : (parseInt(fgNum) || null),
+      bias: (regime && regime.bias) || null,
+      strength: (regime && regime.strength) || null,
+    };
+  } catch (e) { return { regime: '—', fearGreed: null }; }
+});
+
 ipcMain.handle('market-mood', async () => {
   try {
     const [fg, regime, btc] = await Promise.all([
@@ -16503,7 +16562,7 @@ asukaAuth.init({ app: require('electron').app, BrowserWindow, shell: require('el
 
 // ☁️ sync client — her brain to/from Postgres via /state
 const asukaSync = require('./sync-client');
-const SYNC_API_BASE = process.env.ASUKA_API_BASE || 'http://13.50.251.213:3000';
+const SYNC_API_BASE = process.env.ASUKA_API_BASE || 'http://13.51.141.42:3000';
 asukaSync.init({
   getIdToken: () => asukaAuth.getIdToken(),
   loadMemory, saveMemory, loadCare, saveCare,

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  canvas { width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script src="./assets/live2dcubismcore.min.js"></script>
+<script src="./node_modules/pixi.js/dist/browser/pixi.min.js"></script>
+<script src="./node_modules/pixi-live2d-display/dist/cubism4.min.js"></script>
+<script>
+(async () => {
+  try {
+    if (!window.PIXI?.live2d) throw new Error('Live2D plugin missing')
+    const { Live2DModel } = PIXI.live2d
+    const canvas = document.getElementById('c')
+    const w = window.innerWidth || 200
+    const h = window.innerHeight || 420
+    canvas.width = w
+    canvas.height = h
+    const app = new PIXI.Application({
+      view: canvas, autoStart: true, transparent: true, backgroundAlpha: 0, width: w, height: h,
+      powerPreference: 'low-power'
+    })
+    if (app.ticker) app.ticker.maxFPS = 30
+    const model = await Promise.race([
+      Live2DModel.from('./assets/model/huohuo.model3.json'),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000))
+    ])
+    app.stage.addChild(model)
+    model.x = w / 2
+    model.y = h
+    model.scale.set(h / 8500)
+    model.anchor.set(0.5, 1)
+    model.motion('idle')
+    document.addEventListener('mousemove', e => {
+      const dx = (e.clientX / window.innerWidth - 0.5) * 2
+      const dy = (e.clientY / window.innerHeight - 0.5) * 2
+      try {
+        const core = model.internalModel.coreModel
+        core.setParameterValueById('ParamEyeBallX', dx * 1.2)
+        core.setParameterValueById('ParamEyeBallY', -dy)
+        core.setParameterValueById('ParamAngleX', dx * 18)
+        core.setParameterValueById('ParamAngleY', -dy * 12)
+      } catch (e) {}
+    })
+    window.addEventListener('resize', () => {
+      const nw = window.innerWidth
+      const nh = window.innerHeight
+      if (nw < 10 || nh < 10) return
+      app.renderer.resize(nw, nh)
+      model.x = nw / 2
+      model.y = nh
+      model.scale.set(nh / 8500)
+    })
+  } catch (e) {
+    console.error('dashboard-waifu:', e)
+    document.body.style.color = '#888'
+    document.body.style.font = '11px system-ui'
+    document.body.textContent = 'Live2D loading…'
+  }
+})()
+</script>
+</body>
+</html>

@@ -292,6 +292,19 @@
     }
     loadModel()
 
+    // Free WebGL when dashboard opens (two Live2D contexts freeze Electron)
+    ipcRenderer.on('release-live2d', () => {
+      try {
+        if (model && pixiApp?.stage) pixiApp.stage.removeChild(model)
+        model = null
+        window.model = null
+        if (pixiApp) {
+          pixiApp.destroy(true, { children: true, texture: true, baseTexture: true })
+          window.pixiApp = null
+        }
+      } catch(e) { console.warn('release-live2d:', e) }
+    })
+
     // Mouse tracking for Live2D
     document.addEventListener('mousemove', e => {
       if (!model) return
@@ -685,7 +698,7 @@
       setStatus('Connecting to Gemini...')
 
       try {
-        geminiWs = new WebSocket(`${GEMINI_WS_URL}?key=${apiKey}`)
+        geminiWs = new WebSocket(`${GEMINI_WS_URL}?access_tokenkey=${apiKey}`)
         geminiWs.binaryType = 'arraybuffer'
 
         geminiWs.onopen = async () => {

@@ -53,9 +53,8 @@ async function playFirstAnim(mixer, bones, anims) {
       const clip = fbx.animations.find((c) => c.tracks.length > 0) || fbx.animations[0];
       if (!clip) continue;
       const tracks = retargetClip(clip, bones);
-      if (!tracks.length) continue;
-      const retargeted = new THREE.AnimationClip(entry.name, clip.duration, tracks);
-      const action = mixer.clipAction(retargeted);
+      const use = tracks.length ? new THREE.AnimationClip(entry.name, clip.duration, tracks) : clip;
+      const action = mixer.clipAction(use);
       action.setLoop(THREE.LoopRepeat, Infinity);
       action.reset().fadeIn(0.3).play();
       return action;
@@ -64,35 +63,32 @@ async function playFirstAnim(mixer, bones, anims) {
   return null;
 }
 
-function createRenderer(canvas) {
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: true,
-    alpha: true,
-    powerPreference: 'high-performance',
-  });
-  if (!renderer.getContext()) throw new Error('WebGL context not created');
-  return renderer;
+async function loadCharacter(config) {
+  const url = config.modelURL.toLowerCase();
+  if (url.endsWith('.fbx')) {
+    return new FBXLoader().loadAsync(config.modelURL);
+  }
+  const gltf = await new GLTFLoader().loadAsync(config.modelURL);
+  return gltf.scene;
 }
 
 export async function mountCompanion3D(canvas, config) {
   if (!canvas) throw new Error('No canvas element');
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
-  const renderer = createRenderer(canvas);
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 500);
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  scene.add(new THREE.AmbientLight(0xffffff, 1.8));
-  const key = new THREE.DirectionalLight(0xffffff, 1.2);
+  scene.add(new THREE.AmbientLight(0xffffff, 1.6));
+  const key = new THREE.DirectionalLight(0xffffff, 1.3);
   key.position.set(1, 2, 2);
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0x88aaff, 0.35);
-  rim.position.set(-2, 1, -1);
-  scene.add(rim);
+  const fill = new THREE.DirectionalLight(0xaaccff, 0.4);
+  fill.position.set(-2, 1, -1);
+  scene.add(fill);
 
-  const gltf = await new GLTFLoader().loadAsync(config.modelURL);
-  const model = gltf.scene;
+  const model = await loadCharacter(config);
   scene.add(model);
 
   const box = new THREE.Box3().setFromObject(model);
@@ -103,13 +99,20 @@ export async function mountCompanion3D(canvas, config) {
   model.position.y -= box.min.y;
 
   const lookY = size.y * 0.45;
-  camera.position.set(0, lookY, size.y * 1.55);
+  camera.position.set(0, lookY, Math.max(size.y * 1.4, size.z * 2, 2));
   camera.lookAt(0, lookY, 0);
 
   const bones = {};
   model.traverse((o) => { if (o.isBone) bones[o.name] = o; });
   const mixer = new THREE.AnimationMixer(model);
-  let currentAction = await playFirstAnim(mixer, bones, config.anims);
+  let currentAction = null;
+  if (model.animations?.length) {
+    currentAction = mixer.clipAction(model.animations[0]);
+    currentAction.setLoop(THREE.LoopRepeat, Infinity);
+    currentAction.play();
+  } else {
+    currentAction = await playFirstAnim(mixer, bones, config.anims);
+  }
 
   let lastT = performance.now();
   let raf = 0;
@@ -147,9 +150,7 @@ export async function mountCompanion3D(canvas, config) {
       cancelAnimationFrame(raf);
       ro.disconnect();
       if (currentAction) currentAction.stop();
-      const gl = renderer.getContext();
       renderer.dispose();
-      try { gl?.getExtension('WEBGL_lose_context')?.loseContext() } catch (_) {}
       scene.traverse((o) => {
         if (o.geometry) o.geometry.dispose();
         if (o.material) {
