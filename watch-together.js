@@ -41,7 +41,7 @@ function startWatch(newMode = 'general') {
   s.watchTogether = { ...(s.watchTogether || {}), enabled: true, mode };
   deps.saveSettings(s);
   notifyWaifu('watch-together-start', { mode, instruction: getModeInstruction(mode) });
-  console.log(`👀 Watch Together ON (${mode}) — live stream → Gemini`);
+  console.log(`Watch Together ON (${mode})`);
   return { ok: true, mode };
 }
 
@@ -53,7 +53,7 @@ function stopWatch() {
     deps.saveSettings(s);
   }
   notifyWaifu('watch-together-stop', {});
-  console.log('👀 Watch Together OFF');
+  console.log('Watch Together OFF');
   return { ok: true };
 }
 

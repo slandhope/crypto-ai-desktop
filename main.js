@@ -285,7 +285,6 @@ async function archiveChatBatch(overflow) {
     });
     saveEpisodes(eps.slice(-200));
     saveNewLearning(summary);
-    console.log(`📦 Archived ${overflow.length} old messages → episode memory`);
   } catch (e) { console.warn('chat archive failed:', e.message); }
 }
 
@@ -4721,7 +4720,7 @@ ipcMain.handle('get-gemini-key', async () => {
         let data = '';
         res.on('data', c => data += c);
         res.on('end', () => {
-          try { const j = JSON.parse(data); if (j.token) { console.log('Gemini ephemeral token issued'); resolve(j.token); } else { console.error('gemini token:', j.message || j.error); resolve(null); } }
+          try { const j = JSON.parse(data); if (j.token) { resolve(j.token); } else { console.error('gemini token:', j.message || j.error); resolve(null); } }
           catch (e) { resolve(null); }
         });
       });
@@ -7558,7 +7557,7 @@ function saveBrainMemories(memories, opts) {
   saveBrain(brain, opts);
 }
 
-function addMemory(text, category = 'general') {
+function addMemory(text, category = 'general', opts = {}) {
   const brain = loadBrain();
   const memory = {
     id: Date.now(),
@@ -7569,7 +7568,6 @@ function addMemory(text, category = 'general') {
   };
   brain.memories.push(memory);
   saveBrain(brain);
-  console.log(`🧠 Memory saved: ${text.slice(0, 50)}`);
   return memory;
 }
 
@@ -9236,7 +9234,10 @@ function rememberFact(fact, category = 'personal') {
   p.facts.push(f);
   p.facts = p.facts.slice(-200);
   saveUserProfile(p);
-  try { addMemory(f, category); } catch (e) {}
+  // Profile sync is enough for auto-learned facts — skip brain duplicate (was spamming logs)
+  if (category === 'personal' || category === 'screen' || category === 'screen-watch') {
+    try { addMemory(f, category, { quiet: true }); } catch (e) {}
+  }
   const nm = f.match(/^my name is (.+)$/i) || f.match(/^User's name is (.+)$/i);
   if (nm) {
     const mem = loadMemory();
@@ -9287,7 +9288,6 @@ async function autoExtractFromRecentChat() {
     if (!Array.isArray(facts) || !facts.length) return;
     let n = 0;
     for (const f of facts) if (rememberFact(f, 'conversation')) n++;
-    if (n) console.log(`🧠 MemoryOS: stored ${n} item(s) from chat`);
   } catch (e) {}
 }
 
@@ -9312,7 +9312,6 @@ async function summarizeEpisode() {
     });
     saveEpisodes(eps.slice(-150));
     saveNewLearning(summary);
-    console.log(`🧠 Episode saved: ${summary.slice(0, 70)}…`);
   } catch (e) {}
 }
 
@@ -14561,7 +14560,6 @@ function checkImageCap() {
   const settings = loadSettings();
   const cap = settings.imageDailyCap || 30; // default 30 images/day
   if (_imageDailyCount >= cap) {
-    console.log(`🖼️ Image cap reached (${_imageDailyCount}/${cap}) — skipping`);
     return false;
   }
   _imageDailyCount++;
@@ -14577,11 +14575,9 @@ async function extractSignalFromImage(imageBuffer, sender, groupName) {
     // Size filter — skip tiny images (memes/stickers) and huge ones (photos)
     const sizeKB = imageBuffer.length / 1024;
     if (sizeKB < 15) {
-      console.log(`🖼️ Skipping tiny image (${sizeKB.toFixed(0)}KB) from @${sender}`);
       return null;
     }
     if (sizeKB > 600) {
-      console.log(`🖼️ Skipping huge image (${sizeKB.toFixed(0)}KB) from @${sender}`);
       return null;
     }
 
@@ -14728,7 +14724,7 @@ async function readGroupMessages(groupId, limit = 20) {
             if (buffer && buffer.length > 0) {
               item.hasImage = true;
               item.imageBuffer = Buffer.from(buffer);
-              console.log(`🖼️ Image downloaded: ${item.imageBuffer.length} bytes from @${item.sender}`);
+              // image buffered for chart analysis
             }
           } catch(e) { 
             try {
@@ -14745,9 +14741,7 @@ async function readGroupMessages(groupId, limit = 20) {
                 item.hasImage = true;
                 item.imageBuffer = Buffer.from(bytes);
               }
-            } catch(e2) {
-              console.log(`🖼️ Image skip: ${e.message}`);
-            }
+            } catch(e2) { /* skip unreadable image */ }
           }
         }
         processedMessageIds.add(m.id);
@@ -16571,7 +16565,7 @@ async function readPastMessages() {
         let signal = await extractTradingSignal(msg.text || '', msg.sender);
         if (!signal.isSignal && msg.hasImage && msg.imageBuffer) {
           const imgSignal = await extractSignalFromImage(msg.imageBuffer, msg.sender, group.name);
-          if (imgSignal?.isSignal) { signal = imgSignal; console.log(`🖼️ Image signal found from @${msg.sender}`); }
+          if (imgSignal?.isSignal) { signal = imgSignal; }
         }
         
         if (signal.isSignal) {
