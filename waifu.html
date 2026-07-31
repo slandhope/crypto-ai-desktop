@@ -332,23 +332,49 @@
     })
     document.addEventListener('mouseup', () => isDragging = false)
 
-    // ── Chat History ───────────────────────────────────────────────────────
+    // ── Chat History (synced PC ↔ phone via cloud) ─────────────────────────
     let chatHistory = []
-    try { chatHistory = JSON.parse(localStorage.getItem('asukaHistory') || '[]') } catch(e) {}
+
+    function applyChatHistory(log) {
+      chatHistory = Array.isArray(log) ? log.slice(-500) : []
+      try { localStorage.setItem('asukaHistory', JSON.stringify(chatHistory.slice(-100))) } catch(e) {}
+      if (historyPanel.classList.contains('open')) renderHistory()
+    }
+
+    async function loadSyncedChat() {
+      let local = []
+      try { local = JSON.parse(localStorage.getItem('asukaHistory') || '[]') } catch(e) {}
+      if (local.length) await ipcRenderer.invoke('import-local-chat', local).catch(() => {})
+      const log = await ipcRenderer.invoke('get-chat-log').catch(() => []) || []
+      applyChatHistory(log.length ? log : local)
+    }
+    loadSyncedChat()
 
     function addToHistory(role, text) {
       if (!text) return
-      chatHistory.push({ role, text, time: new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) })
-      if (chatHistory.length > 100) chatHistory.shift()
-      try { localStorage.setItem('asukaHistory', JSON.stringify(chatHistory)) } catch(e) {}
-      if (historyPanel.classList.contains('open')) renderHistory()
+      ipcRenderer.invoke('append-chat-message', { role, text }).then(entry => {
+        if (entry) {
+          chatHistory.push(entry)
+          if (chatHistory.length > 500) chatHistory.shift()
+          try { localStorage.setItem('asukaHistory', JSON.stringify(chatHistory.slice(-100))) } catch(e) {}
+          if (historyPanel.classList.contains('open')) renderHistory()
+        }
+      }).catch(() => {
+        const time = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
+        chatHistory.push({ role, text, time, ts: Date.now() })
+        if (chatHistory.length > 100) chatHistory.shift()
+        try { localStorage.setItem('asukaHistory', JSON.stringify(chatHistory)) } catch(e) {}
+        if (historyPanel.classList.contains('open')) renderHistory()
+      })
     }
+
+    ipcRenderer.on('chat-log-updated', (_e, log) => applyChatHistory(log))
 
     function renderHistory() {
       const list = document.getElementById('history-list')
       list.innerHTML = chatHistory.slice(-30).map(m => `
         <div class="history-msg ${m.role}">
-          <div class="msg-label">${m.role === 'user' ? 'YOU' : 'ASUKA'} · ${m.time}</div>
+          <div class="msg-label">${m.role === 'user' ? 'YOU' : 'ASUKA'} · ${m.time || ''}${m.device && m.device !== 'pc' ? ' · 📱' : ''}</div>
           ${m.text}
         </div>
       `).join('')
@@ -356,7 +382,12 @@
     }
 
     historyBtn.addEventListener('click', () => { historyPanel.classList.toggle('open'); if (historyPanel.classList.contains('open')) renderHistory() })
-    historyClear.addEventListener('click', () => { chatHistory = []; try { localStorage.removeItem('asukaHistory') } catch(e) {}; renderHistory() })
+    historyClear.addEventListener('click', () => {
+      ipcRenderer.invoke('clear-chat-log').catch(() => {})
+      chatHistory = []
+      try { localStorage.removeItem('asukaHistory') } catch(e) {}
+      renderHistory()
+    })
 
     // ── ElevenLabs Streaming TTS ───────────────────────────────────────────
     let elevenLabsWs = null
@@ -704,7 +735,7 @@
         geminiWs.onopen = async () => {
           console.log('Gemini WS opened — sending setup')
           setStatus('Setting up session...')
-          const systemPrompt = await ipcRenderer.invoke('get-system-prompt')
+          const systemPrompt = await ipcRenderer.invoke('get-system-prompt', window._lastUserText || '')
           const toolPrompt = `\n\nCRITICAL TOOL RULES — ALWAYS FOLLOW:
 - BTC price, ETH price, ANY crypto price → MUST use get_market_data tool with type="price"
 - Fear and greed index → MUST use get_market_data tool with type="feargreed"  
@@ -1523,11 +1554,15 @@ VOICE RESPONSE RULES — CRITICAL:
     }
 
     // ── Send text to Gemini ────────────────────────────────────────────────
-    function sendTextToGemini(text) {
+    async function sendTextToGemini(text) {
       if (!geminiWs || geminiWs.readyState !== WebSocket.OPEN) return
-      
-      // Build parts — include camera frame if active
-      const parts = [{ text: text || 'Say a brief friendly greeting.' }]
+      if (text) window._lastUserText = text
+
+      const mem = text ? await ipcRenderer.invoke('get-memory-context', text).catch(() => '') : ''
+      const userLine = text || 'Say a brief friendly greeting.'
+      const memBlock = mem ? `[MEMORY — everything you know from all past chats. Recall naturally, never say "you told me before":]\n${mem.slice(-7000)}\n\n` : ''
+
+      const parts = [{ text: memBlock + userLine }]
       
       if (webcamActive) {
         try {
@@ -1693,6 +1728,86 @@ VOICE RESPONSE RULES — CRITICAL:
     }
 
     webcamBtn.addEventListener('click', () => webcamActive ? stopWebcam() : startWebcam())
+
+    // ── WATCH TOGETHER — live screen → Gemini Live (Hakko-style, NOT screenshots) ──
+    let screenWatchActive = false
+    let screenStream = null
+    let screenInterval = null
+    let screenVideoEl = null
+    const screenCanvas = document.createElement('canvas')
+
+    async function startScreenWatch({ mode = 'general', instruction } = {}) {
+      if (screenWatchActive) stopScreenWatch()
+      try {
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: { frameRate: { ideal: 2, max: 3 }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        })
+        if (!screenVideoEl) {
+          screenVideoEl = document.createElement('video')
+          screenVideoEl.muted = true
+          screenVideoEl.playsInline = true
+          screenVideoEl.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none'
+          document.body.appendChild(screenVideoEl)
+        }
+        screenVideoEl.srcObject = screenStream
+        await screenVideoEl.play()
+        screenWatchActive = true
+        window._screenWatchMode = mode
+
+        if (geminiWs?.readyState === WebSocket.OPEN) {
+          const base = await ipcRenderer.invoke('get-system-prompt', '').catch(() => '')
+          const extra = instruction || ''
+          try {
+            geminiWs.send(JSON.stringify({
+              setup: {
+                systemInstruction: { parts: [{ text: base + '\n\n' + extra }] },
+              },
+            }))
+          } catch (e) {}
+        }
+
+        const ms = mode === 'game' ? 1200 : 2000
+        screenInterval = setInterval(() => {
+          if (!screenWatchActive || !geminiReady || !geminiWs || geminiWs.readyState !== WebSocket.OPEN) return
+          try {
+            screenCanvas.width = 960
+            screenCanvas.height = 540
+            screenCanvas.getContext('2d').drawImage(screenVideoEl, 0, 0, 960, 540)
+            const frame = screenCanvas.toDataURL('image/jpeg', 0.5).split(',')[1]
+            geminiWs.send(JSON.stringify({
+              realtimeInput: { video: { data: frame, mimeType: 'image/jpeg' } },
+            }))
+          } catch (e) {}
+        }, ms)
+
+        screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
+          ipcRenderer.invoke('watch-together-stop').catch(() => {})
+          stopScreenWatch()
+        })
+
+        const labels = { game: '🎮 Watching your game live~', movie: '🍿 Movie night~', youtube: '📺 YouTube together~', general: '👀 Watching with you~' }
+        setStatus(labels[mode] || labels.general)
+        addToHistory('asuka', labels[mode] || labels.general)
+      } catch (e) {
+        console.warn('screen watch:', e.message)
+        setStatus('Screen share cancelled — need Screen Recording permission in System Settings')
+        screenWatchActive = false
+      }
+    }
+
+    function stopScreenWatch() {
+      screenWatchActive = false
+      window._screenWatchMode = null
+      if (screenInterval) { clearInterval(screenInterval); screenInterval = null }
+      try { screenStream?.getTracks().forEach(t => t.stop()) } catch (e) {}
+      screenStream = null
+      if (screenVideoEl) screenVideoEl.srcObject = null
+      if (geminiReady) setStatus('Listening...')
+    }
+
+    ipcRenderer.on('watch-together-start', (e, data) => startScreenWatch(data || {}))
+    ipcRenderer.on('watch-together-stop', () => stopScreenWatch())
 
     // ── Text input (type to Gemini) ────────────────────────────────────────
     async function sendTypedMessage(text) {
@@ -2325,17 +2440,6 @@ VOICE RESPONSE RULES — CRITICAL:
 
     dashBtn.addEventListener('click', () => ipcRenderer.send('open-dashboard'))
     document.getElementById('study-btn')?.addEventListener('click', () => ipcRenderer.invoke('open-classroom').catch(()=>{}))
-    // whiteboard note: mirror what Asuka is teaching in the classroom, right on the waifu window
-    ipcRenderer.on('classroom-beat', (e, b) => {
-      const note = document.getElementById('wb-note')
-      if (!note) return
-      if (b && (b.board || b.boardTitle)) {
-        document.getElementById('wb-note-title').textContent = b.boardTitle || 'Whiteboard'
-        document.getElementById('wb-note-body').innerHTML = String(b.board||'').replace(/\*\*(.+?)\*\*/g,'<b style="color:#0a84ff">$1</b>')
-        note.style.display = 'block'
-      }
-    })
-    document.getElementById('wb-note-close')?.addEventListener('click', () => { document.getElementById('wb-note').style.display='none' })
 
     // Save session and extract learnings when window closes
     window.addEventListener('beforeunload', async () => {
@@ -2915,13 +3019,6 @@ VOICE RESPONSE RULES — CRITICAL:
 
   </script>
 
-  <!-- ── Study whiteboard note (shows what Asuka is teaching, like the images) ── -->
-  <div id="wb-note" style="display:none;position:fixed;top:14px;left:14px;right:14px;background:rgba(16,16,19,.96);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:12px 14px;z-index:9997;box-shadow:0 8px 30px rgba(0,0,0,.4);">
-    <div id="wb-note-title" style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#5e9eff;opacity:.9;margin-bottom:5px;font-family:monospace;">Whiteboard</div>
-    <div id="wb-note-body" style="font-size:12px;line-height:1.5;color:#eafff5;font-family:monospace;white-space:pre-wrap;max-height:120px;overflow-y:auto;"></div>
-    <div id="wb-note-close" style="position:absolute;top:8px;right:10px;cursor:pointer;color:#889;font-size:14px;">×</div>
-  </div>
-
   <!-- ── Pixel Pet (idle alter-ego, double-tap to toggle) ── -->
   <canvas id="pixel-pet" width="128" height="128" style="display:none;position:fixed;bottom:20px;left:20px;width:140px;height:140px;image-rendering:pixelated;image-rendering:crisp-edges;cursor:pointer;z-index:9999;"></canvas>
   <div id="pixel-bubble" style="display:none;position:fixed;bottom:150px;left:20px;background:rgba(20,18,30,0.92);color:#fff;font-size:11px;font-family:system-ui,sans-serif;padding:6px 10px;border-radius:10px;z-index:10000;white-space:nowrap;pointer-events:none;"></div>
@@ -2968,13 +3065,22 @@ window.__askBarLoaded = true
     const sdDrawer = document.getElementById('side-drawer')
     let sdOpen = false
     function sdRenderChat(){
-      let hist = []
-      try { hist = JSON.parse(localStorage.getItem('asukaHistory') || '[]') } catch(e) {}
-      const box = document.getElementById('sd-chat')
-      box.innerHTML = hist.slice(-40).map(m =>
-        `<div style="margin-bottom:9px;"><div style="font-size:9px;color:${m.role==='user'?'#2dd4ff':'#f3a8d0'};font-weight:700;letter-spacing:.5px;">${m.role==='user'?'YOU':'ASUKA'} · ${m.time||''}</div><div style="color:#d7dae0;">${String(m.text).replace(/</g,'&lt;')}</div></div>`
-      ).join('') || '<div style="color:#64748b;font-size:11px;">No messages yet~</div>'
-      box.scrollTop = box.scrollHeight
+      ipcRenderer.invoke('get-chat-log').then(hist => {
+        hist = hist || []
+        const box = document.getElementById('sd-chat')
+        box.innerHTML = hist.slice(-40).map(m =>
+          `<div style="margin-bottom:9px;"><div style="font-size:9px;color:${m.role==='user'?'#2dd4ff':'#f3a8d0'};font-weight:700;letter-spacing:.5px;">${m.role==='user'?'YOU':'ASUKA'} · ${m.time||''}${m.device&&m.device!=='pc'?' 📱':''}</div><div style="color:#d7dae0;">${String(m.text).replace(/</g,'&lt;')}</div></div>`
+        ).join('') || '<div style="color:#64748b;font-size:11px;">No messages yet~</div>'
+        box.scrollTop = box.scrollHeight
+      }).catch(() => {
+        let hist = []
+        try { hist = JSON.parse(localStorage.getItem('asukaHistory') || '[]') } catch(e) {}
+        const box = document.getElementById('sd-chat')
+        box.innerHTML = hist.slice(-40).map(m =>
+          `<div style="margin-bottom:9px;"><div style="font-size:9px;color:${m.role==='user'?'#2dd4ff':'#f3a8d0'};font-weight:700;letter-spacing:.5px;">${m.role==='user'?'YOU':'ASUKA'} · ${m.time||''}</div><div style="color:#d7dae0;">${String(m.text).replace(/</g,'&lt;')}</div></div>`
+        ).join('') || '<div style="color:#64748b;font-size:11px;">No messages yet~</div>'
+        box.scrollTop = box.scrollHeight
+      })
     }
     async function sdRenderDocs(){
       const box = document.getElementById('sd-docs')

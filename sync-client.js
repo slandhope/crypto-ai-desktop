@@ -1,25 +1,28 @@
 // ═══════════════════════════════════════════════════════════════════
 // ☁️ SYNC CLIENT (desktop) — her brain travels PC ↔ phone via /state.
-// Maps the local files (memory.json, care-state.json) to the unified
-// asuka_state row in Postgres. Pulls on login, pushes after changes.
-//
-//   const sync = require('./sync-client');
-//   sync.init({ getIdToken, loadMemory, saveMemory, loadCare, saveCare, apiBase });
-//   await sync.pullOnLogin();     // after sign-in: fetch cloud → local
-//   sync.pushSoon();              // after any change: debounced push local → cloud
+// Maps local files → asuka_state in Postgres. Pulls on login, pushes after changes.
+// Full memory (chat, learnings, journal, notes) lives in memory.__sync.
 // ═══════════════════════════════════════════════════════════════════
 const https = require('https');
 const http = require('http');
+const { buildSyncBundle, latestSyncTs, applySyncMerge, mergeSyncBundles } = require('./memory-sync');
 
 let cfg = null;
 function init(c) { cfg = c; }
 
+function stripSync(mem) {
+  if (!mem || typeof mem !== 'object') return mem || {};
+  const { __sync, ...rest } = mem;
+  return rest;
+}
+
 // map local files → the /state shape
 function localToState() {
-  const mem = cfg.loadMemory() || {};
+  const mem = stripSync(cfg.loadMemory() || {});
   const care = cfg.loadCare() || {};
+  const sync = buildSyncBundle(cfg);
   return {
-    memory: mem,
+    memory: { ...mem, __sync: sync },
     bond: care.bondXP || 0,
     coins: care.coins || 0,
     personality: mem.personality || 'chill',
@@ -28,21 +31,30 @@ function localToState() {
     lessons: mem.lessons || {},
     cosmetics: { owned: care.owned || [], care: { hunger: care.hunger, happiness: care.happiness, cleanliness: care.cleanliness, affection: care.affection } },
     allocations: mem.allocations || {},
-    updatedAt: Math.max(mem.lastSeen || 0, care.lastTick || 0),
+    updatedAt: Math.max(mem.lastSeen || 0, care.lastTick || 0, latestSyncTs(sync)),
   };
 }
 
-// map a /state response → back into the local files
-function stateToLocal(state) {
+// map a /state response → back into the local files (merge, never blind overwrite)
+function stateToLocal(state, opts = {}) {
   if (!state) return;
   const mem = cfg.loadMemory() || {};
   const care = cfg.loadCare() || {};
-  // merge cloud memory over local (cloud is source of truth on pull)
-  const newMem = { ...mem, ...(state.memory || {}) };
+  const cloudMem = state.memory || {};
+  const cloudSync = cloudMem.__sync || null;
+  const localSync = buildSyncBundle(cfg);
+
+  if (cloudSync) {
+    const merged = opts.mergeSync ? mergeSyncBundles(localSync, cloudSync) : cloudSync;
+    applySyncMerge(localSync, merged, cfg);
+    cfg.onSyncApplied?.(merged);
+  }
+
+  const newMem = { ...stripSync(mem), ...stripSync(cloudMem) };
   if (state.personality) newMem.personality = state.personality;
   if (state.lessons) newMem.lessons = state.lessons;
   if (state.allocations) newMem.allocations = state.allocations;
-  cfg.saveMemory(newMem);
+  cfg.saveMemory(newMem, { skipPush: true });
 
   const newCare = { ...care };
   if (typeof state.bond === 'number') newCare.bondXP = state.bond;
@@ -51,10 +63,9 @@ function stateToLocal(state) {
     if (state.cosmetics.owned) newCare.owned = state.cosmetics.owned;
     if (state.cosmetics.care) Object.assign(newCare, state.cosmetics.care);
   }
-  cfg.saveCare(newCare);
+  cfg.saveCare(newCare, { skipPush: true });
 }
 
-// low-level request to the backend with the auth token
 function request(method, path, body) {
   return new Promise(async (resolve, reject) => {
     let token = null;
@@ -80,7 +91,6 @@ function request(method, path, body) {
   });
 }
 
-// pull cloud state into local files (called right after login)
 async function pullOnLogin() {
   console.log('☁️ sync: checking cloud for Asuka state...');
   try {
@@ -88,10 +98,9 @@ async function pullOnLogin() {
     if (res.status === 200 && res.body) {
       const cloud = res.body;
       const local = localToState();
-      // if cloud is newer or local is empty, take cloud; else push local up
       if ((cloud.updatedAt || 0) >= (local.updatedAt || 0)) {
-        stateToLocal(cloud);
-        console.log('☁️ pulled Asuka state from cloud');
+        stateToLocal(cloud, { mergeSync: true });
+        console.log('☁️ pulled Asuka state from cloud (memory merged)');
       } else {
         await pushNow();
         console.log('☁️ local newer — pushed to cloud');
@@ -102,24 +111,33 @@ async function pullOnLogin() {
   } catch (e) { console.warn('☁️ sync pull skipped:', e.message); }
 }
 
-// push local → cloud immediately
+async function pullNow() {
+  try {
+    const res = await request('GET', '/state');
+    if (res.status === 200 && res.body) {
+      stateToLocal(res.body, { mergeSync: true });
+      return true;
+    }
+  } catch (e) { console.warn('sync pull skipped:', e.message); }
+  return false;
+}
+
 async function pushNow() {
   try {
     const state = localToState();
     const res = await request('PUT', '/state', state);
     if (res.status === 409 && res.body && res.body.server) {
-      // server had newer — accept it locally
-      stateToLocal(res.body.server);
-      console.log('☁️ server newer — merged down');
+      stateToLocal(res.body.server, { mergeSync: true });
+      await request('PUT', '/state', localToState());
+      console.log('☁️ merged with server — re-pushed');
     }
   } catch (e) { console.warn('sync push skipped:', e.message); }
 }
 
-// debounced push — call after any local change; batches rapid edits
 let _t = null;
 function pushSoon(ms = 4000) {
   clearTimeout(_t);
   _t = setTimeout(() => { pushNow(); }, ms);
 }
 
-module.exports = { init, pullOnLogin, pushNow, pushSoon };
+module.exports = { init, pullOnLogin, pullNow, pushNow, pushSoon };

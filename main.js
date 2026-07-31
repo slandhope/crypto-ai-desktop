@@ -49,6 +49,8 @@ const ALERTS_FILE       = path.join(DATA_DIR, 'alerts.json');
 const SETTINGS_FILE     = path.join(DATA_DIR, 'settings.json');
 const NOTES_FILE        = path.join(DATA_DIR, 'notes.json');
 const VOICE_JOURNAL_FILE= path.join(DATA_DIR, 'voice-journal.json');
+const CHAT_LOG_FILE     = path.join(DATA_DIR, 'chat-log.json');
+const EPISODES_FILE     = path.join(DATA_DIR, 'episodes.json');
 const CHECKLIST_FILE    = path.join(DATA_DIR, 'checklist.json');
 const GAS_SPEND_FILE    = path.join(DATA_DIR, 'gas-spend.json');
 
@@ -228,10 +230,89 @@ function loadMemory() {
     inTrade: false, dcaSchedule: [], lastSeen: Date.now(),
   });
 }
-function saveMemory(m) { saveJSON(MEMORY_FILE, { ...m, lastSeen: Date.now() }); try { require('./sync-client').pushSoon(); } catch (e) {} }
+function saveMemory(m, opts) { saveJSON(MEMORY_FILE, { ...m, lastSeen: Date.now() }); if (!opts?.skipPush) try { require('./sync-client').pushSoon(); } catch (e) {} }
+
+function loadChatLog() { return loadJSON(CHAT_LOG_FILE, []); }
+function saveChatLog(log, opts) {
+  saveJSON(CHAT_LOG_FILE, log);
+  if (!opts?.skipPush) try { require('./sync-client').pushSoon(2000); } catch (e) {}
+}
+function appendChatMessage(role, text) {
+  if (!text) return null;
+  if (role === 'user') global._lastUserMessage = String(text);
+  const log = loadChatLog();
+  const entry = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    role: role === 'user' ? 'user' : 'asuka',
+    text: String(text),
+    ts: Date.now(),
+    device: 'pc',
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  };
+  log.push(entry);
+  if (log.length > 5000) trimChatLog(log);
+  saveChatLog(log);
+  if (mainWindow) mainWindow.webContents.send('chat-log-updated', log);
+  setImmediate(() => { try { autoLearnFromChat(role, text); } catch (e) {} });
+  return entry;
+}
+function clearChatLog() { saveChatLog([]); }
+
+function loadEpisodes() { return loadJSON(EPISODES_FILE, []); }
+function saveEpisodes(eps, opts) {
+  saveJSON(EPISODES_FILE, eps);
+  if (!opts?.skipPush) try { require('./sync-client').pushSoon(3000); } catch (e) {}
+}
+
+async function archiveChatBatch(overflow) {
+  if (!overflow?.length) return;
+  try {
+    const convo = overflow.map(m => `${m.role === 'user' ? 'User' : 'Asuka'}: ${m.text}`).join('\n').slice(0, 14000);
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 400,
+      messages: [{ role: 'user', content: `Archive this old chat history into one dense memory summary — preserve ALL important facts, names, preferences, events, jokes, trading talk, screen moments. 3-6 sentences. This replaces the raw messages in storage.\n\n${convo}` }],
+    });
+    const summary = res.content[0]?.text?.trim();
+    if (!summary || summary.length < 30) return;
+    const eps = loadEpisodes();
+    eps.push({
+      id: `archive-${Date.now()}`,
+      summary: `[archived ${overflow.length} messages] ${summary}`,
+      ts: overflow[overflow.length - 1]?.ts || Date.now(),
+      date: new Date().toISOString().split('T')[0],
+      messageCount: overflow.length,
+      archived: true,
+    });
+    saveEpisodes(eps.slice(-200));
+    saveNewLearning(summary);
+    console.log(`📦 Archived ${overflow.length} old messages → episode memory`);
+  } catch (e) { console.warn('chat archive failed:', e.message); }
+}
+
+function trimChatLog(log) {
+  if (log.length <= 5000) return log;
+  const overflow = log.splice(0, log.length - 5000);
+  setImmediate(() => archiveChatBatch(overflow).catch(() => {}));
+  return log;
+}
+
+function migrateChatFromLocal(entries) {
+  if (!Array.isArray(entries) || !entries.length) return loadChatLog();
+  const { mergeChatLogs } = require('./memory-sync');
+  const migrated = entries.map(e => ({
+    id: e.id || `${e.ts || Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    role: e.role === 'user' ? 'user' : 'asuka',
+    text: String(e.text || ''),
+    ts: e.ts || Date.now(),
+    device: e.device || 'pc',
+    time: e.time || new Date(e.ts || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  }));
+  saveChatLog(mergeChatLogs(loadChatLog(), migrated));
+  return loadChatLog();
+}
 
 function loadJournal() { return loadJSON(JOURNAL_FILE, []); }
-function saveJournal(j) { saveJSON(JOURNAL_FILE, j); }
+function saveJournal(j, opts) { saveJSON(JOURNAL_FILE, j); if (!opts?.skipPush) try { require('./sync-client').pushSoon(); } catch (e) {} }
 function addJournalEntry(e) {
   const j = loadJournal(); j.push({ ...e, timestamp: Date.now() }); saveJournal(j);
 }
@@ -243,6 +324,7 @@ function loadSettings() {
   return loadJSON(SETTINGS_FILE, {
     wallets: [], trackedWallets: [], influencerWallets: [],
     watchlist: [], personality: 'chill', characterName: 'Asuka',
+    watchTogether: { enabled: false, mode: 'general', intervalSec: 50 },
     suppressedAlerts: [], tradeRules: [], aiMode: 'balanced',
     pumpFunChains: ['solana'], pumpFunEnabled: true,
     coingeckoKey: process.env.COINGECKO_API_KEY || null,
@@ -256,17 +338,22 @@ function loadSettings() {
 function saveSettings(s) { saveJSON(SETTINGS_FILE, s); }
 
 function loadNotes() { return loadJSON(NOTES_FILE, []); }
+function saveNotes(notes, opts) { saveJSON(NOTES_FILE, notes); if (!opts?.skipPush) try { require('./sync-client').pushSoon(); } catch (e) {} }
 function saveNote(n) {
   const notes = loadNotes();
   notes.push({ text: n, timestamp: Date.now() });
-  saveJSON(NOTES_FILE, notes);
+  saveNotes(notes);
 }
 
 function loadVoiceJournal() { return loadJSON(VOICE_JOURNAL_FILE, []); }
+function saveVoiceJournal(vj, opts) {
+  saveJSON(VOICE_JOURNAL_FILE, vj);
+  if (!opts?.skipPush) try { require('./sync-client').pushSoon(); } catch (e) {}
+}
 function addVoiceJournalEntry(text, summary, coin) {
   const vj = loadVoiceJournal();
   vj.push({ text, summary, coinMentioned: coin || null, timestamp: Date.now() });
-  saveJSON(VOICE_JOURNAL_FILE, vj);
+  saveVoiceJournal(vj);
 }
 
 function loadChecklist() {
@@ -510,7 +597,7 @@ async function getAIReply(text) {
     if (fr) marketContext += `\n${fr}`;
   }
 
-  const systemWithContext = buildSystemPrompt() + buildMemoryContext() + (marketContext ? `\n\nLIVE MARKET DATA:${marketContext}` : '');
+  const systemWithContext = buildSystemPrompt() + buildMemoryContext(global._lastUserMessage) + (marketContext ? `\n\nLIVE MARKET DATA:${marketContext}` : '');
 
   try {
     const res = await anthropic.messages.create({
@@ -2056,7 +2143,9 @@ async function takeScreenshot(msg) {
         { type: 'text', text: msg || 'What is on this screen? Be specific and casual in 1-2 sentences.' }
       ]}],
     });
-    return res.content[0].text;
+    const reply = res.content[0].text;
+    try { autoRememberContext('screen', msg || 'looked at screen', reply); } catch (e) {}
+    return reply;
   } catch(e) { return 'Could not take screenshot: ' + e.message; }
 }
 
@@ -3896,6 +3985,28 @@ async function routeCommand(userText) {
   // ── 32. PERSONAL ASSISTANT ───────────────────────────────────────────────
   // Note: Weather and time are handled above in sections 35 and 44
 
+  // ── 32b. WATCH TOGETHER — screen companion (games / YouTube / movies) ───
+  if (/stop watching (my )?screen|stop co-?watch|don'?t watch my screen|eyes off/i.test(lower)) {
+    try { require('./watch-together').stopWatch(); } catch (e) {}
+    return 'Okay~ I\'ll look away. Say "watch with me" when you want company again 👀';
+  }
+  if (/watch (this )?game|help me (with )?(this )?game|game mode/i.test(lower)) {
+    try { require('./watch-together').startWatch('game'); } catch (e) {}
+    return 'Game mode~ I\'m watching your screen. I\'ll give hints if you get stuck — just play! 🎮';
+  }
+  if (/watch (this )?(movie|film|show)|movie mode|watch together/i.test(lower) && !/youtube/.test(lower)) {
+    try { require('./watch-together').startWatch('movie'); } catch (e) {}
+    return 'Movie night~ I\'m here on the couch with you. Popcorn energy 🍿';
+  }
+  if (/watch (this )?youtube|youtube (with me|together)|watch (my )?screen/i.test(lower)) {
+    try { require('./watch-together').startWatch(/youtube/.test(lower) ? 'youtube' : 'general'); } catch (e) {}
+    return 'Got it~ watching your screen with you. I\'ll chime in when something\'s worth a comment 📺';
+  }
+  if (/watch with me|keep me company (while|as) i (play|watch)/i.test(lower)) {
+    try { require('./watch-together').startWatch('general'); } catch (e) {}
+    return 'I\'m here~ watching along with you. Say "stop watching my screen" when you want privacy 👀';
+  }
+
   // ── 33. VISION — SCREEN ──────────────────────────────────────────────────
   const screenTriggers = ['look at my screen','what is on my screen','whats on my screen','analyze my screen','what do you see on screen'];
   if (screenTriggers.some(t => lower.includes(t))) {
@@ -3921,6 +4032,7 @@ async function routeCommand(userText) {
   if (['stop watching','look away','stop camera','camera off','turn off camera'].some(t => lower.includes(t))) {
     lastCameraUsed = 0;
     if (mainWindow) mainWindow.webContents.send('stop-webcam');
+    if (/screen|co-?watch/.test(lower)) try { require('./watch-together').stopWatch(); } catch (e) {}
     return 'Camera off.';
   }
 
@@ -4220,9 +4332,9 @@ const SESSION_FILE        = path.join(DATA_DIR, 'active-session.json');
 const PATTERNS_FILE       = path.join(DATA_DIR, 'patterns.json');
 
 function loadLongMemory() { return loadJSON(LONG_MEMORY_FILE, { fresh: [], medium: [], longterm: [], corefacts: [], lastCompressed: null }); }
-function saveLongMemory(m) { saveJSON(LONG_MEMORY_FILE, m); }
+function saveLongMemory(m, opts) { saveJSON(LONG_MEMORY_FILE, m); if (!opts?.skipPush) try { require('./sync-client').pushSoon(); } catch (e) {} }
 function loadPatterns() { return loadJSON(PATTERNS_FILE, []); }
-function savePatterns(p) { saveJSON(PATTERNS_FILE, p); }
+function savePatterns(p, opts) { saveJSON(PATTERNS_FILE, p); if (!opts?.skipPush) try { require('./sync-client').pushSoon(); } catch (e) {} }
 
 // Active session — saves every message in real time for pipeline handoff
 function saveActiveSession(messages, context = {}) {
@@ -4292,26 +4404,45 @@ async function compressMemories() {
   saveLongMemory(lm);
 }
 
-// Build memory context for injection into prompts
-function buildMemoryContext() {
+// Build memory context for injection into prompts (Hakko-style: full recall + retrieval)
+function buildMemoryContext(query) {
+  const { retrieveRelevantMemories } = require('./memory-sync');
+  const q = query || global._lastUserMessage || '';
   const lm = loadLongMemory();
   const patterns = loadPatterns();
-  let ctx = '';
+  const chat = loadChatLog();
+  const profile = getUserProfile();
+  const brain = loadBrain();
+  const episodes = loadEpisodes();
+
+  let ctx = '\n\n═══ YOUR MEMORY — you remember EVERYTHING from past chats (PC + phone). Use naturally, never say "you told me before". ═══';
+
+  const retrieved = retrieveRelevantMemories({
+    chatLog: chat,
+    brainMemories: brain.memories || [],
+    profileFacts: profile.facts || [],
+    episodes,
+    longMemory: lm,
+  }, q, { limit: q ? 45 : 60, minScore: q ? 0.2 : 0 });
+
+  if (retrieved.length) {
+    ctx += '\n\nRECALL FROM FULL HISTORY:\n' + retrieved.map(r => String(r.text).slice(0, 380)).join('\n');
+  }
 
   if (lm.corefacts?.length > 0) {
-    ctx += '\nCORE FACTS ABOUT THIS USER:\n' + lm.corefacts.slice(-5).map(f => f.fact).join('\n');
-  }
-  if (lm.longterm?.length > 0) {
-    ctx += '\n\nLONG TERM PATTERNS:\n' + lm.longterm.slice(-3).map(m => m.summary).join('\n');
-  }
-  if (lm.medium?.length > 0) {
-    ctx += '\n\nRECENT PATTERNS (last 30 days):\n' + lm.medium.slice(-3).map(m => m.summary).join('\n');
-  }
-  if (lm.fresh?.length > 0) {
-    ctx += '\n\nRECENT LEARNINGS (last 7 days):\n' + lm.fresh.slice(-5).map(m => m.summary).join('\n');
+    ctx += '\n\nCORE FACTS:\n' + lm.corefacts.slice(-8).map(f => f.fact || f).join('\n');
   }
   if (patterns?.length > 0) {
-    ctx += '\n\nBEHAVIOR PATTERNS DETECTED:\n' + patterns.slice(-5).map(p => `- ${p.pattern}`).join('\n');
+    ctx += '\n\nBEHAVIOR PATTERNS:\n' + patterns.slice(-5).map(p => `- ${p.pattern}`).join('\n');
+  }
+
+  const recent = chat.slice(-30);
+  if (recent.length) {
+    ctx += '\n\nCURRENT CONVERSATION (most recent):\n' + recent.map(m => {
+      const who = m.role === 'user' ? 'User' : 'Asuka';
+      const dev = m.device && m.device !== 'pc' ? ` [${m.device}]` : '';
+      return `${who}${dev}: ${String(m.text).slice(0, 400)}`;
+    }).join('\n');
   }
   return ctx;
 }
@@ -4363,7 +4494,7 @@ function startGrokNodeWS() {
       type: 'session.update',
       session: {
         modalities: ['text'],
-        instructions: buildSystemPrompt() + buildMemoryContext() + buildSafewordRule() + buildScenesRule() + `\n\nCRITICAL TOOL RULES:\n- For ANY price, funding, fear&greed, dominance, gas → use get_market_data tool\n- For EVERYTHING else (watchlist, notes, YouTube, alerts, journal, portfolio, news, analysis) → use ask_claude tool\n- NEVER answer from memory for market data or commands — always use the tools\n- EXCEPTION: greetings and casual small-talk in ANY language → answer DIRECTLY yourself in that language, no tools
+        instructions: buildSystemPrompt() + buildMemoryContext(global._lastUserMessage) + buildSafewordRule() + buildScenesRule() + `\n\nCRITICAL TOOL RULES:\n- For ANY price, funding, fear&greed, dominance, gas → use get_market_data tool\n- For EVERYTHING else (watchlist, notes, YouTube, alerts, journal, portfolio, news, analysis) → use ask_claude tool\n- NEVER answer from memory for market data or commands — always use the tools\n- EXCEPTION: greetings and casual small-talk in ANY language → answer DIRECTLY yourself in that language, no tools
 - Your name is Asuka — when the user calls your name, respond warmly and attentively
 - If the user says "do not disturb", "be quiet", or similar → call set_do_not_disturb with on=true, acknowledge in ONE short line, then stay silent until they say your name or ask you to come back → then call set_do_not_disturb with on=false
 - If they ask you to WRITE or CREATE something for them (poem, letter, document, story, anything written) → call compose_content with their full request; if they want it opened in Word / as a document on their screen, set open_in_word true
@@ -4600,7 +4731,7 @@ ipcMain.handle('get-gemini-key', async () => {
     });
   } catch (e) { console.error('gemini token failed:', e.message); return null; }
 });
-ipcMain.handle('get-system-prompt', async () => buildSystemPrompt() + buildMemoryContext());
+ipcMain.handle('get-system-prompt', async (e, query) => buildSystemPrompt() + buildMemoryContext(query || global._lastUserMessage));
 
 // Save active session for pipeline handoff
 ipcMain.handle('save-session', async (e, messages, context) => {
@@ -4616,7 +4747,7 @@ ipcMain.handle('end-conversation', async (e, messages) => {
   try {
     const learning = await extractConversationLearnings(messages);
     if (learning) saveNewLearning(learning);
-    // Check if weekly compression needed
+    await autoExtractFromRecentChat();
     const lm = loadLongMemory();
     if (!lm.lastCompressed || Date.now() - lm.lastCompressed > 7 * 86400000) {
       compressMemories(); // runs in background
@@ -4627,7 +4758,13 @@ ipcMain.handle('end-conversation', async (e, messages) => {
 });
 
 // Get memory context for injection
-ipcMain.handle('get-memory-context', async () => buildMemoryContext());
+ipcMain.handle('get-memory-context', async (e, query) => buildMemoryContext(query || global._lastUserMessage));
+
+// Synced chat log (PC ↔ phone via cloud __sync bundle)
+ipcMain.handle('get-chat-log', async () => loadChatLog());
+ipcMain.handle('append-chat-message', async (e, { role, text }) => appendChatMessage(role, text));
+ipcMain.handle('clear-chat-log', async () => { clearChatLog(); return true; });
+ipcMain.handle('import-local-chat', async (e, entries) => migrateChatFromLocal(entries));
 
 // Claude direct query with full memory context
 ipcMain.handle('claude-query', async (e, query) => {
@@ -7411,8 +7548,14 @@ function loadBrain() {
   return { memories: [] };
 }
 
-function saveBrain(brain) {
+function saveBrain(brain, opts) {
   fs.writeFileSync(BRAIN_FILE, JSON.stringify(brain, null, 2));
+  if (!opts?.skipPush) try { require('./sync-client').pushSoon(); } catch (e) {}
+}
+function saveBrainMemories(memories, opts) {
+  const brain = loadBrain();
+  brain.memories = memories;
+  saveBrain(brain, opts);
 }
 
 function addMemory(text, category = 'general') {
@@ -9076,37 +9219,136 @@ ipcMain.handle('save-routines', (e, routines) => {
 });
 
 
-// ─── USER PROFILE — she learns who you are automatically ───────────────────
+// ─── USER PROFILE — she learns who you are automatically (no "remember this" needed) ──
 const USER_PROFILE_FILE = path.join(DATA_DIR, 'user-profile.json');
 function getUserProfile() { return loadJSON(USER_PROFILE_FILE, { facts: [] }); }
-
-let _convoBuffer = [];
-async function maybeExtractFacts(text) {
-  try {
-    if (!text || text.length < 8 || text.length > 400) return;
-    _convoBuffer.push(text);
-    if (_convoBuffer.length < 12) return;
-    const batch = _convoBuffer.splice(0);
-    const res = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001', max_tokens: 250,
-      messages: [{ role: 'user', content: `Extract durable personal facts about this user from their messages — name, job, goals, people in their life, preferences, dislikes, habits, important dates. Return ONLY a JSON array of short fact strings (max 5). Only meaningful lasting facts, not commands or market questions. Return [] if none.\nMESSAGES:\n${batch.join('\n')}` }]
-    });
-    const facts = safeJSON(res.content[0].text, {});
-    if (Array.isArray(facts) && facts.length) {
-      const p = getUserProfile();
-      for (const f of facts) {
-        if (typeof f === 'string' && f.length > 4 && !p.facts.some(x => x.toLowerCase().includes(f.toLowerCase().slice(0, 25)))) {
-          p.facts.push(f.slice(0, 120));
-        }
-      }
-      p.facts = p.facts.slice(-40);
-      saveJSON(USER_PROFILE_FILE, p);
-      console.log(`🧠 Asuka learned ${facts.length} new thing(s) about you`);
-    }
-  } catch(e) {}
+function saveUserProfile(p, opts) {
+  saveJSON(USER_PROFILE_FILE, p);
+  if (!opts?.skipPush) try { require('./sync-client').pushSoon(3000); } catch (e) {}
 }
+
+function rememberFact(fact, category = 'personal') {
+  const f = String(fact || '').trim().slice(0, 220);
+  if (f.length < 4) return false;
+  const low = f.toLowerCase();
+  const p = getUserProfile();
+  if (p.facts.some(x => x.toLowerCase() === low)) return false;
+  p.facts.push(f);
+  p.facts = p.facts.slice(-200);
+  saveUserProfile(p);
+  try { addMemory(f, category); } catch (e) {}
+  const nm = f.match(/^my name is (.+)$/i) || f.match(/^User's name is (.+)$/i);
+  if (nm) {
+    const mem = loadMemory();
+    if (!mem.name) { mem.name = nm[1].trim().split(/\s+/)[0]; saveMemory(mem); }
+  }
+  return true;
+}
+
+function extractObviousFacts(text) {
+  const found = [];
+  const patterns = [
+    [/my name is ([^.!?\n]{2,40})/i, m => `User's name is ${m[1].trim()}`],
+    [/i'?m (\d+) years old/i, m => `User is ${m[1]} years old`],
+    [/i (?:really )?(like|love|enjoy|prefer) ([^.!?\n]{3,80})/i, m => `User ${m[1]}s ${m[2].trim()}`],
+    [/i (?:really )?(hate|dislike|can't stand) ([^.!?\n]{3,80})/i, m => `User dislikes ${m[2].trim()}`],
+    [/my favorite (\w+) is ([^.!?\n]{2,60})/i, m => `User's favorite ${m[1]} is ${m[2].trim()}`],
+    [/i work (?:as|at) ([^.!?\n]{3,60})/i, m => `User works at/as ${m[1].trim()}`],
+    [/i'?m (?:a|an) ([^.!?\n]{3,50})/i, m => `User is a ${m[1].trim()}`],
+    [/i live in ([^.!?\n]{3,50})/i, m => `User lives in ${m[1].trim()}`],
+    [/i'?m from ([^.!?\n]{3,50})/i, m => `User is from ${m[1].trim()}`],
+    [/my (?:birthday|bday) is ([^.!?\n]{3,30})/i, m => `User's birthday is ${m[1].trim()}`],
+    [/my (?:wife|husband|partner|girlfriend|boyfriend|dog|cat|kid|son|daughter)(?:'?s name)? is ([^.!?\n]{2,30})/i, m => m[0].trim()],
+    [/i (?:always|never) ([^.!?\n]{5,80})/i, m => `User ${m[0].trim()}`],
+    [/i'?m (?:trying to|learning|studying) ([^.!?\n]{5,80})/i, m => `User is learning/studying ${m[1].trim()}`],
+    [/i (?:want to|wanna|hope to) ([^.!?\n]{5,80})/i, m => `User wants to ${m[1].trim()}`],
+  ];
+  for (const [re, fmt] of patterns) {
+    const m = text.match(re);
+    if (m) found.push(fmt(m));
+  }
+  return found;
+}
+
+let _learnDebounce = null;
+let _episodeDebounce = null;
+let _msgsSinceEpisode = 0;
+
+async function autoExtractFromRecentChat() {
+  try {
+    const recent = loadChatLog().slice(-16);
+    if (!recent.length) return;
+    const convo = recent.map(m => `${m.role === 'user' ? 'User' : 'Asuka'}: ${m.text}`).join('\n');
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 500,
+      messages: [{ role: 'user', content: `You are a memory system like Hakko.ai. From this chat excerpt, extract EVERYTHING worth remembering permanently — every personal detail, preference, feeling, goal, joke, screen context, trading talk, request, correction, name, relationship, habit. Paraphrase as short memory bullets. Include things that seem small — she remembers ALL of it. Return ONLY a JSON array of strings (max 15). If there was any real conversation, never return [].\n\n${convo}` }]
+    });
+    const facts = safeJSON(res.content[0].text, []);
+    if (!Array.isArray(facts) || !facts.length) return;
+    let n = 0;
+    for (const f of facts) if (rememberFact(f, 'conversation')) n++;
+    if (n) console.log(`🧠 MemoryOS: stored ${n} item(s) from chat`);
+  } catch (e) {}
+}
+
+async function summarizeEpisode() {
+  try {
+    const chunk = loadChatLog().slice(-14);
+    if (chunk.length < 4) return;
+    const convo = chunk.map(m => `${m.role}: ${m.text}`).join('\n');
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 280,
+      messages: [{ role: 'user', content: `Summarize this conversation as one dense memory paragraph — everything said, felt, decided, shown. Like Hakko scene memory. 2-4 sentences max.\n\n${convo}` }]
+    });
+    const summary = res.content[0].text?.trim();
+    if (!summary || summary.length < 20) return;
+    const eps = loadEpisodes();
+    eps.push({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      summary,
+      ts: Date.now(),
+      date: new Date().toISOString().split('T')[0],
+      messageCount: chunk.length,
+    });
+    saveEpisodes(eps.slice(-150));
+    saveNewLearning(summary);
+    console.log(`🧠 Episode saved: ${summary.slice(0, 70)}…`);
+  } catch (e) {}
+}
+
+function scheduleAutoExtract() {
+  clearTimeout(_learnDebounce);
+  _learnDebounce = setTimeout(() => autoExtractFromRecentChat().catch(() => {}), 4000);
+}
+
+function scheduleEpisodeSummary() {
+  _msgsSinceEpisode++;
+  if (_msgsSinceEpisode < 10) return;
+  _msgsSinceEpisode = 0;
+  clearTimeout(_episodeDebounce);
+  _episodeDebounce = setTimeout(() => summarizeEpisode().catch(() => {}), 2000);
+}
+
+function autoLearnFromChat(role, text) {
+  if (!text || String(text).trim().length < 2) return;
+  if (role === 'user') {
+    for (const f of extractObviousFacts(text)) rememberFact(f, 'personal');
+  }
+  scheduleAutoExtract();
+  scheduleEpisodeSummary();
+}
+
+function autoRememberContext(kind, userSaid, summary) {
+  if (!summary || summary.length < 8) return;
+  rememberFact(`[${kind}] ${String(userSaid).slice(0, 60)} → ${String(summary).slice(0, 180)}`, kind);
+}
+
+async function maybeExtractFacts(text) {
+  autoLearnFromChat('user', text);
+}
+
 ipcMain.handle('get-user-profile', () => getUserProfile());
-ipcMain.handle('clear-user-profile', () => { saveJSON(USER_PROFILE_FILE, { facts: [] }); return { success: true }; });
+ipcMain.handle('clear-user-profile', () => { saveUserProfile({ facts: [] }); return { success: true }; });
 
 
 // ─── BRAIN MAINTENANCE — keeps her sharp, never bloated ─────────────────────
@@ -10938,7 +11180,7 @@ function loadCare() {
     streak: 0, lastCareDay: null, lastTick: Date.now(),
     owned: ['default'], equipped: { outfit: 'default', hair: 'default', accessory: null } };
 }
-function saveCare(d) { d.lastTick = Date.now(); saveJSON(CARE_FILE, d); try { require('./sync-client').pushSoon(); } catch (e) {} }
+function saveCare(d, opts) { d.lastTick = Date.now(); saveJSON(CARE_FILE, d); if (!opts?.skipPush) try { require('./sync-client').pushSoon(); } catch (e) {} }
 
 // Daily streak — first care action of the day
 function tickStreak(d) {
@@ -15951,6 +16193,7 @@ ipcMain.handle('pointed-action', async (e, { instruction }) => {
       if (rv.ok) return { did: 'revised', kind: rv.kind, path: rv.path, content: rv.content, title: rv.title };
       return { error: rv.error };
     }
+    try { autoRememberContext('pointed', instruction, parsed.text); } catch (e) {}
     return { answer: parsed.text };
   } catch(err) { console.error('pointed-action:', err.message); return { error: err.message }; }
 });
@@ -16485,14 +16728,20 @@ function createLoginWindow() {
   loginWindow.on('closed', () => { loginWindow = null; });
 }
 
+let _syncPollStarted = false;
+function startSyncPolling() {
+  if (_syncPollStarted) return;
+  _syncPollStarted = true;
+  setInterval(() => { if (asukaAuth.isLoggedIn()) asukaSync.pullNow().catch(() => {}); }, 3 * 60 * 1000);
+}
+
 // after successful login: close login, boot the real app
 function proceedAfterLogin() {
   try { if (loginWindow && !loginWindow.isDestroyed()) loginWindow.close(); } catch (e) {}
-  // boot her right away — never let the network block her appearing
   bootMainApp();
-  // pull her cloud brain in the background; if it arrives, it updates local files
   try {
     require('./sync-client').pullOnLogin().catch(() => {});
+    startSyncPolling();
   } catch (e) {}
 }
 
@@ -16555,6 +16804,8 @@ function bootMainApp() {
     if (mainWindow) mainWindow.webContents.send('play-audio', { audio, text: greeting });
   }, 2000);
 
+  try { require('./watch-together').restoreOnBoot(); } catch (e) {}
+
 } // end bootMainApp
 
 // 🔑 first launch → login screen; returning user → straight into the app
@@ -16566,14 +16817,42 @@ const SYNC_API_BASE = process.env.ASUKA_API_BASE || 'http://13.51.141.42:3000';
 asukaSync.init({
   getIdToken: () => asukaAuth.getIdToken(),
   loadMemory, saveMemory, loadCare, saveCare,
+  loadChatLog, saveChatLog,
+  loadLongMemory, saveLongMemory,
+  loadBrainMemories: () => loadBrain().memories || [],
+  saveBrainMemories: (memories, opts) => saveBrainMemories(memories, opts),
+  loadPatterns, savePatterns,
+  loadJournal, saveJournal,
+  loadVoiceJournal, saveVoiceJournal,
+  loadNotes, saveNotes,
+  loadUserProfile: getUserProfile,
+  saveUserProfile,
+  loadEpisodes, saveEpisodes,
+  onSyncApplied: (merged) => {
+    if (mainWindow && merged?.chatLog) mainWindow.webContents.send('chat-log-updated', merged.chatLog);
+  },
   apiBase: SYNC_API_BASE,
 });
 app.whenReady().then(async () => {
+  // Hakko-style screen share: Electron routes getDisplayMedia → desktop capture (no screenshot lib)
+  try {
+    const { session, desktopCapturer } = require('electron');
+    session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+      try {
+        const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
+        if (request.videoRequested && sources.length) {
+          const pick = sources.find(s => /entire|screen|display/i.test(s.name)) || sources[0];
+          callback({ video: pick, audio: request.audioRequested ? 'loopback' : undefined });
+        } else callback({});
+      } catch (e) { callback({}); }
+    });
+  } catch (e) { console.warn('display media handler:', e.message); }
+
   const token = await asukaAuth.getIdToken().catch(() => null);
   if (token && asukaAuth.isLoggedIn()) {
     bootMainApp();               // already signed in — skip login
     // pull her cloud brain in the background (same as after a fresh login)
-    try { asukaSync.pullOnLogin().catch(() => {}); } catch (e) {}
+    try { asukaSync.pullOnLogin().catch(() => {}); startSyncPolling(); } catch (e) {}
   } else {
     createLoginWindow();         // first time — show login
   }
@@ -16584,6 +16863,13 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 
 // ═══ 🤵 BUTLER — background abilities (iMessage, notifications, notes, WhatsApp, calendar, ritual) ═══
 try { require('./butler-service')(ipcMain, () => mainWindow); } catch (e) { console.error('butler init failed:', e.message); }
+
+// ═══ 👀 WATCH TOGETHER — live screen stream → Gemini Live (Hakko-style VLM) ═══
+try {
+  const watchTogether = require('./watch-together');
+  watchTogether.init({ getMainWindow: () => mainWindow, loadSettings, saveSettings });
+  watchTogether.registerIpc(ipcMain);
+} catch (e) { console.error('watch-together init failed:', e.message); }
 
 // ═══ 🎬 VIDEO LESSONS — local Manim render pipeline ═══
 try {

@@ -540,8 +540,6 @@ function renderBeat() {
   } else { board.style.display = boardOn ? 'block' : 'none'; }
   document.getElementById('progress-bar').style.width = ((idx+1)/beats.length*100) + '%';
   if (voiceOn() && b.say) ipcRenderer.invoke('classroom-speak', { text: b.say }).catch(()=>{});
-  // send a beat to the waifu whiteboard too (logs peek into waifu window)
-  ipcRenderer.invoke('classroom-beat', { topic: currentTopic, say: b.say, board: b.board, boardTitle: b.boardTitle, i: idx, total: beats.length }).catch(()=>{});
 }
 function highlight(t){ return String(t).replace(/\*\*(.+?)\*\*/g,'<span class="hl">$1</span>'); }
 
