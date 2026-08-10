@@ -218,7 +218,7 @@
 
   <script>
     console.log('%c[MAIN SCRIPT STARTED]', 'color:cyan;font-size:16px')
-    const { ipcRenderer } = require('electron')
+    // ipcRenderer is exposed globally by preload.js — do not redeclare const ipcRenderer here
     const { Live2DModel } = PIXI.live2d
 
     // Terminal logger
@@ -1383,7 +1383,7 @@ VOICE RESPONSE RULES — CRITICAL:
           else result = 'Could not read messages: ' + (r?.error || 'unknown')
         } else if (fc.name === 'send_message') {
           const r = await ipcRenderer.invoke('imessage-send', { to: fc.args.to, text: fc.args.text }).catch(()=>null)
-          result = r?.ok ? 'Sent! One short warm confirmation.' : 'Send failed: ' + (r?.error || 'unknown') + '. Check the number/handle exists in Messages.'
+          result = r?.ok ? 'Sent! One short warm confirmation.' : (r?.cancelled || r?.error === 'cancelled' ? 'They cancelled the send. Acknowledge briefly.' : 'Send failed: ' + (r?.error || 'unknown') + '. Check the number/handle exists in Messages.')
         } else if (fc.name === 'check_notifications') {
           const r = await ipcRenderer.invoke('notifications-recent', { limit: fc.args.limit || 15 }).catch(()=>null)
           if (r?.notifications) result = 'Recent notifications: ' + r.notifications.map(n => `${n.app} (${n.when}): ${n.snippets.join(' / ').slice(0,100)}`).join(' | ') + '. Give them the highlights.'
@@ -1407,7 +1407,7 @@ VOICE RESPONSE RULES — CRITICAL:
           else result = 'WhatsApp error: ' + (r?.error || 'unknown')
         } else if (fc.name === 'send_whatsapp') {
           const r = await ipcRenderer.invoke('whatsapp-send', { to: fc.args.to, text: fc.args.text }).catch(()=>null)
-          result = r?.ok ? `Sent to ${r.chat}! One short warm confirmation.` : (r?.error === 'not_connected' ? 'WhatsApp not linked yet — tell them to say check my whatsapp first to link it.' : 'Send failed: ' + (r?.error || 'unknown'))
+          result = r?.ok ? `Sent to ${r.chat}! One short warm confirmation.` : (r?.cancelled || r?.error === 'cancelled' ? 'They cancelled the send. Acknowledge briefly.' : (r?.error === 'not_connected' ? 'WhatsApp not linked yet — tell them to say check my whatsapp first to link it.' : 'Send failed: ' + (r?.error || 'unknown')))
         } else if (fc.name === 'revise_last_work') {
           const rv = await ipcRenderer.invoke('revise-work', { instruction: fc.args.instruction, hint: fc.args.which || null }).catch(()=>null)
           if (rv?.ok) {
@@ -2334,6 +2334,19 @@ VOICE RESPONSE RULES — CRITICAL:
     function showConfirm(type, text) { awaitingConfirm = type; confirmText.textContent = text; confirmBar.classList.add('open') }
     function hideConfirm() { awaitingConfirm = null; confirmBar.classList.remove('open') }
 
+    // P2: human confirm for send / OS / post actions from main process
+    let _actionConfirmResolve = null
+    ipcRenderer.on('ask-action-confirm', (_e, payload) => {
+      const { id, title, detail } = payload || {}
+      awaitingConfirm = 'action:' + id
+      confirmText.textContent = (title || 'Confirm') + (detail ? ' — ' + detail : '')
+      confirmBar.classList.add('open')
+      _actionConfirmResolve = (ok) => {
+        ipcRenderer.invoke('action-confirm-response', { id, ok }).catch(()=>{})
+        _actionConfirmResolve = null
+      }
+    })
+
     // ── 💹 Voice trade confirmation card ──────────────────────────────
     // Shows the trade visually; resolves {confirmed, summary} or {cancelled}
     async function showTradeCard({ action, coin, usd_amount, percent }) {
@@ -2414,13 +2427,21 @@ VOICE RESPONSE RULES — CRITICAL:
     window.showTradeCard = showTradeCard
 
     confirmYes.addEventListener('click', async () => {
+      if (awaitingConfirm && String(awaitingConfirm).startsWith('action:')) {
+        const fn = _actionConfirmResolve; hideConfirm(); if (fn) fn(true); return
+      }
       const type = awaitingConfirm; hideConfirm()
       const r = type === 'morning'
         ? await ipcRenderer.invoke('confirm-morning-briefing')
         : await ipcRenderer.invoke('confirm-news-briefing')
       if (r?.reply) { addToHistory('asuka', r.reply); await speakText(r.reply) }
     })
-    confirmNo.addEventListener('click', hideConfirm)
+    confirmNo.addEventListener('click', () => {
+      if (awaitingConfirm && String(awaitingConfirm).startsWith('action:')) {
+        const fn = _actionConfirmResolve; hideConfirm(); if (fn) fn(false); return
+      }
+      hideConfirm()
+    })
 
     // ── Buttons ───────────────────────────────────────────────────────────
     herMuteBtn.addEventListener('click', () => {
@@ -2438,7 +2459,13 @@ VOICE RESPONSE RULES — CRITICAL:
       else startMicStreaming()
     })
 
-    dashBtn.addEventListener('click', () => ipcRenderer.send('open-dashboard'))
+    dashBtn.addEventListener('click', () => {
+      try { document.body.style.visibility = 'hidden'; } catch (_) {}
+      ipcRenderer.send('open-dashboard')
+    })
+    ipcRenderer.on('companion-suppressed', (_e, on) => {
+      try { document.body.style.visibility = on ? 'hidden' : 'visible'; } catch (_) {}
+    })
     document.getElementById('study-btn')?.addEventListener('click', () => ipcRenderer.invoke('open-classroom').catch(()=>{}))
 
     // Save session and extract learnings when window closes
@@ -2872,13 +2899,12 @@ VOICE RESPONSE RULES — CRITICAL:
         if (window._pixelRoomActive) exitPixelRoom()   // kills pixel sprite, restores window + Live2D
         // ── self-check: report any missing room assets in console + on screen ──
         try {
-          const fs2 = require('fs'), path2 = require('path')
-          const need = ['room-bg.png','sofa-cutout.png','desk-cutout.png','idle_stand.png','idle_sit_couch.png','idle_sit_desk.png','skate_1.png','skate_2.png','skate_3.png','cat_play_sit.png','cat_play_lie.png']
-          const missing = need.filter(f => !fs2.existsSync(path2.join(__dirname,'assets','room',f)))
-          if (missing.length) {
-            console.error('🛋️ MISSING room assets:', missing.join(', '))
-            alert('My Room missing files in assets/room/:\n' + missing.join('\n'))
-          } else { console.log('🛋️ all room assets found ✓') }
+          ipcRenderer.invoke('check-room-assets').then(r => {
+            if (r && r.missing && r.missing.length) {
+              console.error('MISSING room assets:', r.missing.join(', '))
+              alert('My Room missing files in assets/room/:\n' + r.missing.join('\n'))
+            } else { console.log('all room assets found') }
+          }).catch(e => console.warn('room asset check failed', e))
         } catch(e) { console.warn('room asset check failed', e) }
         window._layerSandwichActive = true
         if (pixelMode) exitPixel()   // plain free-roam pixel mode also owns click-through — must exit it
@@ -3113,7 +3139,6 @@ window.__askBarLoaded = true
 })()
 ;(function(){
   function initAskBar(){
-  const { ipcRenderer } = require('electron')
   const inp = document.getElementById('ab-in'), send = document.getElementById('ab-send')
   const fileIn = document.getElementById('ab-file'), chip = document.getElementById('ab-chip')
   if (!inp || !send) { console.error('ask-bar: elements missing'); return }
@@ -3181,7 +3206,6 @@ window.__askBarLoaded = true
 
   // ── Quick wallpaper switcher beside her ──
   function initWpSwitcher(){
-    const { ipcRenderer } = require('electron')
     const btn = document.getElementById('wp-btn'), pop = document.getElementById('wp-pop'), grid = document.getElementById('wp-pop-grid')
     if (!btn || !pop || !grid) return
     async function loadThumbs(){

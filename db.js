@@ -10,9 +10,20 @@ const { Pool } = pkg;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('localhost')
-    ? false
-    : { rejectUnauthorized: false },   // RDS needs SSL, local doesn't
+  ssl: (() => {
+    const url = process.env.DATABASE_URL || '';
+    if (!url || /localhost|127\.0\.0\.1/.test(url)) return false;
+    // Pin RDS CA when provided; otherwise require valid certs (set DATABASE_SSL_INSECURE=1 only for broken local tunnels)
+    if (process.env.DATABASE_SSL_INSECURE === '1' || process.env.DATABASE_SSL_INSECURE === 'true') {
+      console.warn('⚠️  DATABASE_SSL_INSECURE=1 — RDS cert not verified');
+      return { rejectUnauthorized: false };
+    }
+    const caPath = process.env.RDS_CA_PATH || process.env.DATABASE_SSL_CA;
+    if (caPath && fs.existsSync(caPath)) {
+      return { rejectUnauthorized: true, ca: fs.readFileSync(caPath, 'utf8') };
+    }
+    return { rejectUnauthorized: true };
+  })(),
 });
 
 pool.on('error', (e) => console.error('🗄️  pg pool error:', e.message));
@@ -22,7 +33,7 @@ async function initDB() {
   try {
     const schema = fs.readFileSync(path.join(__dirname, 'db-schema.sql'), 'utf8');
     await pool.query(schema);
-    console.log('🗄️  DB initialized (users, user_data, asuka_state, user_credits)');
+    console.log('🗄️  DB initialized (users, user_data, asuka_state, user_credits, trading_blobs)');
   } catch (e) {
     console.error('🗄️  DB init error:', e.message);
   }
@@ -50,16 +61,57 @@ async function getAsukaState(userId) {
     updatedAt: row.updated_at ? new Date(row.updated_at).getTime() : 0,
   };
 }
+function isEmptyObject(v) {
+  return !v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).length === 0;
+}
+
+// Never wipe a populated memory column with {} / missing — companion moat guard
+function pickMemory(incoming, current) {
+  if (incoming === undefined || incoming === null) return current || {};
+  if (typeof incoming !== 'object' || Array.isArray(incoming)) return current || {};
+  if (isEmptyObject(incoming) && !isEmptyObject(current)) {
+    console.warn('🗄️  refused empty memory overwrite for user (kept existing)');
+    return current;
+  }
+  // If incoming drops a rich __sync while current has one, keep current.__sync
+  if (incoming.__sync === undefined && current && current.__sync) {
+    return { ...incoming, __sync: current.__sync };
+  }
+  if (isEmptyObject(incoming.__sync) && current && !isEmptyObject(current.__sync)) {
+    return { ...incoming, __sync: current.__sync };
+  }
+  return incoming;
+}
+
+function pickJsonField(incoming, current, fallback = {}) {
+  if (incoming === undefined || incoming === null) return current != null ? current : fallback;
+  if (typeof incoming !== 'object') return current != null ? current : fallback;
+  if (isEmptyObject(incoming) && !isEmptyObject(current)) return current;
+  return incoming;
+}
+
 async function saveAsukaState(userId, s) {
+  const cur = await getAsukaState(userId);
+  const memory = pickMemory(s.memory, cur.memory);
+  const streaks = pickJsonField(s.streaks, cur.streaks, {});
+  const lessons = pickJsonField(s.lessons, cur.lessons, {});
+  const cosmetics = pickJsonField(s.cosmetics, cur.cosmetics, {});
+  const allocations = pickJsonField(s.allocations, cur.allocations, {});
+  const bond = typeof s.bond === 'number' ? s.bond : (cur.bond || 0);
+  const level = typeof s.level === 'number' ? s.level : (cur.level || 1);
+  const coins = typeof s.coins === 'number' ? s.coins : (cur.coins || 0);
+  const personality = s.personality || cur.personality || 'default';
+  const tier = s.tier || cur.tier || 'premium';
+
   await pool.query(
     `INSERT INTO asuka_state (user_id, memory, bond, level, personality, coins, tier, streaks, lessons, cosmetics, allocations, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
      ON CONFLICT (user_id) DO UPDATE SET
        memory=$2, bond=$3, level=$4, personality=$5, coins=$6, tier=$7,
        streaks=$8, lessons=$9, cosmetics=$10, allocations=$11, updated_at=NOW()`,
-    [userId, JSON.stringify(s.memory||{}), s.bond||0, s.level||1, s.personality||'default',
-     s.coins||0, s.tier||'premium', JSON.stringify(s.streaks||{}), JSON.stringify(s.lessons||{}),
-     JSON.stringify(s.cosmetics||{}), JSON.stringify(s.allocations||{})]
+    [userId, JSON.stringify(memory || {}), bond, level, personality,
+     coins, tier, JSON.stringify(streaks || {}), JSON.stringify(lessons || {}),
+     JSON.stringify(cosmetics || {}), JSON.stringify(allocations || {})]
   );
   return getAsukaState(userId);
 }

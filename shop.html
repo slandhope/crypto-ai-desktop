@@ -54,7 +54,7 @@
   <div id="toast"></div>
 
 <script>
-  const { ipcRenderer } = require('electron')
+  // ipcRenderer global from preload.js
   document.getElementById('close').addEventListener('click', () => ipcRenderer.invoke('close-shop').catch(()=>{}))
   let CAT = 'outfit', DATA = null
 

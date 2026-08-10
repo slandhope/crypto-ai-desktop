@@ -1504,7 +1504,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
   };
   function loadPage1Lite() {
     try {
-      var ipc = require('electron').ipcRenderer;
+      var ipc = (window.ipcRenderer||window.asuka?.ipc);
       function race(ch, arg, ms) {
         var p = arg !== undefined ? ipc.invoke(ch, arg) : ipc.invoke(ch);
         return Promise.race([p, new Promise(function(r) { setTimeout(function() { r(null); }, ms || 5000); })]).catch(function() { return null; });
@@ -1545,7 +1545,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
   document.addEventListener('click', function(e) {
     if (e.target.closest('#close-btn')) {
       e.stopImmediatePropagation();
-      try { require('electron').ipcRenderer.send('dashboard-closed'); window.close(); } catch(x) {}
+      try { (window.ipcRenderer||window.asuka?.ipc).send('dashboard-closed'); window.close(); } catch(x) {}
       return;
     }
     var tab = e.target.closest('.page-tab');
@@ -1575,8 +1575,52 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     }
     if (e.target.closest('#p1-conn-btn')) {
       var m = document.getElementById('connect-modal'); if (m) m.style.display = 'flex';
+      document.body.style.cursor = 'default';
+      // Lightweight status so pill doesn't sit on "checking…" forever while dash-app loads
+      try {
+        var ipcLite = window.ipcRenderer || window.asuka?.ipc;
+        if (ipcLite) {
+          Promise.race([
+            ipcLite.invoke('get-connection-status'),
+            new Promise(function(res){ setTimeout(function(){ res(null); }, 4000); })
+          ]).then(function(st) {
+            var bEl = document.getElementById('conn-binance-st');
+            if (!bEl) return;
+            if (!st) { bEl.textContent = 'status unavailable'; return; }
+            var c = st.binance === 'connected';
+            bEl.textContent = c ? '✓ Connected' : (st.binance === 'keys_saved_unverified' ? 'saved (unverified)' : 'not connected');
+          }).catch(function() {
+            var bEl2 = document.getElementById('conn-binance-st');
+            if (bEl2) bEl2.textContent = 'not connected';
+          });
+        }
+      } catch (_) {}
       if (typeof window.refreshConnStatus === 'function') window.refreshConnStatus();
       else if (!window.__dashAppLoaded && typeof window.loadDashboardApp === 'function') window.loadDashboardApp();
+      return;
+    }
+    if (e.target.closest('#connect-close') || (e.target.id === 'connect-modal')) {
+      var cm = document.getElementById('connect-modal');
+      if (cm) cm.style.display = 'none';
+      document.body.style.cursor = 'default';
+      try {
+        var ipc = window.ipcRenderer || window.asuka?.ipc;
+        if (ipc) ipc.invoke('walletconnect-cancel').catch(function(){});
+      } catch (_) {}
+      var wrap = document.getElementById('conn-wc-qr-wrap');
+      if (wrap) wrap.style.display = 'none';
+      return;
+    }
+    if (e.target.closest('#conn-wc-cancel')) {
+      document.body.style.cursor = 'default';
+      var wrap2 = document.getElementById('conn-wc-qr-wrap');
+      if (wrap2) wrap2.style.display = 'none';
+      var wmsg = document.getElementById('conn-wmsg');
+      if (wmsg) { wmsg.style.color = 'var(--text2)'; wmsg.textContent = 'Cancelled'; }
+      try {
+        var ipc2 = window.ipcRenderer || window.asuka?.ipc;
+        if (ipc2) ipc2.invoke('walletconnect-cancel').catch(function(){});
+      } catch (_) {}
       return;
     }
     if (e.target.closest('#waifu-load-hint') || e.target.closest('#waifu-wrap')) { window.loadWaifuFrame(); return; }
@@ -1777,6 +1821,81 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       </div>
       <div style="font-size:11px;color:var(--text2);margin-top:8px;">Commands: /positions /balance /pause /resume /help — or ask anything</div>
     </div>
+  </div>
+
+  <!-- Group admin (Bot API) -->
+  <div class="tg-section">
+    <div class="tg-section-title">🛠 Manage groups (Asuka admin)</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.5;">
+      Add your bot as <b>admin</b> (Ban users, Delete messages, Pin, Invite users). Then register the group chat id, or send any message in the group so she discovers it.
+      Owner slash cmds in-group: <code>/kick /ban /mute /unmute /del /pin /title /desc</code> (reply to a user/msg).
+    </div>
+    <div id="tg-admin-bot-st" style="font-size:11px;color:var(--text3);margin-bottom:8px;">Checking bot…</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <input class="tg-input" id="tg-admin-chat-id" placeholder="Group chat id (−100…) or @publicname" style="margin:0;flex:1;">
+      <button class="tg-add-btn" id="tg-admin-register">Register</button>
+    </div>
+    <div id="tg-admin-groups" style="font-size:12px;margin-bottom:12px;"></div>
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;">Pending join requests</div>
+    <div id="tg-admin-joins" style="font-size:12px;margin-bottom:12px;"><div style="color:var(--text3);">None</div></div>
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;">Quick action</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <select id="tg-admin-action-group" class="tg-input" style="margin:0;"><option value="">Select group</option></select>
+      <select id="tg-admin-action" class="tg-input" style="margin:0;">
+        <option value="post">Post message</option>
+        <option value="kick">Kick user</option>
+        <option value="ban">Ban user</option>
+        <option value="mute">Mute 24h</option>
+        <option value="title">Set title</option>
+        <option value="desc">Set description</option>
+      </select>
+      <input class="tg-input" id="tg-admin-action-arg" placeholder="@user / user id / text" style="margin:0;grid-column:1/-1;">
+      <button class="tg-add-btn" id="tg-admin-run" style="grid-column:1/-1;">Run (asks confirm)</button>
+    </div>
+    <div id="tg-admin-msg" style="font-size:11px;margin-top:8px;color:var(--text2);"></div>
+  </div>
+
+  <!-- Human-like host / mod presence -->
+  <div class="tg-section">
+    <div class="tg-section-title">👤 Group host presence</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.5;">
+      She watches the group like a careful human mod: anti-spam, welcomes, answers @mentions, optional vibe/hype.
+      <b>Kick/ban never auto</b> — only spam delete/mute + your confirms.
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div class="toggle-label">Enabled</div>
+      <div class="toggle" id="tg-mod-enabled"><div class="toggle-knob"></div></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;">Mode</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="tg-add-btn tg-mod-mode" data-m="silent" style="flex:1;font-size:11px;">Silent</button>
+      <button class="tg-add-btn tg-mod-mode" data-m="light" style="flex:1;font-size:11px;border-color:var(--accent);">Light</button>
+      <button class="tg-add-btn tg-mod-mode" data-m="full" style="flex:1;font-size:11px;">Full</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+      <label style="font-size:10px;color:var(--text2);">Max replies/hr (light)<input class="tg-input" id="tg-mod-max" type="number" min="1" max="30" style="margin-top:4px;"></label>
+      <label style="font-size:10px;color:var(--text2);">Cooldownoldown sec<input class="tg-input" id="tg-mod-cd" type="number" min="15" max="600" style="margin-top:4px;"></label>
+      <label style="font-size:10px;color:var(--text2);">Hype every (hours)<input class="tg-input" id="tg-mod-hype-hrs" type="number" min="2" max="48" style="margin-top:4px;"></label>
+      <label style="font-size:10px;color:var(--text2);">Spam mute (hours)<input class="tg-input" id="tg-mod-mute-hrs" type="number" min="1" max="168" style="margin-top:4px;"></label>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:8px 0;">
+      <div class="toggle-label">Auto anti-spam</div>
+      <div class="toggle" id="tg-mod-spam"><div class="toggle-knob"></div></div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:8px 0;">
+      <div class="toggle-label">Welcomes</div>
+      <div class="toggle" id="tg-mod-welcome"><div class="toggle-knob"></div></div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:8px 0;">
+      <div class="toggle-label">Scheduled hype</div>
+      <div class="toggle" id="tg-mod-hype"><div class="toggle-knob"></div></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button class="tg-add-btn" id="tg-mod-save" style="flex:1;">Save host settings</button>
+      <button class="tg-add-btn" id="tg-mod-hype-now" style="flex:1;">Hype now</button>
+    </div>
+    <div id="tg-mod-msg" style="font-size:11px;margin-top:8px;color:var(--text2);"></div>
+    <div id="tg-mod-stats" style="font-size:10px;color:var(--text3);margin-top:6px;"></div>
   </div>
 
   <!-- Monitored Groups -->
@@ -3436,9 +3555,9 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;">
-        <button class="tg-add-btn" style="background:rgba(251,191,36,0.15);color:#fbbf24;" onclick="window._stripeLinks && window.open(window._stripeLinks.upgrade_degen)">⬆️ Upgrade to Degen $399/yr</button>
-        <button class="tg-add-btn" style="background:rgba(0,212,255,0.1);color:#00d4ff;" onclick="window._stripeLinks && window.open(window._stripeLinks.day_pass)">🎫 Buy Day Pass $2</button>
-        <button class="tg-add-btn" style="background:rgba(52,211,153,0.1);color:var(--green);" onclick="window._stripeLinks && window.open(window._stripeLinks.message_pack)">📦 +500 Voice msgs $5</button>
+        <button class="tg-add-btn" style="background:rgba(251,191,36,0.15);color:#fbbf24;" id="btn-upgrade-degen" onclick="window._stripeLinks && window.open(window._stripeLinks.upgrade_degen)">⬆️ Upgrade to Degen</button>
+        <button class="tg-add-btn" style="background:rgba(0,212,255,0.1);color:#00d4ff;" id="btn-day-pass" onclick="window._stripeLinks && window.open(window._stripeLinks.day_pass)">🎫 Buy Day Pass</button>
+        <button class="tg-add-btn" style="background:rgba(52,211,153,0.1);color:var(--green);" id="btn-msg-pack" onclick="window._stripeLinks && window.open(window._stripeLinks.message_pack)">📦 Voice message pack</button>
       </div>
     </div>
   </div>
@@ -3675,9 +3794,9 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       
       <!-- Lock state -->
       <div id="dev-lock-state">
-        <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Password protected — default: <span style="color:var(--accent);font-family:monospace;">Asuka2026!</span></div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Password protected — set via Settings or <code>DEV_PANEL_PASSWORD</code> env (no default).</div>
         <div style="display:flex;gap:6px;">
-          <input type="password" id="settings-dev-pwd-input" placeholder="Dev password — default: Asuka2026!" class="s-input" style="flex:1;">
+          <input type="password" id="settings-dev-pwd-input" placeholder="Dev password (min 8 chars)" class="s-input" style="flex:1;">
           <button class="s-btn s-btn-primary" id="dev-unlock-btn" style="padding:8px 14px;white-space:nowrap;">Unlock</button>
         </div>
         <div id="dev-unlock-err" style="font-size:11px;color:#ef4444;margin-top:4px;"></div>
@@ -3765,7 +3884,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     window.__dashAppLoading = true;
     var run = function() {
       var s = document.createElement('script');
-      s.src = './dashboard-app.js?v=20260728-fix5';
+      s.src = './dashboard-app.js?v=20260805-tgmod';
       s.onload = function() {
         window.__dashAppLoaded = true;
         loading = false;
@@ -3845,7 +3964,7 @@ function premiumLayerInit() {
     const out = document.getElementById('safety-result')
     if(!out) return
     out.innerHTML = '<div class="skeleton" style="height:60px;"></div>'
-    const ipc = require('electron').ipcRenderer
+    const ipc = (window.ipcRenderer||window.asuka?.ipc)
     const r = await ipc.invoke('safety-card', { ca, chain: 'eth' }).catch(()=>null)
     if (!r || r.error) { out.innerHTML = '<div style="font-size:11px;color:var(--text3);">' + (r?.error || 'Check failed') + '</div>'; return }
     const col = { A:'var(--green)', B:'#7cc47f', C:'var(--gold)', D:'#ff9f0a', F:'var(--red)' }[r.score] || 'var(--text)'
@@ -3857,7 +3976,7 @@ function premiumLayerInit() {
         '<div style="font-size:11px;color:var(--green);">✅ No red flags — LP ok, not mintable, sane distribution</div>') +
       '</div>'
   })
-  try { const ipc = require('electron').ipcRenderer
+  try { const ipc = (window.ipcRenderer||window.asuka?.ipc)
     ipc.invoke('get-auto-launch').then(r => { const el = document.getElementById('s-autolaunch'); if (el) el.checked = !!r?.on })
     document.getElementById('s-autolaunch')?.addEventListener('change', (e) => ipc.invoke('set-auto-launch', { on: e.target.checked })) } catch(e){}
   document.querySelectorAll('.theme-chip').forEach(c => c.onclick = () => applyTheme(c.dataset.theme))
@@ -3901,13 +4020,13 @@ function premiumLayerInit() {
     { n:'Go to Calls',       run:()=>document.querySelector('.page-tab[data-page="7"]')?.click() },
     { n:'Go to Others',      run:()=>document.querySelector('.page-tab[data-page="5"]')?.click() },
     { n:'Open Settings',     run:()=>document.getElementById('settings-open-btn')?.click() },
-    { n:'📚 Study — new lesson', run:()=>{ try { require('electron').ipcRenderer.invoke('open-classroom') } catch(e){} } },
+    { n:'📚 Study — new lesson', run:()=>{ try { (window.ipcRenderer||window.asuka?.ipc).invoke('open-classroom') } catch(e){} } },
     { n:'Theme: Apple Blue',   run:()=>applyTheme('apple') },
     { n:'Theme: Pure Mono',    run:()=>applyTheme('mono') },
     { n:'Theme: Midnight Cyan',run:()=>applyTheme('cyan') },
     { n:'Theme: Champagne',    run:()=>applyTheme('champagne') },
     { n:'Reload app',        run:()=>location.reload() },
-    { n:'📋 Weekly report card', run:()=>{ try { require('electron').ipcRenderer.invoke('weekly-report') } catch(e){} } },
+    { n:'📋 Weekly report card', run:()=>{ try { (window.ipcRenderer||window.asuka?.ipc).invoke('weekly-report') } catch(e){} } },
     { n:'📸 Analyze chart on screen (⌘⇧A)', run:()=>{ alert('Press Cmd+Shift+A anywhere — Asuka reads the chart on your screen.') } }
   ]
   const kEl = document.getElementById('cmdk'), kIn = document.getElementById('cmdk-in'), kList = document.getElementById('cmdk-list')
@@ -3975,14 +4094,14 @@ function premiumLayerInit() {
       const name = document.getElementById('fm-name')?.value.trim()
       const callMe = document.getElementById('fm-callme')?.value.trim()
       const dream = document.getElementById('fm-dream')?.value.trim()
-      try { await require('electron').ipcRenderer.invoke('companion-set', { name, profile: { callMe: callMe || name, dream } }) } catch(e){}
+      try { await (window.ipcRenderer||window.asuka?.ipc).invoke('companion-set', { name, profile: { callMe: callMe || name, dream } }) } catch(e){}
       localStorage.setItem('asuka-met','1'); localStorage.setItem('asuka-tos','1'); ob.classList.remove('show')
     }
   }
   // ── Risk pill under the portfolio value ──
   setInterval(async () => {
     try {
-      const r = await require('electron').ipcRenderer.invoke('risk-meter')
+      const r = await (window.ipcRenderer||window.asuka?.ipc).invoke('risk-meter')
       if (!r) return
       let pill = document.getElementById('risk-pill')
       if (!pill) { const anchor = document.getElementById('port-change'); if (!anchor) return
@@ -3998,7 +4117,7 @@ function premiumLayerInit() {
   // ── Advisor leaderboard on Calls tab ──
   async function renderLeaderboard() {
     const el = document.getElementById('adv-leaderboard'); if (!el) return
-    const rows = await require('electron').ipcRenderer.invoke('advisor-leaderboard').catch(()=>[])
+    const rows = await (window.ipcRenderer||window.asuka?.ipc).invoke('advisor-leaderboard').catch(()=>[])
     if (!rows || rows.length < 2) { el.innerHTML = ''; return }
     el.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.05em;margin-bottom:8px;">🏆 LEADERBOARD</div>' +
       rows.map((r,i) => '<div style="display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:9px 13px;margin-bottom:5px;font-size:12px;">' +
@@ -4017,7 +4136,7 @@ function premiumLayerInit() {
       let card = document.getElementById('shadow-card')
       if (!card) { card = document.createElement('div'); card.id = 'shadow-card'; card.className = 'tg-section'
         card.style.marginBottom = '10px'; host.insertBefore(card, host.firstChild) }
-      const s = await require('electron').ipcRenderer.invoke('shadow-stats').catch(()=>null)
+      const s = await (window.ipcRenderer||window.asuka?.ipc).invoke('shadow-stats').catch(()=>null)
       if (!s) return
       const better = s.delta >= 0
       card.innerHTML = '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">🕶️ Your edits vs. hands-off</div>' +
@@ -4046,7 +4165,7 @@ function premiumLayerInit() {
 
   // ── PIN + daily loss limit save (piggybacks the Save Settings button) ──
   document.getElementById('settings-save-btn')?.addEventListener('click', async () => {
-    const ipc = require('electron').ipcRenderer
+    const ipc = (window.ipcRenderer||window.asuka?.ipc)
     const pin = document.getElementById('s-pin')?.value.trim()
     if (pin !== undefined && pin !== '••••') await ipc.invoke('pin-set', { pin }).catch(()=>{})
     const cap = document.getElementById('s-losscap')?.value
@@ -4056,7 +4175,7 @@ function premiumLayerInit() {
   // ── Risk meter pill (refreshes with the dashboard) ──
   async function loadRiskPill() {
     try {
-      const r = await require('electron').ipcRenderer.invoke('risk-meter')
+      const r = await (window.ipcRenderer||window.asuka?.ipc).invoke('risk-meter')
       const el = document.getElementById('risk-pill'); if (!el) return
       if (!r.open) { el.style.display = 'none'; return }
       const col = r.level === 'hot' ? '#ff453a' : r.level === 'warm' ? '#ff9f0a' : 'var(--green)'
@@ -4072,7 +4191,7 @@ function premiumLayerInit() {
   // ── Advisor leaderboard ──
   window.loadLeaderboard = async function() {
     const el = document.getElementById('adv-leaderboard'); if (!el) return
-    const rows = await require('electron').ipcRenderer.invoke('advisor-leaderboard').catch(()=>[])
+    const rows = await (window.ipcRenderer||window.asuka?.ipc).invoke('advisor-leaderboard').catch(()=>[])
     const withTrades = rows.filter(r => r.trades > 0)
     if (!withTrades.length) { el.innerHTML = ''; return }
     el.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.05em;margin-bottom:8px;">🏆 LEADERBOARD — REAL RESULTS</div>' +
@@ -4090,7 +4209,7 @@ function premiumLayerInit() {
   ;(async () => {
     try {
       const st = await Promise.race([
-        require('electron').ipcRenderer.invoke('pin-status'),
+        (window.ipcRenderer||window.asuka?.ipc).invoke('pin-status'),
         new Promise(res => setTimeout(() => res(null), 3000))
       ])
       if (!st?.enabled) return
@@ -4103,7 +4222,7 @@ function premiumLayerInit() {
       const inp = ov.querySelector('#pin-in'); inp.focus()
       inp.addEventListener('input', async () => {
         if (inp.value.length < 4) return
-        const r = await require('electron').ipcRenderer.invoke('pin-check', { pin: inp.value }).catch(()=>null)
+        const r = await (window.ipcRenderer||window.asuka?.ipc).invoke('pin-check', { pin: inp.value }).catch(()=>null)
         if (r?.ok) ov.remove()
         else if (inp.value.length >= 8) { ov.querySelector('#pin-err').textContent = 'Wrong PIN'; inp.value = '' }
       })
@@ -4112,7 +4231,7 @@ function premiumLayerInit() {
 
   // ── 🖼️ Wallpaper picker ──
   window.loadWallpapers = async function() {
-    const ipc = require('electron').ipcRenderer
+    const ipc = (window.ipcRenderer||window.asuka?.ipc)
     const grid = document.getElementById('wp-grid'); if (!grid) return
     const r = await ipc.invoke('list-scenes').catch(()=>({scenes:[]}))
     const scenes = r?.scenes || []
@@ -4134,12 +4253,12 @@ function premiumLayerInit() {
       el.style.borderColor = 'var(--accent)'
     })
   }
-  document.getElementById('wp-none')?.addEventListener('click', () => require('electron').ipcRenderer.invoke('apply-scene', { name: null }).catch(()=>{}))
+  document.getElementById('wp-none')?.addEventListener('click', () => (window.ipcRenderer||window.asuka?.ipc).invoke('apply-scene', { name: null }).catch(()=>{}))
   setTimeout(loadWallpapers, 2800)
 
   // ── 🎯 Daily quests ──
   window.loadQuests = async function() {
-    const ipc = require('electron').ipcRenderer
+    const ipc = (window.ipcRenderer||window.asuka?.ipc)
     const q = await ipc.invoke('quests-get').catch(()=>null)
     const el = document.getElementById('quest-list'); if (!el || !q || !Array.isArray(q.quests)) return
     el.innerHTML = q.quests.map(x => `<div style="padding:4px 0;">${x.done ? '✅' : '⬜'} ${x.label}</div>`).join('')
@@ -4153,7 +4272,7 @@ function premiumLayerInit() {
   setTimeout(loadQuests, 2500)
 
   // ── 📸 Shareable P&L card ──
-  require('electron').ipcRenderer.on('pnl-card', (e, t) => {
+  (window.ipcRenderer||window.asuka?.ipc).on('pnl-card', (e, t) => {
     const cv = document.createElement('canvas'); cv.width = 640; cv.height = 360
     const x = cv.getContext('2d')
     const g = x.createLinearGradient(0,0,640,360)
@@ -4183,12 +4302,12 @@ function premiumLayerInit() {
     document.body.appendChild(mdl)
     mdl.onclick = (ev) => { if (ev.target === mdl) mdl.remove() }
     mdl.querySelector('#pnl-close').onclick = () => mdl.remove()
-    mdl.querySelector('#pnl-save').onclick = () => require('electron').ipcRenderer.invoke('save-image-file', { dataUrl: url, name: `asuka-${t.coin}-win` })
+    mdl.querySelector('#pnl-save').onclick = () => (window.ipcRenderer||window.asuka?.ipc).invoke('save-image-file', { dataUrl: url, name: `asuka-${t.coin}-win` })
   })
 
   // ── 💞 Her tab ──
   window.loadHerTab = async function() {
-    const ipc = require('electron').ipcRenderer
+    const ipc = (window.ipcRenderer||window.asuka?.ipc)
     const r = await ipc.invoke('companion-get').catch(()=>null)
     if (!r || !r.companion || !r.tier) return
     const c = r.companion
@@ -4248,7 +4367,7 @@ function premiumLayerInit() {
   // ── 🐦 X Manager wiring ──
   (function(){
    try {
-    const ipc = require('electron').ipcRenderer
+    const ipc = (window.ipcRenderer||window.asuka?.ipc)
     const $ = id => document.getElementById(id)
     async function loadXM(){
       const d = await ipc.invoke('xmgr-get').catch(()=>null); if(!d || !d.project) return
@@ -4325,15 +4444,26 @@ if (typeof requestIdleCallback === 'function') {
       <div id="conn-bmsg" style="font-size:10px;margin-top:5px;"></div>
     </div>
 
-    <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Wallet (MetaMask / Trust / any)</div>
+    <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Wallet (WalletConnect)</div>
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;">
       <div style="display:flex;gap:8px;margin-bottom:10px;">
-        <button class="tg-add-btn conn-w-provider" data-p="metamask" style="flex:1;font-size:11px;">🦊 MetaMask</button>
+        <button class="tg-add-btn conn-w-provider" data-p="metamask" style="flex:1;font-size:11px;border-color:var(--accent);">🦊 MetaMask</button>
         <button class="tg-add-btn conn-w-provider" data-p="trust" style="flex:1;font-size:11px;">🛡️ Trust</button>
       </div>
-      <input class="s-input" id="conn-waddr" placeholder="Paste your wallet address (0x… or Solana)" style="margin-bottom:6px;font-size:12px;">
-      <button class="tg-add-btn" id="conn-wsave" style="width:100%;">Connect Wallet</button>
-      <div style="font-size:9.5px;color:var(--text3);margin-top:6px;line-height:1.5;">Approval-per-trade — no keys stored. You approve every transaction in your own wallet. Paste your public address to link it.</div>
+      <button class="tg-add-btn" id="conn-wc-start" style="width:100%;margin-bottom:8px;">🔗 Connect with WalletConnect</button>
+      <div id="conn-wc-qr-wrap" style="display:none;text-align:center;padding:8px 0 4px;">
+        <img id="conn-wc-qr" alt="WalletConnect QR" style="width:220px;height:220px;border-radius:12px;background:#fff;padding:8px;">
+        <div style="font-size:10px;color:var(--text2);margin-top:8px;line-height:1.4;">Scan with MetaMask / Trust mobile<br>or open the wallet deep link on your phone</div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="tg-add-btn" id="conn-wc-open" style="flex:1;font-size:11px;">Open in wallet</button>
+          <button class="tg-add-btn" id="conn-wc-cancel" style="flex:1;font-size:11px;">Cancel</button>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin:10px 0 6px;">Fallback — paste address only (no live session)</div>
+      <input class="s-input" id="conn-waddr" placeholder="Paste 0x… address (optional fallback)" style="margin-bottom:6px;font-size:12px;">
+      <button class="tg-add-btn" id="conn-wsave" style="width:100%;">Link address only</button>
+      <button class="tg-add-btn" id="conn-w-disconnect" style="width:100%;margin-top:6px;display:none;">Disconnect wallet</button>
+      <div style="font-size:9.5px;color:var(--text3);margin-top:6px;line-height:1.5;">Live WalletConnect = approve every tx in your wallet. No private keys stored in Asuka. Needs <code>WALLETCONNECT_PROJECT_ID</code> in .env.</div>
       <div id="conn-wmsg" style="font-size:10px;margin-top:5px;"></div>
     </div>
   </div>

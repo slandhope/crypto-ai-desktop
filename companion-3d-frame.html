@@ -7,65 +7,55 @@
     position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
     color: #a0a0a8; font: 12px -apple-system, sans-serif; padding: 16px; text-align: center;
   }
-</style></head>
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./node_modules/three/build/three.module.js",
+    "three/addons/": "./node_modules/three/examples/jsm/"
+  }
+}
+</script>
+</head>
 <body>
 <canvas id="c3d"></canvas>
 <div id="err"></div>
-<script>
-(function () {
-  const path = require('path');
-  const fs = require('fs');
-  const appDir = __dirname;
-  const err = document.getElementById('err');
-  const fail = (t) => { err.textContent = t; err.style.display = 'flex'; };
+<script type="module">
+const err = document.getElementById('err');
+const fail = (t) => { err.textContent = t; err.style.display = 'flex'; };
 
+async function exists(url) {
   try {
-    const vrmDir = path.join(appDir, 'assets', 'vrm');
-    const novaPath = path.join(vrmDir, 'nova', 'model.fbx');
-    const glbPath = path.join(vrmDir, 'asuka.glb');
-    const modelPath = fs.existsSync(novaPath) ? novaPath : glbPath;
-    if (!fs.existsSync(modelPath)) { fail('Missing assets/vrm/nova/model.fbx'); return; }
-
-    const all = fs.existsSync(vrmDir) ? fs.readdirSync(vrmDir) : [];
-    const animPriority = (n) => {
-      const s = n.toLowerCase();
-      if (s.includes('idle')) return 0;
-      if (s.includes('sitting')) return 1;
-      if (s.includes('talk')) return 2;
-      if (s.includes('walk') || s.includes('strafe')) return 3;
-      return 4;
-    };
-    const animFiles = all
-      .filter((f) => /\.fbx$/i.test(f) && !/^\d+\.fbx$/i.test(f))
-      .sort((a, b) => animPriority(a) - animPriority(b) || a.localeCompare(b));
-
-    const threePath = path.join(appDir, 'node_modules', 'three', 'build', 'three.module.js');
-    if (!fs.existsSync(threePath)) { fail('Run: npm install three'); return; }
-
-    const toURL = (p) => 'file://' + p.replace(/\\/g, '/');
-    const config = {
-      modelURL: toURL(modelPath),
-      anims: animFiles.map((f) => ({
-        url: toURL(path.join(vrmDir, f)),
-        name: f.replace(/\.fbx$/i, ''),
-      })),
-    };
-
-    const im = document.createElement('script');
-    im.type = 'importmap';
-    im.textContent = JSON.stringify({
-      imports: {
-        three: toURL(threePath),
-        'three/addons/': toURL(path.join(appDir, 'node_modules', 'three', 'examples', 'jsm')) + '/',
-      },
-    });
-    document.head.appendChild(im);
-
-    import(toURL(path.join(appDir, 'companion-3d.js')))
-      .then((mod) => mod.mountCompanion3D(document.getElementById('c3d'), config))
-      .catch((e) => fail('Nova: ' + e.message));
-  } catch (e) {
-    fail('Error: ' + e.message);
+    const r = await fetch(url, { method: 'HEAD' });
+    return r.ok;
+  } catch (_) {
+    try {
+      const r = await fetch(url, { method: 'GET', headers: { Range: 'bytes=0-0' } });
+      return r.ok || r.status === 206;
+    } catch (e2) { return false; }
   }
-})();
-</script></body></html>
+}
+
+const animCandidates = [
+  'Idle.fbx', 'idle.fbx', 'Sitting.fbx', 'sitting.fbx',
+  'Talking.fbx', 'talk.fbx', 'Walk.fbx', 'walk.fbx',
+];
+
+try {
+  let modelURL = './assets/vrm/nova/model.fbx';
+  if (!(await exists(modelURL))) modelURL = './assets/vrm/asuka.glb';
+  if (!(await exists(modelURL))) { fail('Missing assets/vrm/nova/model.fbx (or asuka.glb)'); }
+  else {
+    const anims = [];
+    for (const f of animCandidates) {
+      const url = './assets/vrm/' + f;
+      if (await exists(url)) anims.push({ url, name: f.replace(/\.fbx$/i, '') });
+    }
+    const { mountCompanion3D } = await import('./companion-3d.js');
+    await mountCompanion3D(document.getElementById('c3d'), { modelURL, anims });
+  }
+} catch (e) {
+  fail('Nova: ' + (e && e.message ? e.message : e));
+}
+</script>
+</body></html>

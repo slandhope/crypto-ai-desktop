@@ -19,7 +19,7 @@
   <canvas id="wb-canvas" width="800" height="460"></canvas>
 
 <script>
-  const { ipcRenderer } = require('electron')
+  // ipcRenderer global from preload.js
   document.getElementById('wb-close').addEventListener('click', () => ipcRenderer.invoke('close-whiteboard').catch(()=>{}))
 
   let _busy = false, _queue = []

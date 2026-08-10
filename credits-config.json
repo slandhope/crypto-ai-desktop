@@ -6,5 +6,43 @@
     "ultra":   { "label": "Ultra",   "dailyCredits": 4000, "priceMonthly": 80 }
   },
   "actionCosts": { "chat": 10, "voice_minute": 50, "video": 200 },
-  "topupPacks": [ { "credits": 1000, "price": 3 }, { "credits": 5000, "price": 12 }, { "credits": 15000, "price": 30 } ]
+  "topupPacks": [
+    { "credits": 1000, "price": 3 },
+    { "credits": 5000, "price": 12 },
+    { "credits": 15000, "price": 30 }
+  ],
+  "defaultChatModel": "claude-haiku-4-5-20251001",
+  "maxTokensCap": 2048,
+  "allowedModels": [
+    "claude-haiku-4-5-20251001",
+    "claude-3-5-haiku-20241022",
+    "claude-sonnet-4-6"
+  ],
+  "fairUseHardCeiling": {
+    "premium": 2000,
+    "super": 6000,
+    "ultra": 16000
+  },
+  "voiceTiers": {
+    "starter": { "name": "Starter", "price_annual": 149, "voice_per_day": 50,  "scan_interval": 30, "scalp_enabled": false, "mirofish_agents": 10 },
+    "pro":     { "name": "Pro",     "price_annual": 249, "voice_per_day": 200, "scan_interval": 15, "scalp_enabled": true,  "mirofish_agents": 20 },
+    "degen":   { "name": "Degen",   "price_annual": 399, "voice_per_day": 999999, "scan_interval": 5, "scalp_enabled": true, "mirofish_agents": 30 }
+  },
+  "addons": {
+    "day_pass": { "price": 2, "label": "Day Pass" },
+    "message_pack": { "price": 5, "voice_messages": 500, "label": "+500 Voice msgs" }
+  },
+  "stripeLinks": {
+    "day_pass": "https://buy.stripe.com/daypass",
+    "message_pack": "https://buy.stripe.com/messagepack",
+    "upgrade_pro": "https://buy.stripe.com/pro",
+    "upgrade_degen": "https://buy.stripe.com/degen"
+  },
+  "cosmeticCoins": [
+    { "id": "c500",  "coins": 500,  "price": 4.99 },
+    { "id": "c1200", "coins": 1200, "price": 9.99 },
+    { "id": "c2800", "coins": 2800, "price": 19.99 },
+    { "id": "c8000", "coins": 8000, "price": 49.99 }
+  ],
+  "note": "SINGLE SOURCE OF TRUTH for product prices. Edit here only — desktop, server, and dashboard UI all read this file (or GET /credits/config)."
 }

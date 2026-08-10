@@ -62,6 +62,14 @@ CREATE TABLE IF NOT EXISTS user_credits (
   updated_at     TIMESTAMP DEFAULT NOW()
 );
 
+-- ── TRADING BLOBS: paper / snipes / signals off instance disk (O2) ──
+CREATE TABLE IF NOT EXISTS trading_blobs (
+  key         TEXT PRIMARY KEY,                   -- paper | snipes | daily_signals | …
+  data        JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ── indexes for the queries the servers actually run ──
 CREATE INDEX IF NOT EXISTS idx_user_data_updated  ON user_data(updated_at);
 CREATE INDEX IF NOT EXISTS idx_asuka_updated       ON asuka_state(updated_at);
+CREATE INDEX IF NOT EXISTS idx_trading_blobs_updated ON trading_blobs(updated_at);

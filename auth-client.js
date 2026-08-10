@@ -28,15 +28,45 @@ const REDIRECT_URI   = `http://localhost:${LOOPBACK_PORT}/callback`;
 const SCOPES         = 'openid email profile';
 
 const TOKEN_FILE = path.join(os.homedir(), '.asuka-auth.json');
+let _secretStore = null;
+try { _secretStore = require('./secret-store'); } catch (_) {}
 
 let _ctx = null;   // { app, BrowserWindow, shell }
 let _tokens = null; // { id_token, access_token, refresh_token, expires_at, user }
 
 function init(ctx) { _ctx = ctx; _load(); }
 
-function _load() { try { _tokens = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8')); } catch (e) { _tokens = null; } }
-function _save() { try { fs.writeFileSync(TOKEN_FILE, JSON.stringify(_tokens), { mode: 0o600 }); } catch (e) {} }
-function _clear() { try { fs.unlinkSync(TOKEN_FILE); } catch (e) {} _tokens = null; }
+function _load() {
+  try {
+    if (_secretStore) {
+      const sealed = _secretStore.loadAuthTokens();
+      if (sealed) { _tokens = sealed; return; }
+    }
+  } catch (_) {}
+  try {
+    _tokens = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8'));
+    // migrate plaintext → safeStorage
+    if (_tokens && _secretStore) {
+      _secretStore.saveAuthTokens(_tokens);
+      try { fs.unlinkSync(TOKEN_FILE); } catch (_) {}
+    }
+  } catch (e) { _tokens = null; }
+}
+function _save() {
+  try {
+    if (_secretStore && _secretStore.encryptionAvailable()) {
+      _secretStore.saveAuthTokens(_tokens);
+      try { fs.unlinkSync(TOKEN_FILE); } catch (_) {}
+      return;
+    }
+  } catch (_) {}
+  try { fs.writeFileSync(TOKEN_FILE, JSON.stringify(_tokens), { mode: 0o600 }); } catch (e) {}
+}
+function _clear() {
+  try { if (_secretStore) _secretStore.clearAuthTokens(); } catch (_) {}
+  try { fs.unlinkSync(TOKEN_FILE); } catch (e) {}
+  _tokens = null;
+}
 
 // PKCE — protects the code exchange on public clients
 function _pkce() {

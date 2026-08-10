@@ -4,7 +4,22 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const PORT = 3001;
+const PORT = Number(process.env.DEV_PANEL_PORT) || 3001;
+// Bind localhost only by default — never expose the panel on 0.0.0.0 unless explicitly forced
+const BIND_HOST = process.env.DEV_PANEL_BIND || '127.0.0.1';
+const crypto = require('crypto');
+const activeSessions = new Map(); // token -> expiry ms
+
+function makeSessionToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+function sessionOk(token) {
+  if (!token) return false;
+  const exp = activeSessions.get(token);
+  if (!exp) return false;
+  if (Date.now() > exp) { activeSessions.delete(token); return false; }
+  return true;
+}
 // DATA_DIR: use the local ./asuka-data folder (shared with scanner-server on EC2).
 // Falls back to the Mac app-support path if that's where the data lives (desktop use).
 const DATA_DIR = (() => {
@@ -40,7 +55,16 @@ const DEFAULT_TIERS = [
 const ALL_COINS = ['BTC','ETH','SOL','BNB','XRP','DOGE','AVAX','LINK','ARB','PEPE','BONK','TRUMP','WIF','SUI','APT'];
 const COST_PER_COIN_MAIN = 1.79;  // $/day per coin in main scanner
 const COST_PER_COIN_SCALP = 0.21; // $/day per coin in scalp scanner
-const DEFAULT_PASSWORD = 'Asuka2026!';
+// No hardcoded default password — set DEV_PANEL_PASSWORD or change via panel after first bootstrap
+function resolvePanelPassword(state) {
+  if (process.env.DEV_PANEL_PASSWORD && process.env.DEV_PANEL_PASSWORD.length >= 8) {
+    return process.env.DEV_PANEL_PASSWORD.trim();
+  }
+  if (state && state.password && state.password.length >= 8 && state.password !== 'Asuka2026!') {
+    return state.password.trim();
+  }
+  return null;
+}
 
 function loadJSON(file, def = {}) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
@@ -53,15 +77,11 @@ function saveJSON(file, data) {
 
 function getDevState() {
   try {
-    // Try dev-state.json
     const state = loadJSON(DEV_STATE_FILE, null);
-    if (state && state.password) {
-      return { ...state };
-    }
+    if (state) return { ...state };
   } catch(e) {}
   
   try {
-    // Try settings.json
     const settings = loadJSON(SETTINGS_FILE, null);
     if (settings && settings.devPassword) {
       return {
@@ -75,9 +95,8 @@ function getDevState() {
     }
   } catch(e) {}
   
-  // Always fallback to default
   return {
-    password: DEFAULT_PASSWORD,
+    password: null,
     coinOverride: null,
     intervalOverride: null,
     pauseAll: false,
@@ -183,7 +202,7 @@ function autoOptimize(threshold, type) {
 }
 
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url, `http://localhost:${PORT}`);
+  const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
   const pathname = url.pathname;
 
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -192,9 +211,8 @@ const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
   const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-  const devState = getDevState();
-  const isAuthed = token === devState.password || pathname === '/auth' || pathname === '/';
+  const token = auth.replace(/^Bearer\s+/i, '').trim();
+  const isAuthed = sessionOk(token) || pathname === '/auth' || pathname === '/';
 
   let body = '';
   req.on('data', chunk => body += chunk);
@@ -214,20 +232,27 @@ const server = http.createServer((req, res) => {
         const parsed = JSON.parse(body);
         const password = (parsed.password || '').trim();
         const state = getDevState();
-        const stored = (state.password || DEFAULT_PASSWORD).trim();
-        if (password === stored) {
+        const stored = resolvePanelPassword(state);
+        if (!stored) {
           res.writeHead(200);
-          res.end(JSON.stringify({ success: true, token: stored }));
-          console.log('✅ Auth successful');
+          res.end(JSON.stringify({ success: false, error: 'Dev panel password not configured. Set DEV_PANEL_PASSWORD (min 8 chars).' }));
+          return;
+        }
+        if (password === stored) {
+          const session = makeSessionToken();
+          activeSessions.set(session, Date.now() + 12 * 60 * 60 * 1000);
+          res.writeHead(200);
+          res.end(JSON.stringify({ success: true, token: session }));
+          console.log('Dev panel: auth ok');
         } else {
-          res.writeHead(200); // 200 so browser gets the response
+          res.writeHead(200);
           res.end(JSON.stringify({ success: false, error: 'Wrong password' }));
-          console.log('❌ Auth failed');
+          console.log('Dev panel: auth failed');
         }
       } catch(e) { 
-        console.error('Auth parse error:', e.message, 'body:', body);
+        console.error('Auth parse error:', e.message);
         res.writeHead(200);
-        res.end(JSON.stringify({ success: false, error: 'Parse error: ' + e.message }));
+        res.end(JSON.stringify({ success: false, error: 'Parse error' }));
       }
       return;
     }
@@ -580,7 +605,7 @@ input:focus{border-color:#00d4ff}
   <h2>CRYPTO.AI Dev Panel</h2>
   <p>Secure developer access only</p>
   <input type="password" id="pwd" placeholder="Developer password">
-  <button id="unlock-btn" style="cursor:pointer;" onclick="(function(){var p=document.getElementById('pwd');if(!p)return;var pwd=p.value.trim();if(!pwd){document.getElementById('lock-err').textContent='Enter password';return;}fetch('/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})}).then(function(r){return r.json()}).then(function(d){if(d.success){localStorage.setItem('dev_token',d.token);window._token=d.token;document.getElementById('lock').style.display='none';document.getElementById('app').style.display='block';if(typeof refresh==='function')refresh();}else{document.getElementById('lock-err').textContent='Wrong password — try Asuka2026!';p.value='';p.focus();}}).catch(function(e){document.getElementById('lock-err').textContent='Error: '+e.message;})})()">Unlock</button>
+  <button id="unlock-btn" style="cursor:pointer;" onclick="(function(){var p=document.getElementById('pwd');if(!p)return;var pwd=p.value.trim();if(!pwd){document.getElementById('lock-err').textContent='Enter password';return;}fetch('/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})}).then(function(r){return r.json()}).then(function(d){if(d.success){localStorage.setItem('dev_token',d.token);window._token=d.token;document.getElementById('lock').style.display='none';document.getElementById('app').style.display='block';if(typeof refresh==='function')refresh();}else{document.getElementById('lock-err').textContent=d.error||'Wrong password';p.value='';p.focus();}}).catch(function(e){document.getElementById('lock-err').textContent='Error: '+e.message;})})()">Unlock</button>
   <div id="lock-err"></div>
 </div>
 
@@ -969,7 +994,7 @@ async function unlock() {
       refresh();
       refreshTimer = setInterval(refresh, 8000);
     } else {
-      if (err) err.textContent = '❌ ' + (d.error || 'Wrong password') + ' — default: Asuka2026!';
+      if (err) err.textContent = '❌ ' + (d.error || 'Wrong password');
       if (pwdEl) { pwdEl.value = ''; pwdEl.focus(); }
     }
   } catch(e) { 
@@ -1441,11 +1466,29 @@ async function addCosmetic() {
 </body>
 </html>`; }
 
-server.listen(PORT, '0.0.0.0', () => {
+function ensureDevPassword() {
+  const state = getDevState();
+  if (resolvePanelPassword(state)) return resolvePanelPassword(state);
+  // First boot: mint a strong password, persist, print once (never the old default)
+  const generated = crypto.randomBytes(18).toString('base64url');
+  const next = { ...state, password: generated };
+  saveDevState(next);
+  console.log('Dev panel: generated password (saved to asuka-data/dev-state.json). Set DEV_PANEL_PASSWORD to override.');
+  console.log('Dev panel password:', generated);
+  return generated;
+}
+
+ensureDevPassword();
+
+if (BIND_HOST !== '127.0.0.1' && BIND_HOST !== 'localhost') {
+  console.warn('Dev panel BIND is', BIND_HOST, '— only use this behind a firewall with a strong DEV_PANEL_PASSWORD');
+}
+
+server.listen(PORT, BIND_HOST, () => {
   console.log('');
-  console.log('  ⚙️  CRYPTO.AI Dev Panel');
-  console.log('  → http://localhost:' + PORT);
-  console.log('  → Password: Asuka2026!');
+  console.log('  CRYPTO.AI Dev Panel');
+  console.log('  → http://' + BIND_HOST + ':' + PORT);
+  console.log('  → Bound to ' + BIND_HOST + ' (set DEV_PANEL_BIND to change; default localhost-only)');
   console.log('');
 });
 process.on('uncaughtException', e => console.error('Dev server:', e.message));

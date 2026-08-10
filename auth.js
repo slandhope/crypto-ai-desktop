@@ -35,6 +35,12 @@ if (POOL_ID && CLIENT_IDS.length) {
 }
 if (GOOGLE_CLIENT_IDS.length) console.log('🔑 Google token verification ready · clients:', GOOGLE_CLIENT_IDS.length);
 
+const IS_PROD = process.env.NODE_ENV === 'production' || process.env.REQUIRE_AUTH === '1' || process.env.REQUIRE_AUTH === 'true';
+if (IS_PROD && !verifier && !GOOGLE_CLIENT_IDS.length) {
+  console.error('🛑 REQUIRE_AUTH/production set but no Cognito/Google verifiers — refusing to start with open auth');
+  process.exit(1);
+}
+
 // unify identity across desktop (Cognito) + mobile (Google) by EMAIL.
 // Same person, same email → same userId everywhere → same Asuka + data.
 function idFromEmail(email) { return 'u_' + Buffer.from(String(email).toLowerCase().trim()).toString('base64url'); }
@@ -45,13 +51,22 @@ function extractToken(req) {
   return req.headers['x-id-token'] || null;
 }
 
+function emailVerified(claim) {
+  return claim === true || claim === 'true';
+}
+
 // try verifying a token as Cognito first, then Google
 async function verifyAnyToken(token) {
   // 1. Cognito (desktop / web)
   if (verifier) {
     try {
       const p = await verifier.verify(token);
-      return { email: p.email || null, name: p.name || p['cognito:username'] || null, via: 'cognito' };
+      return {
+        email: p.email || null,
+        name: p.name || p['cognito:username'] || null,
+        emailVerified: emailVerified(p.email_verified),
+        via: 'cognito',
+      };
     } catch (e) { if (process.env.AUTH_DEBUG) console.warn('🔑 cognito verify failed:', e.message); }
   }
   // 2. Google native (mobile)
@@ -59,7 +74,12 @@ async function verifyAnyToken(token) {
     try {
       const ticket = await googleClient.verifyIdToken({ idToken: token, audience: GOOGLE_CLIENT_IDS });
       const p = ticket.getPayload();
-      return { email: p.email || null, name: p.name || null, via: 'google' };
+      return {
+        email: p.email || null,
+        name: p.name || null,
+        emailVerified: emailVerified(p.email_verified),
+        via: 'google',
+      };
     } catch (e) { if (process.env.AUTH_DEBUG) console.warn('🔑 google verify failed:', e.message); }
   }
   return null;
@@ -67,8 +87,9 @@ async function verifyAnyToken(token) {
 
 // resolve a user object from the request, or null
 async function resolveUser(req) {
-  // TEST MODE: no verifiers configured → trust x-user-id (dev only)
+  // TEST MODE: no verifiers configured → trust x-user-id (dev only; blocked in production above)
   if (!verifier && !GOOGLE_CLIENT_IDS.length) {
+    if (IS_PROD) return null;
     const uid = req.headers['x-user-id'];
     return uid ? { userId: uid, email: null, testMode: true } : null;
   }
@@ -77,16 +98,32 @@ async function resolveUser(req) {
   const v = await verifyAnyToken(token);
   if (!v) { if (process.env.AUTH_DEBUG) console.warn('🔑 token not verified by any provider'); return null; }
   if (!v.email) { if (process.env.AUTH_DEBUG) console.warn('🔑 token verified but NO email claim — via', v.via); return null; }
+  // Identity is keyed by email — never accept unverified emails (account takeover angle)
+  if (!v.emailVerified) {
+    if (process.env.AUTH_DEBUG) console.warn('🔑 email_verified !== true — rejecting', v.via, v.email);
+    return null;
+  }
   return {
     userId: idFromEmail(v.email),                // SAME id on desktop + mobile (keyed by email)
     email: v.email,
     name: v.name,
     via: v.via,
+    emailVerified: true,
   };
 }
 
 // middleware: hard-require a valid login
 async function authRequired(req, res, next) {
+  const token = extractToken(req);
+  if (token && (verifier || GOOGLE_CLIENT_IDS.length)) {
+    const v = await verifyAnyToken(token);
+    if (v && v.email && !v.emailVerified) {
+      return res.status(403).json({
+        error: 'email_unverified',
+        message: 'Verify your email, then sign in again.',
+      });
+    }
+  }
   const user = await resolveUser(req);
   if (!user) return res.status(401).json({ error: 'unauthorized', message: 'Please sign in.' });
   req.user = user;
@@ -101,7 +138,10 @@ async function authOptional(req, res, next) {
 
 // helper for non-middleware spots
 function userIdOf(req) {
-  return (req.user && req.user.userId) || req.headers['x-user-id'] || 'anon';
+  if (req.user && req.user.userId) return req.user.userId;
+  // Never honor client-supplied x-user-id when verifiers exist or in production
+  if (IS_PROD || verifier || GOOGLE_CLIENT_IDS.length) return 'anon';
+  return req.headers['x-user-id'] || 'anon';
 }
 
 module.exports = { authRequired, authOptional, userIdOf, resolveUser };

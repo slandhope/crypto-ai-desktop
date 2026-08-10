@@ -38,7 +38,7 @@ const levWarnings = {
   150: '150x — EXTREME — 0.67% move = liquidation'
 }
 
-const { ipcRenderer } = require('electron')
+// ipcRenderer is exposed globally by preload.js — do not redeclare here
 
 let memory={}, settings={}, alerts=[], watchlist=[], trackedWallets=[], prices={}
 let waifuModel=null, editApp=null, custApp=null
@@ -162,14 +162,40 @@ async function refreshConnStatus(){
   if (!st) { const bEl = document.getElementById('conn-binance-st'); if (bEl) { bEl.textContent = 'status unavailable'; } }
   const bEl = document.getElementById('conn-binance-st')
   if (bEl && st) { const c = st.binance==='connected'; bEl.textContent = c?'✓ Connected':(st.binance==='keys_saved_unverified'?'saved (unverified)':'not connected'); bEl.style.background = c?'rgba(52,211,153,0.15)':'var(--bg3)'; bEl.style.color = c?'var(--green)':'var(--text2)' }
+  const msg = document.getElementById('conn-wmsg')
+  const disc = document.getElementById('conn-w-disconnect')
+  if (st && msg) {
+    if (st.walletLive || st.wallet==='connected') {
+      msg.style.color = 'var(--green)'
+      msg.textContent = `✓ Live WC: ${(st.walletAddress||'').slice(0,6)}…${(st.walletAddress||'').slice(-4)}${st.walletProvider ? ' · ' + st.walletProvider : ''}`
+      if (disc) disc.style.display = 'block'
+    } else if (st.wallet==='linked') {
+      msg.style.color = 'var(--gold)'
+      msg.textContent = `Address linked (not live): ${(st.walletAddress||'').slice(0,6)}… — use WalletConnect above`
+      if (disc) disc.style.display = 'block'
+    }
+  }
   // reflect on the pill
   const pill = document.getElementById('p1-conn-btn')
-  if (pill && st) { const anyConn = st.binance==='connected' || st.wallet==='connected'; pill.textContent = anyConn ? '🔗 Connected' : '🔗 Connect'; pill.style.color = anyConn?'var(--green)':'var(--accent)'; pill.style.background = anyConn?'rgba(52,211,153,0.12)':'rgba(45,212,255,0.12)' }
+  if (pill && st) { const anyConn = st.binance==='connected' || st.wallet==='connected' || st.wallet==='linked'; pill.textContent = anyConn ? '🔗 Connected' : '🔗 Connect'; pill.style.color = anyConn?'var(--green)':'var(--accent)'; pill.style.background = anyConn?'rgba(52,211,153,0.12)':'rgba(45,212,255,0.12)' }
 }
 window.refreshConnStatus = refreshConnStatus
-document.getElementById('p1-conn-btn')?.addEventListener('click', () => { document.getElementById('connect-modal').style.display='flex'; refreshConnStatus() })
-document.getElementById('connect-close')?.addEventListener('click', () => document.getElementById('connect-modal').style.display='none')
-document.getElementById('connect-modal')?.addEventListener('click', (e)=>{ if(e.target.id==='connect-modal') e.target.style.display='none' })
+document.getElementById('p1-conn-btn')?.addEventListener('click', () => {
+  document.getElementById('connect-modal').style.display='flex'
+  document.body.style.cursor = 'default'
+  refreshConnStatus()
+})
+document.getElementById('connect-close')?.addEventListener('click', () => {
+  document.getElementById('connect-modal').style.display='none'
+  document.body.style.cursor = 'default'
+  ipcRenderer.invoke('walletconnect-cancel').catch(()=>{})
+})
+document.getElementById('connect-modal')?.addEventListener('click', (e)=>{
+  if (e.target.id !== 'connect-modal') return
+  e.target.style.display='none'
+  document.body.style.cursor = 'default'
+  ipcRenderer.invoke('walletconnect-cancel').catch(()=>{})
+})
 document.getElementById('conn-bsave')?.addEventListener('click', async () => {
   const msg = document.getElementById('conn-bmsg'); msg.style.color='var(--text2)'; msg.textContent='Connecting…'
   const r = await ipcRenderer.invoke('connect-binance', { apiKey: document.getElementById('conn-bkey').value.trim(), secret: document.getElementById('conn-bsecret').value.trim(), testnet: document.getElementById('conn-btestnet').checked }).catch(e=>({ok:false,error:e.message}))
@@ -178,19 +204,80 @@ document.getElementById('conn-bsave')?.addEventListener('click', async () => {
   else { msg.style.color='var(--red)'; msg.textContent='✗ '+(r?.error||'failed') }
   refreshConnStatus()
 })
-let _connProvider = 'walletconnect'
+let _connProvider = 'metamask'
+let _wcDeepLink = null
 document.querySelectorAll('.conn-w-provider').forEach(b => b.onclick = () => {
   _connProvider = b.dataset.p
   document.querySelectorAll('.conn-w-provider').forEach(x=>x.style.borderColor='var(--border)')
   b.style.borderColor='var(--accent)'
-  document.getElementById('conn-wmsg').innerHTML = `<span style="color:var(--text3)">Open ${b.dataset.p==='metamask'?'MetaMask':'Trust'} → copy your address → paste below → Connect. (Extensions can't auto-inject into desktop apps, so we link by address — approval-per-trade.)</span>`
+  const msg = document.getElementById('conn-wmsg')
+  if (msg) msg.innerHTML = `<span style="color:var(--text3)">Selected ${b.dataset.p==='metamask'?'MetaMask':'Trust'} — tap Connect with WalletConnect, then scan or Open in wallet.</span>`
+})
+document.getElementById('conn-wc-start')?.addEventListener('click', async () => {
+  const msg = document.getElementById('conn-wmsg')
+  const wrap = document.getElementById('conn-wc-qr-wrap')
+  if (msg) { msg.style.color='var(--text2)'; msg.textContent='Starting WalletConnect…' }
+  const r = await ipcRenderer.invoke('walletconnect-start', { provider: _connProvider }).catch(e=>({ok:false,error:e.message}))
+  if (!r?.ok) {
+    if (msg) {
+      msg.style.color='var(--red)'
+      msg.textContent = r?.error === 'missing_project_id' || r?.code === 'missing_project_id'
+        ? (r.hint || 'Set WALLETCONNECT_PROJECT_ID in .env (cloud.reown.com)')
+        : ('✗ ' + (r?.error || 'failed'))
+    }
+    return
+  }
+  _wcDeepLink = r.deepLink
+  const img = document.getElementById('conn-wc-qr')
+  if (img && r.qrDataUrl) img.src = r.qrDataUrl
+  if (wrap) wrap.style.display = 'block'
+  if (msg) { msg.style.color='var(--accent)'; msg.textContent='Scan the QR in your wallet app…' }
+})
+document.getElementById('conn-wc-open')?.addEventListener('click', () => {
+  if (_wcDeepLink) ipcRenderer.invoke('open-url', _wcDeepLink).catch(()=>{})
+})
+document.getElementById('conn-wc-cancel')?.addEventListener('click', () => {
+  document.body.style.cursor = 'default'
+  const wrap = document.getElementById('conn-wc-qr-wrap')
+  if (wrap) wrap.style.display = 'none'
+  const msg = document.getElementById('conn-wmsg')
+  if (msg) { msg.style.color='var(--text2)'; msg.textContent='Cancelled' }
+  // fire-and-forget — never block the UI on WC teardown
+  ipcRenderer.invoke('walletconnect-cancel').catch(()=>{})
+})
+ipcRenderer.on('walletconnect-connected', (e, snap) => {
+  const wrap = document.getElementById('conn-wc-qr-wrap')
+  if (wrap) wrap.style.display = 'none'
+  const msg = document.getElementById('conn-wmsg')
+  if (msg) {
+    msg.style.color = 'var(--green)'
+    msg.textContent = `✓ Live session: ${(snap?.address||'').slice(0,6)}…${(snap?.address||'').slice(-4)}${snap?.peer ? ' · ' + snap.peer : ''}`
+  }
+  refreshConnStatus()
+})
+ipcRenderer.on('walletconnect-error', (e, p) => {
+  const msg = document.getElementById('conn-wmsg')
+  if (msg) { msg.style.color='var(--red)'; msg.textContent='✗ ' + (p?.error || 'WalletConnect failed') }
+})
+ipcRenderer.on('walletconnect-disconnected', () => {
+  refreshConnStatus()
+  const msg = document.getElementById('conn-wmsg')
+  if (msg) { msg.style.color='var(--text2)'; msg.textContent='Wallet disconnected' }
 })
 document.getElementById('conn-wsave')?.addEventListener('click', async () => {
   const msg = document.getElementById('conn-wmsg'); msg.style.color='var(--text2)'; msg.textContent='Linking…'
   const r = await ipcRenderer.invoke('connect-wallet', { address: document.getElementById('conn-waddr').value.trim(), provider: _connProvider }).catch(e=>({ok:false,error:e.message}))
-  if (r?.ok) { msg.style.color='var(--green)'; msg.textContent='✓ Wallet linked: '+r.address.slice(0,6)+'…'+r.address.slice(-4) }
+  if (r?.ok) { msg.style.color='var(--gold)'; msg.textContent='✓ Address linked: '+r.address.slice(0,6)+'…'+r.address.slice(-4)+' (fallback — not live WC)' }
   else { msg.style.color='var(--red)'; msg.textContent='✗ '+(r?.error||'failed') }
   refreshConnStatus()
+})
+document.getElementById('conn-w-disconnect')?.addEventListener('click', async () => {
+  await ipcRenderer.invoke('disconnect-wallet').catch(()=>{})
+  const wrap = document.getElementById('conn-wc-qr-wrap')
+  if (wrap) wrap.style.display = 'none'
+  refreshConnStatus()
+  const msg = document.getElementById('conn-wmsg')
+  if (msg) { msg.style.color='var(--text2)'; msg.textContent='Disconnected' }
 })
 
 function p1invoke(channel, ms){
@@ -644,6 +731,8 @@ async function loadTelegramUI() {
       }
       renderIntelFeed()
       loadBotStatus().catch(() => {})
+      loadTgAdminUI().catch(() => {})
+      loadTgModUI().catch(() => {})
 
       if (settings?.tradeNotifications) document.getElementById('trade-notify-toggle')?.classList.add('on')
       if (settings?.intelNotifications) document.getElementById('intel-notify-toggle')?.classList.add('on')
@@ -656,9 +745,182 @@ async function loadTelegramUI() {
         const dh = document.getElementById('drawdown-hint')
         if (dh) dh.style.color = 'var(--red)'
       }
+    } else {
+      loadTgAdminUI().catch(() => {})
+      loadBotStatus().catch(() => {})
+      loadTgModUI().catch(() => {})
     }
   } catch(e) { console.error('loadTelegramUI:', e) }
 }
+
+async function loadTgAdminUI() {
+  const st = await ipcRenderer.invoke('tg-admin-status').catch(() => null)
+  const botEl = document.getElementById('tg-admin-bot-st')
+  if (botEl) {
+    if (!st?.botConfigured) botEl.textContent = '⚠️ TELEGRAM_BOT_TOKEN missing in .env'
+    else if (st.bot) botEl.textContent = `Bot @${st.bot.username || st.bot.first_name} ready · ${st.managedGroups?.length || 0} group(s)`
+    else botEl.textContent = `Bot token set but getMe failed: ${st.botError || 'error'}`
+  }
+  const list = document.getElementById('tg-admin-groups')
+  const sel = document.getElementById('tg-admin-action-group')
+  if (list) {
+    const groups = st?.managedGroups || []
+    if (!groups.length) list.innerHTML = '<div style="color:var(--text3);">No managed groups yet — register a chat id or message the group.</div>'
+    else {
+      list.innerHTML = groups.map(g => `
+        <div class="tg-group-item" style="margin-bottom:6px;">
+          <div>
+            <div class="tg-group-name">${g.title || g.id}</div>
+            <div class="tg-group-type">${g.type || 'group'} · ${g.id}</div>
+          </div>
+          <button class="tg-remove-btn tg-admin-default" data-id="${g.id}">Default</button>
+          <button class="tg-remove-btn tg-admin-forget" data-id="${g.id}">Forget</button>
+        </div>`).join('')
+      list.querySelectorAll('.tg-admin-forget').forEach(b => b.onclick = async () => {
+        await ipcRenderer.invoke('tg-admin-remove-group', { chatId: b.dataset.id })
+        loadTgAdminUI()
+      })
+      list.querySelectorAll('.tg-admin-default').forEach(b => b.onclick = async () => {
+        const s = await ipcRenderer.invoke('get-settings').catch(()=>({})) || {}
+        s.telegramDefaultManageChatId = b.dataset.id
+        await ipcRenderer.invoke('save-settings', s).catch(()=>{})
+        const msg = document.getElementById('tg-admin-msg')
+        if (msg) { msg.style.color='var(--green)'; msg.textContent='Default manage group set' }
+      })
+    }
+  }
+  if (sel) {
+    const cur = sel.value
+    sel.innerHTML = '<option value="">Select group</option>' + (st?.managedGroups || []).map(g =>
+      `<option value="${g.id}">${(g.title || g.id).replace(/</g,'')}</option>`).join('')
+    if (cur) sel.value = cur
+  }
+  const joins = document.getElementById('tg-admin-joins')
+  if (joins) {
+    const pending = st?.pendingJoins || []
+    if (!pending.length) joins.innerHTML = '<div style="color:var(--text3);">None</div>'
+    else {
+      joins.innerHTML = pending.slice().reverse().slice(0, 12).map(j => `
+        <div class="tg-group-item" style="margin-bottom:6px;">
+          <div>
+            <div class="tg-group-name">${j.name || j.username || j.userId}</div>
+            <div class="tg-group-type">${j.chatTitle || j.chatId}</div>
+          </div>
+          <button class="tg-add-btn tg-join-ok" data-c="${j.chatId}" data-u="${j.userId}" style="padding:4px 8px;font-size:10px;">Approve</button>
+          <button class="tg-remove-btn tg-join-no" data-c="${j.chatId}" data-u="${j.userId}">Decline</button>
+        </div>`).join('')
+      joins.querySelectorAll('.tg-join-ok').forEach(b => b.onclick = async () => {
+        const r = await ipcRenderer.invoke('tg-admin-approve-join', { chatId: b.dataset.c, userId: Number(b.dataset.u) })
+        const msg = document.getElementById('tg-admin-msg')
+        if (msg) { msg.style.color = r?.ok ? 'var(--green)' : 'var(--red)'; msg.textContent = r?.ok ? 'Approved' : (r?.error || 'failed') }
+        loadTgAdminUI()
+      })
+      joins.querySelectorAll('.tg-join-no').forEach(b => b.onclick = async () => {
+        const r = await ipcRenderer.invoke('tg-admin-decline-join', { chatId: b.dataset.c, userId: Number(b.dataset.u) })
+        const msg = document.getElementById('tg-admin-msg')
+        if (msg) { msg.style.color = r?.ok ? 'var(--green)' : 'var(--red)'; msg.textContent = r?.ok ? 'Declined' : (r?.error || 'failed') }
+        loadTgAdminUI()
+      })
+    }
+  }
+}
+window.loadTgAdminUI = loadTgAdminUI
+
+function setToggleEl(id, on) {
+  const el = document.getElementById(id)
+  if (!el) return
+  el.classList.toggle('on', !!on)
+}
+
+async function loadTgModUI() {
+  const r = await ipcRenderer.invoke('tg-group-mod-get').catch(() => null)
+  const cfg = r?.config
+  if (!cfg) return
+  setToggleEl('tg-mod-enabled', cfg.enabled)
+  setToggleEl('tg-mod-spam', cfg.autoSpam)
+  setToggleEl('tg-mod-welcome', cfg.welcomeEnabled)
+  setToggleEl('tg-mod-hype', cfg.hypeEnabled)
+  document.querySelectorAll('.tg-mod-mode').forEach(b => {
+    b.style.borderColor = b.dataset.m === cfg.mode ? 'var(--accent)' : 'var(--border)'
+  })
+  _tgModMode = cfg.mode || 'light'
+  const max = document.getElementById('tg-mod-max'); if (max) max.value = cfg.maxRepliesPerHour
+  const cd = document.getElementById('tg-mod-cd'); if (cd) cd.value = cfg.cooldownSec
+  const hh = document.getElementById('tg-mod-hype-hrs'); if (hh) hh.value = cfg.hypeIntervalHours
+  const mh = document.getElementById('tg-mod-mute-hrs'); if (mh) mh.value = cfg.autoMuteSpamHours
+  const stats = document.getElementById('tg-mod-stats')
+  if (stats && r.runtime) {
+    const rows = (r.runtime.replyStats || []).map(x => `${x.chatId}: ${x.lastHour}/hr`).join(' · ')
+    stats.textContent = `Bot @${r.runtime.botUsername || '?'} · mode ${cfg.mode}${rows ? ' · ' + rows : ''}`
+  }
+}
+
+let _tgModMode = 'light'
+document.getElementById('tg-mod-enabled')?.addEventListener('click', () => document.getElementById('tg-mod-enabled').classList.toggle('on'))
+document.getElementById('tg-mod-spam')?.addEventListener('click', () => document.getElementById('tg-mod-spam').classList.toggle('on'))
+document.getElementById('tg-mod-welcome')?.addEventListener('click', () => document.getElementById('tg-mod-welcome').classList.toggle('on'))
+document.getElementById('tg-mod-hype')?.addEventListener('click', () => document.getElementById('tg-mod-hype').classList.toggle('on'))
+document.querySelectorAll('.tg-mod-mode').forEach(b => b.addEventListener('click', () => {
+  _tgModMode = b.dataset.m
+  document.querySelectorAll('.tg-mod-mode').forEach(x => x.style.borderColor = 'var(--border)')
+  b.style.borderColor = 'var(--accent)'
+}))
+
+document.getElementById('tg-mod-save')?.addEventListener('click', async () => {
+  const patch = {
+    enabled: document.getElementById('tg-mod-enabled')?.classList.contains('on'),
+    autoSpam: document.getElementById('tg-mod-spam')?.classList.contains('on'),
+    welcomeEnabled: document.getElementById('tg-mod-welcome')?.classList.contains('on'),
+    hypeEnabled: document.getElementById('tg-mod-hype')?.classList.contains('on'),
+    mode: _tgModMode || 'light',
+    maxRepliesPerHour: parseInt(document.getElementById('tg-mod-max')?.value, 10) || 8,
+    cooldownSec: parseInt(document.getElementById('tg-mod-cd')?.value, 10) || 50,
+    hypeIntervalHours: parseInt(document.getElementById('tg-mod-hype-hrs')?.value, 10) || 6,
+    autoMuteSpamHours: parseInt(document.getElementById('tg-mod-mute-hrs')?.value, 10) || 6,
+  }
+  const r = await ipcRenderer.invoke('tg-group-mod-set', patch).catch(e => ({ ok:false, error:e.message }))
+  const msg = document.getElementById('tg-mod-msg')
+  if (msg) { msg.style.color = r?.ok ? 'var(--green)' : 'var(--red)'; msg.textContent = r?.ok ? `Saved · ${r.config.mode} host` : (r?.error || 'failed') }
+  loadTgModUI()
+})
+
+document.getElementById('tg-mod-hype-now')?.addEventListener('click', async () => {
+  const chatId = document.getElementById('tg-admin-action-group')?.value || undefined
+  const r = await ipcRenderer.invoke('tg-group-mod-hype-now', { chatId: chatId || undefined }).catch(e => ({ ok:false, error:e.message }))
+  const msg = document.getElementById('tg-mod-msg')
+  if (msg) {
+    msg.style.color = (r?.ok || r?.posted > 0) ? 'var(--green)' : 'var(--red)'
+    msg.textContent = r?.ok ? 'Hype posted' : (r?.posted != null ? `Posted ${r.posted}` : (r?.error || 'failed/cancelled'))
+  }
+})
+
+document.getElementById('tg-admin-register')?.addEventListener('click', async () => {
+  const chatId = document.getElementById('tg-admin-chat-id')?.value.trim()
+  const msg = document.getElementById('tg-admin-msg')
+  const r = await ipcRenderer.invoke('tg-admin-register-group', { chatId }).catch(e => ({ ok:false, error:e.message }))
+  if (msg) { msg.style.color = r?.ok ? 'var(--green)' : 'var(--red)'; msg.textContent = r?.ok ? `Registered ${r.group?.title || chatId}` : (r?.error || 'failed') }
+  if (r?.ok) loadTgAdminUI()
+})
+
+document.getElementById('tg-admin-run')?.addEventListener('click', async () => {
+  const chatId = document.getElementById('tg-admin-action-group')?.value
+  const action = document.getElementById('tg-admin-action')?.value
+  const arg = document.getElementById('tg-admin-action-arg')?.value.trim()
+  const msg = document.getElementById('tg-admin-msg')
+  if (!chatId) { if (msg) { msg.style.color='var(--red)'; msg.textContent='Select a group'; } return }
+  let r
+  if (action === 'post') r = await ipcRenderer.invoke('tg-admin-post', { chatId, text: arg, pin: false })
+  else if (action === 'kick') r = await ipcRenderer.invoke('tg-admin-kick', { chatId, username: arg, userId: /^\d+$/.test(arg) ? Number(arg) : undefined })
+  else if (action === 'ban') r = await ipcRenderer.invoke('tg-admin-ban', { chatId, username: arg, userId: /^\d+$/.test(arg) ? Number(arg) : undefined })
+  else if (action === 'mute') r = await ipcRenderer.invoke('tg-admin-mute', { chatId, username: arg, userId: /^\d+$/.test(arg) ? Number(arg) : undefined, hours: 24 })
+  else if (action === 'title') r = await ipcRenderer.invoke('tg-admin-set-title', { chatId, title: arg })
+  else if (action === 'desc') r = await ipcRenderer.invoke('tg-admin-set-description', { chatId, description: arg })
+  if (msg) {
+    msg.style.color = r?.ok ? 'var(--green)' : 'var(--red)'
+    msg.textContent = r?.ok ? 'Done' : (r?.error || r?.hint || 'failed')
+  }
+  loadTgAdminUI()
+})
 
 function renderTgGroups(groups) {
   const list = document.getElementById('tg-groups-list')
@@ -1364,8 +1626,26 @@ async function loadUsageStats() {
     if(!autoToggle) return
     if (autoToggle && stats.config?.auto_extend) autoToggle.classList.add('on')
 
-    // Store stripe links
+    // Store stripe links + fill subscription card from pricing source of truth
     window._stripeLinks = stats.stripeLinks || {}
+    const vt = stats.pricing?.voiceTiers || {}
+    const tierKey = stats.tierName || 'pro'
+    const tierInfo = vt[tierKey] || stats.tier || {}
+    const nameEl = document.getElementById('sub-tier-name')
+    const priceEl = document.getElementById('sub-tier-price')
+    if (nameEl) nameEl.textContent = (tierInfo.name || tierNames[tierKey] || tierKey || 'PRO').toUpperCase()
+    if (priceEl && tierInfo.price_annual != null) priceEl.textContent = `$${tierInfo.price_annual}/year`
+    const addons = stats.pricing?.addons || {}
+    const degenBtn = document.getElementById('btn-upgrade-degen')
+    const dayBtn = document.getElementById('btn-day-pass')
+    const packBtn = document.getElementById('btn-msg-pack')
+    if (degenBtn && vt.degen?.price_annual) degenBtn.textContent = `⬆️ Upgrade to Degen $${vt.degen.price_annual}/yr`
+    if (dayBtn && addons.day_pass?.price != null) dayBtn.textContent = `🎫 Buy Day Pass $${addons.day_pass.price}`
+    if (packBtn && addons.message_pack) {
+      const n = addons.message_pack.voice_messages || 500
+      const p = addons.message_pack.price
+      packBtn.textContent = p != null ? `📦 +${n} Voice msgs $${p}` : `📦 +${n} Voice msgs`
+    }
 
   } catch(e) { console.error('Usage stats error:', e) }
 }
@@ -5203,10 +5483,32 @@ ipcRenderer.on('telegram-signal', (event, signal) => {
     type: 'signal',
     source: `@${signal.caller} in ${signal.groupName}`,
     body: `${signal.direction?.toUpperCase()} ${signal.coin} — Entry: $${signal.entry} → Target: $${signal.target} | SL: $${signal.stopLoss}`,
-    note: `${signal.confidence}% confidence`,
-    action: 'Paper Trade Opened',
+    note: `${signal.confidence}% confidence${signal.chartNote ? ' · chart' : ''}`,
+    action: 'Signal logged',
     notify: true
   })
+})
+
+// Buyback approve-mode: surface CA + amount so you can execute in your own wallet
+ipcRenderer.on('buyback-signal', (event, sig) => {
+  const ca = sig?.ca || ''
+  const body = `$${sig?.symbol || '?'} · buy ~$${sig?.amount || '?'} · ${sig?.reason || ''}${ca ? '\nCA: ' + ca : ''}`
+  addToIntelFeed({
+    type: 'warning',
+    source: 'Buyback',
+    body,
+    note: sig?.needsUnlock ? 'Unlock burner PIN in Auto-Desk' : 'Approve mode — execute in your wallet',
+    action: ca ? 'CA ready to copy' : 'Open Auto-Desk',
+    notify: true,
+    ca,
+  })
+  try {
+    new Notification('🔔 Buyback signal', { body: body.slice(0, 180) })
+  } catch (_) {}
+  if (ca && navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(ca).catch(()=>{})
+  }
+  try { aldSay?.(`🔔 Buyback signal: $${sig.symbol} ~$${sig.amount}\n${sig.reason || ''}${ca ? '\nCA copied: ' + ca : ''}`) } catch (_) {}
 })
 
 // Intelligence feed
@@ -5746,39 +6048,30 @@ document.getElementById('dev-unlock-btn')?.addEventListener('click', async () =>
   const err = document.getElementById('dev-unlock-err')
   if (!pwd) return
 
-  // Verify via IPC (works even without dev server running)
+  const unlock = (token) => {
+    _devToken = token
+    localStorage.setItem('dev_token', token)
+    document.getElementById('dev-lock-state').style.display = 'none'
+    document.getElementById('dev-unlocked-state').style.display = 'block'
+    if (err) err.textContent = ''
+  }
+
+  const ipcRes = await ipcRenderer.invoke('dev-verify-password', pwd).catch(() => null)
+  if (ipcRes === true || ipcRes?.ok === true) { unlock('ipc-ok'); return }
+
   try {
-    const ok = await ipcRenderer.invoke('dev-verify-password', pwd).catch(() => null)
-    if (ok === true) {
-      _devToken = pwd
-      localStorage.setItem('dev_token', pwd)
-      document.getElementById('dev-lock-state').style.display = 'none'
-      document.getElementById('dev-unlocked-state').style.display = 'block'
-      if (err) err.textContent = ''
-    } else {
-      if (err) err.textContent = '❌ Wrong password — default is Asuka2026!'
-    }
-  } catch(e) {
-    // Fallback: try dev server
-    try {
-      const res = await fetch('http://localhost:3001/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pwd })
-      })
-      const data = await res.json()
-      if (data.success) {
-        _devToken = pwd
-        localStorage.setItem('dev_token', pwd)
-        document.getElementById('dev-lock-state').style.display = 'none'
-        document.getElementById('dev-unlocked-state').style.display = 'block'
-        if (err) err.textContent = ''
-      } else {
-        if (err) err.textContent = '❌ Wrong password'
-      }
-    } catch(e2) {
-      if (err) err.textContent = '❌ Could not verify password'
-    }
+    const res = await fetch('http://127.0.0.1:3001/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd })
+    })
+    const data = await res.json()
+    if (data.success && data.token) { unlock(data.token); return }
+    if (err) err.textContent = '❌ ' + (data.error || 'Wrong password')
+  } catch (e2) {
+    if (err) err.textContent = ipcRes?.error === 'not_configured'
+      ? '❌ Set DEV_PANEL_PASSWORD or unlock via http://127.0.0.1:3001 (check terminal for generated password)'
+      : '❌ Wrong password or dev panel not running'
   }
 })
 
@@ -5812,12 +6105,14 @@ document.querySelectorAll('.dev-interval-btn').forEach(btn => {
 document.getElementById('dev-save-pwd-btn')?.addEventListener('click', async () => {
   const pwd = document.getElementById('dev-new-pwd')?.value
   if (!pwd || pwd.length < 8) return
+  const ok = await ipcRenderer.invoke('dev-change-password', pwd).catch(() => false)
   await devApiCall('changePassword', { value: pwd })
-  _devToken = pwd
-  localStorage.setItem('dev_token', pwd)
-  setEl('dev-new-pwd','value','')
-  setEl('dev-unlock-err','textContent','')
-  alert('Password changed!')
+  if (ok) {
+    setEl('dev-new-pwd','value','')
+    alert('Password changed!')
+  } else {
+    alert('Password not saved (min 8 chars; cannot use the old default)')
+  }
 })
 
 // Auto-unlock if token saved

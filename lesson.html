@@ -75,7 +75,7 @@
   </div>
 
 <script>
-  const { ipcRenderer } = require('electron')
+  // ipcRenderer global from preload.js
   document.getElementById('close').addEventListener('click', () => ipcRenderer.invoke('close-lesson').catch(()=>{}))
 
   let LESSON = null, GOAL = '', TOPIC = ''

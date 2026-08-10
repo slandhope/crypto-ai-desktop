@@ -182,12 +182,12 @@
     <div class="status" id="status">One account. Same Asuka on every device.</div>
 
     <div class="footnote">
-      Signing in creates or restores your Asuka — her memory, bond, and progress live with your account, so she follows you from <b>desktop to phone</b>.
+      Asuka is an <b>AI companion</b> (not a human therapist or financial advisor). Signing in restores her memory across <b>desktop and phone</b>. 18+ only.
     </div>
   </div>
 
 <script>
-  const { ipcRenderer } = require('electron');
+  const api = window.electronAPI;
 
   // scatter petals
   const petalWrap = document.getElementById('petals');
@@ -212,11 +212,10 @@
     status.className = 'status working';
     status.innerHTML = '<span class="waiting-dots">Opening Google sign-in</span>';
     try {
-      const result = await ipcRenderer.invoke('auth-google-login');
+      const result = await api.googleLogin();
       if (result && result.ok) {
         status.className = 'status working';
         status.textContent = 'Welcome back' + (result.name ? ', ' + result.name : '') + ' — waking Asuka…';
-        // main process will close this window and open the app
       } else {
         throw new Error(result && result.error ? result.error : 'Sign-in was cancelled');
       }
@@ -228,8 +227,7 @@
     }
   });
 
-  // if main tells us login finished (e.g. via deep link), react
-  ipcRenderer.on('auth-success', (_e, user) => {
+  api.onAuthSuccess(() => {
     status.className = 'status working';
     status.textContent = 'Welcome back — waking Asuka…';
   });

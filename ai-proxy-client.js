@@ -16,7 +16,8 @@
 const http = require('http');
 const https = require('https');
 
-function apiBase() { return process.env.ASUKA_API_BASE || 'http://13.51.141.42:3000'; }
+const { getApiBase } = require('./api-base');
+function apiBase() { return getApiBase(); }
 
 // low-level POST to the backend with the user's auth token
 function backendPost(path, body, getIdToken) {

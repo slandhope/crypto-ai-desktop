@@ -11,8 +11,10 @@ function createLive2DWindow() {
     frame: false,
     alwaysOnTop: true,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      preload: require('path').join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
     },
     backgroundColor: '#00000000',
     hasShadow: false,

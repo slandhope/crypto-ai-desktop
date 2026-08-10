@@ -1,6 +1,8 @@
 // Merge helpers for PC ↔ phone memory sync (bundled in asuka_state.memory.__sync)
 
 const CHAT_CAP = 5000;
+/** Max chat messages included in each PUT /state — full history stays local; reduces cleartext blast radius (H3). */
+const SYNC_CHAT_WIRE_CAP = Number(process.env.ASUKA_SYNC_CHAT_CAP || 800);
 
 function mergeChatLogs(a, b) {
   const map = new Map();
@@ -137,17 +139,18 @@ function retrieveRelevantMemories(sources, query, opts = {}) {
 }
 
 function buildSyncBundle(cfg) {
+  const chat = cfg.loadChatLog?.() || [];
   return {
     v: 2,
-    chatLog: cfg.loadChatLog?.() || [],
+    chatLog: chat.slice(-Math.max(100, SYNC_CHAT_WIRE_CAP)),
     longMemory: cfg.loadLongMemory?.() || null,
-    brainMemories: cfg.loadBrainMemories?.() || [],
-    patterns: cfg.loadPatterns?.() || [],
-    journal: cfg.loadJournal?.() || [],
-    voiceJournal: cfg.loadVoiceJournal?.() || [],
-    notes: cfg.loadNotes?.() || [],
+    brainMemories: (cfg.loadBrainMemories?.() || []).slice(-200),
+    patterns: (cfg.loadPatterns?.() || []).slice(-100),
+    journal: (cfg.loadJournal?.() || []).slice(-200),
+    voiceJournal: (cfg.loadVoiceJournal?.() || []).slice(-100),
+    notes: (cfg.loadNotes?.() || []).slice(-100),
     userProfile: cfg.loadUserProfile?.() || { facts: [] },
-    episodes: cfg.loadEpisodes?.() || [],
+    episodes: (cfg.loadEpisodes?.() || []).slice(-80),
   };
 }
 
@@ -217,6 +220,6 @@ function mergeSyncBundles(local, cloud) {
 }
 
 module.exports = {
-  CHAT_CAP, mergeChatLogs, mergeLongMemory, mergeEpisodes, buildSyncBundle, latestSyncTs,
+  CHAT_CAP, SYNC_CHAT_WIRE_CAP, mergeChatLogs, mergeLongMemory, mergeEpisodes, buildSyncBundle, latestSyncTs,
   applySyncMerge, mergeSyncBundles, retrieveRelevantMemories, tokenize,
 };

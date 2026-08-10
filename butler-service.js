@@ -292,34 +292,51 @@ module.exports = function registerButler(ipcMain, getMainWindow) {
   const sendToWindow = (ch, ...args) => {
     try { const w = getMainWindow && getMainWindow(); if (w && !w.isDestroyed()) w.webContents.send(ch, ...args); } catch (_) {}
   };
+  const sec = require('./security-hardening');
   ipcMain.handle('butler-status', () => butlerStatus());
   ipcMain.handle('butler-save-gmail', (e, { user, pass }) => {
-    try {
-      const envPath = path.join(__dirname, '.env');
-      let env = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
-      const setVar = (key, val) => {
-        const re = new RegExp('^' + key + '=.*$', 'm');
-        if (re.test(env)) env = env.replace(re, key + '=' + val);
-        else env += (env.endsWith('\n') || env === '' ? '' : '\n') + key + '=' + val + '\n';
-      };
-      setVar('GMAIL_USER', user);
-      setVar('GMAIL_APP_PASSWORD', pass);
-      fs.writeFileSync(envPath, env);
-      process.env.GMAIL_USER = user; process.env.GMAIL_APP_PASSWORD = pass;
-      return { ok: true };
-    } catch (err) { return { error: err.message }; }
+    // Never write Gmail secrets into plaintext .env — OS keychain via safeStorage
+    try { return sec.saveGmailCreds(user, pass); }
+    catch (err) { return { error: err.message }; }
   });
   ipcMain.handle('imessage-recent', (e, { limit } = {}) => imessageRecent(limit));
   ipcMain.handle('imessage-unread', () => imessageUnreadCount());
-  ipcMain.handle('imessage-send', (e, { to, text }) => imessageSend(to, text));
+  ipcMain.handle('imessage-send', async (e, { to, text }) => {
+    const broker = require('./tool-broker');
+    const gate = await broker.requestTool('imessage-send', {
+      title: 'Send iMessage?',
+      detail: `To: ${String(to || '').slice(0, 60)}\n"${String(text || '').slice(0, 160)}"`,
+      danger: true,
+    });
+    if (!gate.allowed) return { cancelled: true, error: gate.error || 'cancelled' };
+    return imessageSend(to, text);
+  });
   ipcMain.handle('notifications-recent', (e, { limit } = {}) => notificationsRecent(limit));
   ipcMain.handle('notes-list', (e, { limit } = {}) => notesList(limit));
   ipcMain.handle('note-read', (e, { title }) => noteRead(title));
-  ipcMain.handle('note-create', (e, { title, body }) => noteCreate(title, body));
+  ipcMain.handle('note-create', async (e, { title, body }) => {
+    const broker = require('./tool-broker');
+    const gate = await broker.requestTool('note-create', {
+      title: 'Create Apple Note?',
+      detail: `Title: ${String(title || '').slice(0, 80)}`,
+      danger: false,
+    });
+    if (!gate.allowed) return { cancelled: true, error: gate.error || 'cancelled' };
+    return noteCreate(title, body);
+  });
   ipcMain.handle('whatsapp-start', () => whatsappStart(sendToWindow));
   ipcMain.handle('whatsapp-recent', (e, { limit } = {}) => whatsappRecent(limit));
-  ipcMain.handle('whatsapp-send', (e, { to, text }) => whatsappSend(to, text));
+  ipcMain.handle('whatsapp-send', async (e, { to, text }) => {
+    const broker = require('./tool-broker');
+    const gate = await broker.requestTool('whatsapp-send', {
+      title: 'Send WhatsApp?',
+      detail: `To: ${String(to || '').slice(0, 60)}\n"${String(text || '').slice(0, 160)}"`,
+      danger: true,
+    });
+    if (!gate.allowed) return { cancelled: true, error: gate.error || 'cancelled' };
+    return whatsappSend(to, text);
+  });
   ipcMain.handle('calendar-today', (e, { days } = {}) => calendarToday(days));
   ipcMain.handle('morning-ritual', () => morningRitual());
-  console.log('🤵 Butler service registered');
+  console.log('Butler service registered (send actions via tool-broker)');
 };

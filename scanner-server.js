@@ -30,6 +30,10 @@ const MEMORY_FILE        = path.join(DATA_DIR, 'memory.json');
 const SETTINGS_FILE      = path.join(DATA_DIR, 'settings.json');
 const DAILY_SIGNALS_FILE = path.join(DATA_DIR, 'daily-signals.json');
 const PAPER_FILE         = path.join(DATA_DIR, 'paper-trades.json');
+const SNIPES_FILE        = path.join(DATA_DIR, 'dex-snipes.json');
+const PAPER_BALANCE      = 100000;
+const PAPER_TRADES_FILE  = PAPER_FILE; // alias — trading-store owns persistence
+const tradingStore       = require('./trading-store');
 
 // ── desktop-only touchpoints → safe stubs ──
 const mainWindow = null;
@@ -2460,10 +2464,12 @@ function scheduleDailyTradeBot() {
 }
 
 // ── saveDailySignals ──
-function saveDailySignals(d) { saveJSON(DAILY_SIGNALS_FILE, d); }
+function saveDailySignals(d) { tradingStore.saveDailySignalsBlob(d); }
 
 // ── loadDailySignals ──
-function loadDailySignals() { return loadJSON(DAILY_SIGNALS_FILE, { signals: {}, lastUpdated: null, date: null }); }
+function loadDailySignals() {
+  return tradingStore.loadDailySignalsBlob();
+}
 
 // ── openPaperTrade ──
 async function openPaperTrade(signal) {
@@ -2658,17 +2664,13 @@ async function openPaperTrade(signal) {
   return trade;
 }
 
-// ── loadPaperTrades ──
+// ── loadPaperTrades / savePaperTrades — Postgres via trading-store, file fallback
 function loadPaperTrades() {
-  return loadJSON(PAPER_TRADES_FILE, {
-    balance: PAPER_BALANCE,
-    trades: [],
-    stats: { wins: 0, losses: 0, totalPnl: 0 }
-  });
+  return tradingStore.loadPaperTrades(PAPER_BALANCE);
 }
-
-// ── savePaperTrades ──
-function savePaperTrades(d) { saveJSON(PAPER_TRADES_FILE, d); }
+function savePaperTrades(d) {
+  return tradingStore.savePaperTrades(d);
+}
 
 // ── checkPaperTrades ──
 async function checkPaperTrades() {
@@ -2885,12 +2887,9 @@ function loadUserConfig() {
 const USER_CONFIG_FILE = path.join(DATA_DIR, 'user-config.json');
 
 
-// ── TIERS ──
-const TIERS = {
-  starter: { name:'Starter', price_annual:149, voice_per_day:50, scan_interval:30, scalp_enabled:false, mirofish_agents:10 },
-  pro:     { name:'Pro',     price_annual:249, voice_per_day:200, scan_interval:15, scalp_enabled:true, mirofish_agents:20 },
-  degen:   { name:'Degen',   price_annual:399, voice_per_day:999999, scan_interval:5, scalp_enabled:true, mirofish_agents:30 },
-};
+// ── TIERS (from credits-config.json via pricing.js) ──
+const pricing = require('./pricing');
+const TIERS = pricing.getVoiceTiers();
 
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2899,11 +2898,57 @@ const TIERS = {
 const DEV_PANEL_HTML = (() => { try { return fs.readFileSync(path.join(__dirname, 'dev-panel.html'), 'utf8'); } catch (e) { return '<h1>dev-panel.html missing</h1>'; } })();
 
 const api = express();
-api.use(express.json({ limit: '25mb' }));   // audio/image base64 payloads need headroom
-api.get('/health', (req, res) => res.json({ ok: true, brain: 'asuka', up: process.uptime() }));
-api.get('/signals', (req, res) => { try { res.json(loadDailySignals()); } catch (e) { res.json({ signals: [] }); } });
-api.get('/trades', (req, res) => { try { res.json(loadPaperTrades()); } catch (e) { res.json({ trades: [] }); } });
-api.get('/stats', (req, res) => {
+// Default 2mb JSON; AI media routes raise the limit per-route
+api.use(express.json({
+  limit: process.env.JSON_BODY_LIMIT || '12mb',
+  verify: (req, _res, buf) => { req.rawBodyLen = buf.length; },
+}));
+api.use((req, res, next) => {
+  if (/^\/ai\/(voice|transcribe|image)/.test(req.path)) {
+    const len = Number(req.headers['content-length'] || req.rawBodyLen || 0);
+    const max = Number(process.env.AI_BODY_MAX_BYTES || 12 * 1024 * 1024);
+    if (len > max) return res.status(413).json({ error: 'payload_too_large', max });
+    const ct = String(req.headers['content-type'] || '');
+    if (ct && !ct.includes('application/json')) {
+      return res.status(415).json({ error: 'unsupported_media_type' });
+    }
+  }
+  next();
+});
+
+// TLS posture: trust proxy when behind ALB/nginx; optionally refuse cleartext
+api.set('trust proxy', 1);
+api.use((req, res, next) => {
+  const requireTls = process.env.REQUIRE_TLS === '1' || process.env.REQUIRE_TLS === 'true';
+  if (!requireTls) return next();
+  const proto = (req.headers['x-forwarded-proto'] || req.protocol || '').toString().split(',')[0].trim();
+  if (proto === 'https' || req.secure) return next();
+  // allow local health checks without TLS
+  if (req.path === '/health' && (req.ip === '127.0.0.1' || req.ip === '::1' || req.hostname === 'localhost')) return next();
+  return res.status(403).json({ error: 'tls_required', message: 'HTTPS required' });
+});
+api.get('/health', async (req, res) => {
+  let dbStatus = 'unknown';
+  try {
+    const { pool: dbPool } = require('./db');
+    await dbPool.query('SELECT 1');
+    dbStatus = 'ok';
+  } catch (e) {
+    dbStatus = 'down';
+  }
+  const ready = dbStatus === 'ok';
+  res.status(ready ? 200 : 503).json({
+    ok: ready,
+    brain: 'asuka',
+    up: process.uptime(),
+    db: dbStatus,
+    version: (() => { try { return require('./package.json').version; } catch (_) { return null; } })(),
+    ts: Date.now(),
+  });
+});
+api.get('/signals', authRequired, (req, res) => { try { res.json(loadDailySignals()); } catch (e) { res.json({ signals: [] }); } });
+api.get('/trades', authRequired, (req, res) => { try { res.json(loadPaperTrades()); } catch (e) { res.json({ trades: [] }); } });
+api.get('/stats', authRequired, (req, res) => {
   try { const pd = loadPaperTrades(); const closed = (pd.trades||[]).filter(t => t.closed || ['closed','win','loss'].includes(t.status));
     res.json({ balance: pd.balance ?? 100000, totalTrades: (pd.trades||[]).length, closed: closed.length,
       wins: closed.filter(t => (t.pnl||0) > 0).length }); } catch (e) { res.json({}); }
@@ -2977,7 +3022,7 @@ api.get('/credits/balance', authOptional, async (req, res) => {
   try { res.json(await credits.balance(userIdOf(req))); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 api.get('/credits/config', (req, res) => {
-  try { const c = credits.getConfig(); res.json({ tiers: c.tiers, actionCosts: c.actionCosts, topupPacks: c.topupPacks }); }
+  try { res.json(pricing.publicConfig()); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -2991,26 +3036,31 @@ api.post('/credits/set-tier', requireAdmin, async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 🤖 the proxy: app → here → Claude. Charges credits per call.
-api.post('/ai/chat', authRequired, async (req, res) => {
+// 🤖 the proxy: app → here → Claude. Spend credits atomically; clamp model/tokens.
+// 🤖 the proxy: app → here → Claude. Spend credits atomically; clamp model/tokens.
+async function handleAiChat(req, res) {
   const uid = userIdOf(req);
-  const { messages, system, model, action, units, max_tokens } = req.body || {};
+  const { messages, system, action, units } = req.body || {};
   const act = action || 'chat';
-  const pre = await credits.check(uid, act, units || 1);
-  if (!pre.ok) return res.status(402).json({ error: pre.reason, message: pre.message, balance: await credits.balance(uid) });
+  const { model, max_tokens } = credits.clampAiRequest(req.body || {});
+  const spent = await credits.spend(uid, act, units || 1);
+  if (!spent.ok) return res.status(402).json({ error: spent.reason, message: spent.message, balance: await credits.balance(uid) });
   try {
     const resp = await anthropic.messages.create({
-      model: model || 'claude-haiku-4-5-20251001',
-      max_tokens: max_tokens || 1024,
+      model,
+      max_tokens,
       system: system || undefined,
       messages: messages || [{ role: 'user', content: 'Hello' }],
     });
-    await credits.charge(uid, act, units || 1);   // only charge on success
-    res.json({ content: resp.content, balance: await credits.balance(uid) });
+    res.json({ content: resp.content, balance: await credits.balance(uid), model, max_tokens });
   } catch (e) {
-    res.status(500).json({ error: 'ai_failed', detail: e.message });   // no charge on failure
+    await credits.refund(uid, spent.charged).catch(() => {});
+    res.status(500).json({ error: 'ai_failed', detail: e.message });
   }
-});
+}
+api.post('/ai/chat', authRequired, handleAiChat);
+// Mobile / legacy clients that still POST /api/chat
+api.post('/api/chat', authRequired, handleAiChat);
 
 // ── 🎙️ GEMINI LIVE — mint a short-lived ephemeral token (metered) ──
 // The app asks for a token, we mint one with OUR key, LOCKED to a model
@@ -3019,12 +3069,14 @@ api.post('/ai/chat', authRequired, async (req, res) => {
 // our key never leaves the server).
 api.post('/ai/gemini-token', authRequired, async (req, res) => {
   const uid = userIdOf(req);
-  // starting a live session costs like a video action (editable in config)
-  const pre = await credits.check(uid, 'video', 1);
-  if (!pre.ok) return res.status(402).json({ error: pre.reason, message: pre.message, balance: await credits.balance(uid) });
+  const spent = await credits.spend(uid, 'video', 1);
+  if (!spent.ok) return res.status(402).json({ error: spent.reason, message: spent.message, balance: await credits.balance(uid) });
   try {
     const key = await getSecret('GEMINI_API_KEY').catch(() => process.env.GEMINI_API_KEY);
-    if (!key) return res.status(500).json({ error: 'gemini_unavailable' });
+    if (!key) {
+      await credits.refund(uid, spent.charged).catch(() => {});
+      return res.status(500).json({ error: 'gemini_unavailable' });
+    }
     const { GoogleGenAI } = require('@google/genai');
     const client = new GoogleGenAI({ apiKey: key, httpOptions: { apiVersion: 'v1alpha' } });
     const model = (req.body && req.body.model) || 'gemini-2.0-flash-live-001';
@@ -3042,9 +3094,9 @@ api.post('/ai/gemini-token', authRequired, async (req, res) => {
         httpOptions: { apiVersion: 'v1alpha' },
       },
     });
-    await credits.charge(uid, 'video', 1);
     res.json({ token: token.name, expiresAt: token.expireTime, balance: await credits.balance(uid) });
   } catch (e) {
+    await credits.refund(uid, spent.charged).catch(() => {});
     res.status(500).json({ error: 'gemini_token_failed', detail: e.message });
   }
 });
@@ -3123,8 +3175,8 @@ api.post('/ai/voice', authRequired, async (req, res) => {
 
   // voice billed per ~word-block; ~1 unit per 200 chars, min 1
   const units = Math.max(1, Math.ceil(text.length / 200));
-  const pre = await credits.check(uid, 'voice_minute', units);
-  if (!pre.ok) return res.status(402).json({ error: pre.reason, message: pre.message, balance: await credits.balance(uid) });
+  const spent = await credits.spend(uid, 'voice_minute', units);
+  if (!spent.ok) return res.status(402).json({ error: spent.reason, message: spent.message, balance: await credits.balance(uid) });
 
   try {
     const apiKey = await getSecret('ELEVENLABS_API_KEY').catch(() => process.env.ELEVENLABS_API_KEY);
@@ -3133,8 +3185,10 @@ api.post('/ai/voice', authRequired, async (req, res) => {
       || (character && process.env['VOICE_ID_' + String(character).toUpperCase()])
       || process.env.VOICE_ID
       || 'TmK7x2BFDD7TOVlR69J2';
-    if (!apiKey) return res.status(500).json({ error: 'voice_unavailable' });
-    console.log('🔊 voice req → keyTail:', apiKey ? apiKey.slice(-4) : 'NONE', '| voiceId:', voiceId, '| personality:', personality, '| character:', character);
+    if (!apiKey) {
+      await credits.refund(uid, spent.charged).catch(() => {});
+      return res.status(500).json({ error: 'voice_unavailable' });
+    }
 
     const isMommy = personality === 'mommy';
     const payload = {
@@ -3156,17 +3210,23 @@ api.post('/ai/voice', authRequired, async (req, res) => {
         r2.on('data', c => chunks.push(c));
         r2.on('end', () => {
           if (r2.statusCode === 200) resolve(Buffer.concat(chunks).toString('base64'));
-          else { const errBody = Buffer.concat(chunks).toString('utf8').slice(0, 200); console.error('🔊 EL error', r2.statusCode, '→', errBody); reject(new Error('el status ' + r2.statusCode)); }
+          else {
+            const errBody = Buffer.concat(chunks).toString('utf8').slice(0, 200);
+            console.error('EL error', r2.statusCode, '→', errBody);
+            if (r2.statusCode === 401) {
+              reject(new Error('ElevenLabs 401 — rotate ELEVENLABS_API_KEY in AWS Secrets Manager / .env'));
+            } else reject(new Error('el status ' + r2.statusCode));
+          }
         });
       });
       r.on('error', reject); r.on('timeout', () => { r.destroy(); reject(new Error('voice timeout')); });
       r.write(body); r.end();
     });
 
-    await credits.charge(uid, 'voice_minute', units);   // charge only on success
     res.json({ audio, balance: await credits.balance(uid) });
   } catch (e) {
-    res.status(500).json({ error: 'voice_failed', detail: e.message });   // no charge on failure
+    await credits.refund(uid, spent.charged).catch(() => {});
+    res.status(500).json({ error: 'voice_failed', detail: e.message });
   }
 });
 
@@ -3179,7 +3239,19 @@ api.post('/ai/voice', authRequired, async (req, res) => {
 // PATCH /state       → merge a few fields (bond +1, coins -50, etc.)
 // ═══════════════════════════════════════════════════════════════════
 const db = require('./db');
-db.initDB();   // ensure tables exist on boot
+db.initDB().then(async () => {
+  try {
+    await tradingStore.initTradingStore({
+      pool: db.pool,
+      paperFile: PAPER_FILE,
+      snipesFile: SNIPES_FILE,
+      signalsFile: DAILY_SIGNALS_FILE,
+      paperBalance: PAPER_BALANCE,
+    });
+  } catch (e) {
+    console.warn('trading-store init:', e.message);
+  }
+}).catch((e) => console.error('DB init:', e.message));
 
 api.get('/state', authRequired, async (req, res) => {
   try {
@@ -3225,13 +3297,63 @@ try {
 } catch (e) { console.error('clarity-routes register failed:', e.message); }
 
 const PORT = process.env.PORT || 3000;
-api.listen(PORT, () => console.log(`🌐 API on :${PORT}`));
+const SSL_KEY = process.env.SSL_KEY_PATH || process.env.SSL_KEY;
+const SSL_CERT = process.env.SSL_CERT_PATH || process.env.SSL_CERT;
+if (SSL_KEY && SSL_CERT) {
+  try {
+    const key = fs.readFileSync(SSL_KEY);
+    const cert = fs.readFileSync(SSL_CERT);
+    https.createServer({ key, cert }, api).listen(PORT, () => {
+      console.log(`API on :${PORT} (HTTPS)`);
+    });
+  } catch (e) {
+    console.error('HTTPS listen failed:', e.message, '— falling back to HTTP');
+    api.listen(PORT, () => console.log(`API on :${PORT} (HTTP fallback)`));
+  }
+} else {
+  api.listen(PORT, () => {
+    console.log(`API on :${PORT}`);
+    if (process.env.REQUIRE_TLS === '1') {
+      console.warn('REQUIRE_TLS=1 but no SSL_KEY_PATH/SSL_CERT_PATH — put TLS at the load balancer and set X-Forwarded-Proto');
+    }
+  });
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // ⏰ SCHEDULERS — the 3 tiers
 // ═══════════════════════════════════════════════════════════════════
 console.log('🧠 Asuka scanner brain starting…');
-startIndependentScanner();          // Main tier (30-min) + scalp cadence inside
-scheduleDailyTradeBot();            // Daily RSI at 00:05 UTC
-setInterval(() => { checkPaperTrades().catch(()=>{}); }, 60 * 1000);  // TP/SL monitor
-console.log('✅ All tiers scheduled.');
+if (process.env.API_ONLY === '1' || process.env.API_ONLY === 'true') {
+  console.log('API_ONLY=1 — scanner/trade schedulers disabled (run a separate worker for those)');
+} else {
+  startIndependentScanner();          // Main tier (30-min) + scalp cadence inside
+  scheduleDailyTradeBot();            // Daily RSI at 00:05 UTC
+  setInterval(() => { checkPaperTrades().catch(()=>{}); }, 60 * 1000);  // TP/SL monitor
+  console.log('✅ All tiers scheduled.');
+}
+
+// Graceful shutdown + crash handlers
+let _shuttingDown = false;
+async function gracefulShutdown(signal) {
+  if (_shuttingDown) return;
+  _shuttingDown = true;
+  console.log(`${signal} — draining…`);
+  try {
+    const { pool } = require('./db');
+    await tradingStore.shutdown().catch(() => {});
+    await Promise.race([
+      pool.end(),
+      new Promise((r) => setTimeout(r, 4000)),
+    ]);
+  } catch (_) {}
+  process.exit(0);
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('uncaughtException', (err) => {
+  console.error('uncaughtException:', err?.stack || err);
+  setTimeout(() => process.exit(1), 200);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('unhandledRejection:', err?.stack || err);
+});
