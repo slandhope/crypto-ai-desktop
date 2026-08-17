@@ -17,6 +17,10 @@
   try {
     if (!window.PIXI?.live2d) throw new Error('Live2D plugin missing')
     const { Live2DModel } = PIXI.live2d
+    const params = new URLSearchParams(location.search)
+    const modelPath = params.get('model') || './assets/model/huohuo.model3.json'
+    const scaleDiv = Number(params.get('scaleDiv') || 8500) || 8500
+    const motion = params.has('motion') ? params.get('motion') : 'idle'
     const canvas = document.getElementById('c')
     const w = window.innerWidth || 200
     const h = window.innerHeight || 420
@@ -28,15 +32,20 @@
     })
     if (app.ticker) app.ticker.maxFPS = 30
     const model = await Promise.race([
-      Live2DModel.from('./assets/model/huohuo.model3.json'),
+      Live2DModel.from(modelPath),
       new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000))
     ])
     app.stage.addChild(model)
     model.x = w / 2
     model.y = h
-    model.scale.set(h / 8500)
+    model.scale.set(h / scaleDiv)
     model.anchor.set(0.5, 1)
-    model.motion('idle')
+    const offsetY = Number(params.get('offsetY') || 0) || 0
+    model.y = h + offsetY * 0.35
+    try {
+      if (motion) model.motion(motion)
+      else model.motion('', 0)
+    } catch (e) {}
     document.addEventListener('mousemove', e => {
       const dx = (e.clientX / window.innerWidth - 0.5) * 2
       const dy = (e.clientY / window.innerHeight - 0.5) * 2
@@ -54,8 +63,8 @@
       if (nw < 10 || nh < 10) return
       app.renderer.resize(nw, nh)
       model.x = nw / 2
-      model.y = nh
-      model.scale.set(nh / 8500)
+      model.y = nh + offsetY * 0.35
+      model.scale.set(nh / scaleDiv)
     })
   } catch (e) {
     console.error('dashboard-waifu:', e)

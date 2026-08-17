@@ -2,6 +2,14 @@
 <html>
 <head>
 <link rel="stylesheet" href="asuka-design.css">
+  <script>
+    (function () {
+      try {
+        var m = localStorage.getItem('asuka-appearance') === 'dark' ? 'dark' : 'light'
+        document.documentElement.setAttribute('data-theme', m)
+      } catch (e) { document.documentElement.setAttribute('data-theme', 'light') }
+    })()
+  </script>
   <meta charset="UTF-8">
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -11,81 +19,93 @@
     #scene-vid-blur { z-index:1 !important; } #scene-vid { z-index:2 !important; } #scene-bg { z-index:1 !important; } #scene-grad { z-index:3 !important; } #scene-overlay { z-index:4 !important; }
     #scene-vid, #scene-bg { display:block !important; }
 
-    .btn {
-      position:fixed; width:36px; height:36px; border-radius:50%;
-      display:flex; align-items:center; justify-content:center;
-      cursor:pointer; font-size:15px; z-index:100;
-      transition:all 0.2s; backdrop-filter:blur(8px);
+    #chrome-dock {
+      position:fixed; left:12px; bottom:228px; z-index:100;
+      display:flex; flex-direction:column; gap:3px; padding:6px;
+      border-radius:999px;
+      background:rgba(255,255,255,0.42);
+      border:0.5px solid rgba(255,255,255,0.55);
+      backdrop-filter:blur(40px) saturate(1.85);
+      -webkit-backdrop-filter:blur(40px) saturate(1.85);
+      box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.72), 0 12px 40px rgba(0,0,0,0.10);
+      isolation:isolate;
     }
-    .btn:hover { transform:scale(1.1); background:rgba(10,132,255,0.25); border-color:rgba(10,132,255,0.55); }
+    #chrome-dock::before {
+      content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+      background:radial-gradient(120% 80% at 12% 0%, rgba(255,255,255,0.38), transparent 42%);
+    }
+    .btn {
+      position:relative; width:40px; height:40px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer; font-size:15px; z-index:1;
+      transition:transform 0.18s cubic-bezier(0.22,1,0.36,1), background 0.18s;
+      background:transparent; border:none; color:#1d1d1f;
+    }
+    .btn:hover { transform:scale(1.06); background:rgba(255,255,255,0.55); }
+    .btn:active { transform:scale(0.96); }
 
-    #history-btn   { bottom:580px; left:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); }
-    #chat-btn      { bottom:530px; left:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); }
-    #her-mute-btn  { bottom:480px; left:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); }
-    #mic-mute-btn  { bottom:430px; left:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); }
-    #webcam-btn    { bottom:380px; left:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); }
-    #dashboard-btn { bottom:330px; left:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); }
-    #study-btn     { bottom:280px; left:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); }
-    #care-btn      { bottom:230px; left:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); }
 
-    #her-mute-btn.muted { background:rgba(248,113,113,0.2); border-color:rgba(248,113,113,0.4); }
-    #mic-mute-btn.muted { background:rgba(248,113,113,0.2); border-color:rgba(248,113,113,0.4); }
-    #webcam-btn.active  { background:rgba(52,211,153,0.2);  border-color:rgba(52,211,153,0.4); }
+    #her-mute-btn.muted { background:rgba(248,113,113,0.25); border-color:rgba(248,113,113,0.45); }
+    #mic-mute-btn.muted { background:rgba(248,113,113,0.25); border-color:rgba(248,113,113,0.45); }
+    #webcam-btn.active  { background:rgba(52,211,153,0.28);  border-color:rgba(52,211,153,0.5); }
 
     #chat-panel {
-      position:fixed; bottom:530px; left:54px; width:260px;
-      background:rgba(4,7,26,0.96); border:1px solid rgba(0,212,255,0.2);
-      padding:10px; display:none; flex-direction:column; gap:8px;
-      z-index:100; border-radius:10px; backdrop-filter:blur(20px);
-      box-shadow:0 8px 32px rgba(0,0,0,0.4);
+      position:fixed; bottom:530px; left:54px; width:280px;
+      background:rgba(255,255,255,0.48); border:0.5px solid rgba(255,255,255,0.55);
+      padding:12px; display:none; flex-direction:column; gap:10px;
+      z-index:100; border-radius:22px; backdrop-filter:blur(40px) saturate(1.85);
+      box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.65), 0 16px 48px rgba(0,0,0,0.10);
     }
     #chat-panel.open { display:flex; }
-    #input-row { display:flex; gap:6px; }
+    #input-row { display:flex; gap:8px; align-items:center; }
     #user-input {
-      flex:1; background:rgba(0,212,255,0.06);
-      border:1px solid rgba(0,212,255,0.2); border-radius:6px;
-      color:#e0f4ff; font-family:-apple-system,sans-serif; font-size:12px;
-      padding:7px 10px; outline:none; transition:border 0.2s;
+      flex:1; height:42px; background:rgba(255,255,255,0.55);
+      border:0.5px solid rgba(255,255,255,0.55); border-radius:999px;
+      color:#1c2438; font-family:var(--body); font-size:13px;
+      padding:0 14px; outline:none; transition:border 0.2s;
     }
-    #user-input:focus { border-color:rgba(0,212,255,0.5); }
-    #user-input::placeholder { color:rgba(255,255,255,0.2); }
+    #user-input:focus { border-color:rgba(59,130,246,0.45); }
+    #user-input::placeholder { color:#8b93a7; }
     #send-btn {
-      padding:7px 12px; background:rgba(0,212,255,0.15);
-      border:1px solid rgba(0,212,255,0.3); border-radius:6px;
-      color:#00d4ff; font-size:11px; font-weight:600; cursor:pointer;
+      width:42px; height:42px; border-radius:50%;
+      background:linear-gradient(135deg,#60a5fa,#3b82f6);
+      border:none; color:#fff; font-size:12px; font-weight:700; cursor:pointer;
+      box-shadow:0 6px 16px rgba(59,130,246,0.28);
     }
-    #send-btn:hover { background:rgba(0,212,255,0.3); }
+    #send-btn:hover { filter:brightness(1.05); }
 
     /* History panel */
     #history-panel {
-      position:fixed; bottom:580px; left:54px; width:280px; max-height:340px;
-      background:rgba(4,7,26,0.97); border:1px solid rgba(255,200,0,0.2);
-      display:none; flex-direction:column; z-index:100; border-radius:10px;
-      box-shadow:0 8px 32px rgba(0,0,0,0.4); backdrop-filter:blur(20px);
+      position:fixed; bottom:492px; left:68px; width:280px; max-height:340px;
+      background:rgba(255,255,255,0.48); border:0.5px solid rgba(255,255,255,0.55);
+      display:none; flex-direction:column; z-index:100; border-radius:22px;
+      box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.65), 0 16px 48px rgba(0,0,0,0.10);
+      backdrop-filter:blur(40px) saturate(1.85);
       overflow:hidden;
     }
     #history-panel.open { display:flex; }
     #history-header {
-      padding:8px 12px; font-size:10px; font-weight:600; color:rgba(255,200,0,0.8);
-      letter-spacing:1px; border-bottom:1px solid rgba(255,200,0,0.1);
+      padding:10px 14px; font-size:12px; font-weight:600; color:#1d1d1f;
+      letter-spacing:-0.02em; border-bottom:0.5px solid rgba(30,40,70,0.08);
       display:flex; justify-content:space-between; align-items:center; flex-shrink:0;
     }
-    #history-clear { font-size:9px; color:rgba(248,113,113,0.7); cursor:pointer; padding:2px 6px; border:1px solid rgba(248,113,113,0.2); border-radius:4px; }
+    #history-clear { font-size:11px; color:#e11d48; cursor:pointer; padding:3px 8px; border:none; border-radius:999px; background:transparent; }
     #history-list { overflow-y:auto; flex:1; padding:8px; display:flex; flex-direction:column; gap:6px; }
     #history-list::-webkit-scrollbar { width:2px; }
-    #history-list::-webkit-scrollbar-thumb { background:rgba(255,200,0,0.2); }
-    .history-msg { padding:6px 10px; border-radius:8px; font-size:10px; line-height:1.4; max-width:100%; }
-    .history-msg.user { background:rgba(0,212,255,0.1); border:1px solid rgba(0,212,255,0.15); color:#e0f4ff; align-self:flex-end; text-align:right; }
-    .history-msg.asuka { background:rgba(255,200,0,0.08); border:1px solid rgba(255,200,0,0.12); color:rgba(255,230,150,0.9); align-self:flex-start; }
+    #history-list::-webkit-scrollbar-thumb { background:rgba(30,40,70,0.2); }
+    .history-msg { padding:8px 12px; border-radius:16px; font-size:11px; line-height:1.4; max-width:100%; }
+    .history-msg.user { background:rgba(59,130,246,0.12); border:1px solid rgba(59,130,246,0.18); color:#1c2438; align-self:flex-end; text-align:right; }
+    .history-msg.asuka { background:rgba(139,124,255,0.12); border:1px solid rgba(139,124,255,0.18); color:#1c2438; align-self:flex-start; }
     .msg-label { font-size:8px; opacity:0.5; margin-bottom:2px; letter-spacing:0.5px; }
 
     /* Status bar */
     #status {
       position:fixed; bottom:10px; left:10px;
-      color:#00d4ff; font-family:-apple-system,monospace; font-size:10px;
-      background:rgba(0,0,0,0.7); padding:4px 10px; border-radius:20px;
+      color:#141a2a; font-family:var(--mono),monospace; font-size:10px;
+      background:rgba(255,255,255,0.42); padding:4px 10px; border-radius:999px;
       pointer-events:none; z-index:1000;
-      border:1px solid rgba(0,212,255,0.15); backdrop-filter:blur(10px);
+      border:0.5px solid rgba(255,255,255,0.55); backdrop-filter:blur(40px) saturate(1.85);
+      box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.65);
       max-width:300px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     }
 
@@ -98,25 +118,57 @@
 
     #drop-overlay {
       position:fixed; inset:0;
-      background:rgba(0,212,255,0.06); border:2px dashed rgba(0,212,255,0.5);
+      background:rgba(0,113,227,0.06); border:1.5px dashed rgba(0,113,227,0.35);
       display:none; align-items:center; justify-content:center;
-      color:#00d4ff; font-family:-apple-system,sans-serif; font-size:13px;
+      color:#0071e3; font-family:-apple-system,sans-serif; font-size:13px;
       z-index:200; pointer-events:none; border-radius:12px;
     }
     #drop-overlay.active { display:flex; }
 
     #confirm-bar {
-      position:fixed; bottom:300px; left:54px; width:240px;
-      background:rgba(4,7,26,0.96); border:1px solid rgba(0,212,255,0.2);
+      position:fixed; bottom:300px; left:68px; width:240px;
+      background:rgba(255,255,255,0.48); border:0.5px solid rgba(255,255,255,0.55);
       padding:12px; display:none; flex-direction:column; gap:10px;
-      z-index:100; border-radius:10px; backdrop-filter:blur(20px);
+      z-index:100; border-radius:18px; backdrop-filter:blur(40px) saturate(1.85);
+      box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.65), 0 16px 48px rgba(0,0,0,0.10); color:#1d1d1f;
     }
     #confirm-bar.open { display:flex; }
-    #confirm-text { color:#e0f4ff; font-size:11px; }
+    #confirm-text { color:#141a2a; font-size:11px; }
     #confirm-btns { display:flex; gap:8px; }
-    .c-yes { flex:1; padding:6px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:600; text-align:center; background:rgba(52,211,153,0.15); border:1px solid rgba(52,211,153,0.3); color:#34d399; }
-    .c-no  { flex:1; padding:6px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:600; text-align:center; background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.2); color:#f87171; }
+    .c-yes { flex:1; padding:8px; border-radius:999px; cursor:pointer; font-size:12px; font-weight:650; text-align:center; background:rgba(29,158,87,0.14); border:0.5px solid rgba(29,158,87,0.28); color:#1d9e57; }
+    .c-no  { flex:1; padding:8px; border-radius:999px; cursor:pointer; font-size:12px; font-weight:650; text-align:center; background:rgba(225,29,72,0.10); border:0.5px solid rgba(225,29,72,0.22); color:#e11d48; }
 
+
+    html[data-theme="dark"] #chrome-dock {
+      background:rgba(40,40,44,0.48); border-color:rgba(255,255,255,0.14);
+      box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.16), 0 12px 40px rgba(0,0,0,0.40);
+    }
+    html[data-theme="dark"] .btn { color:#f5f5f7; }
+    html[data-theme="dark"] .btn:hover { background:rgba(55,55,60,0.62); }
+    html[data-theme="dark"] #chat-panel,
+    html[data-theme="dark"] #history-panel {
+      background:rgba(40,40,44,0.52); border-color:rgba(255,255,255,0.14);
+      box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.14), 0 16px 48px rgba(0,0,0,0.4);
+    }
+    html[data-theme="dark"] #user-input { background:rgba(55,55,60,0.7); color:#f5f5f7; border-color:rgba(255,255,255,0.14); }
+    html[data-theme="dark"] #status { background:rgba(40,40,44,0.55); color:#f5f5f7; border-color:rgba(255,255,255,0.12); }
+    html[data-theme="dark"] #trade-card {
+      background:rgba(40,40,44,0.72) !important; color:#f5f5f7 !important;
+      border-color:rgba(255,255,255,0.14) !important;
+    }
+    html[data-theme="dark"] #tc-coin { color:#f5f5f7 !important; }
+    html[data-theme="dark"] #tc-rows { color:#a1a1a6 !important; }
+    html[data-theme="dark"] #history-header { color:#f5f5f7; }
+    .sd-tab {
+      color:#6e6e73; border-bottom:2px solid transparent;
+    }
+    .sd-tab.active { color:#1d1d1f; border-bottom-color:#0071e3; }
+    html[data-theme="dark"] .sd-tab { color:#a1a1a6; }
+    html[data-theme="dark"] .sd-tab.active { color:#f5f5f7; border-bottom-color:#0a84ff; }
+    html[data-theme="dark"] #confirm-bar { background:rgba(40,40,44,0.62); color:#f5f5f7; border-color:rgba(255,255,255,0.14); }
+    html[data-theme="dark"] #confirm-text { color:#f5f5f7; }
+    html[data-theme="dark"] .history-msg.user,
+    html[data-theme="dark"] .history-msg.asuka { color:#f5f5f7; }
     video { display:none; }
   </style>
 </head>
@@ -126,56 +178,59 @@
   <div id="status">Connecting...</div>
   <div id="gemini-indicator">● GEMINI LIVE</div>
 
-  <div id="history-btn"  class="btn" title="Chat history">📜</div>
-  <div id="her-mute-btn" class="btn" title="Mute her voice">🔊</div>
-  <div id="mic-mute-btn" class="btn" title="Mute your mic">🎤</div>
-  <div id="webcam-btn"   class="btn" title="Toggle camera">📷</div>
-  <div id="dashboard-btn" class="btn" title="Dashboard">📊</div>
-  <div id="study-btn" class="btn" title="Study with Asuka">📚</div>
-  <div id="care-btn" class="btn" title="Care & Shop">🎀</div>
+  <div id="chrome-dock">
+    <div id="history-btn"  class="btn" title="Chat history">📜</div>
+    <div id="her-mute-btn" class="btn" title="Mute her voice">🔊</div>
+    <div id="mic-mute-btn" class="btn" title="Mute your mic">🎤</div>
+    <div id="webcam-btn"   class="btn" title="Toggle camera">📷</div>
+    <div id="dashboard-btn" class="btn" title="Dashboard">📊</div>
+    <div id="study-btn" class="btn" title="Study with Asuka">📚</div>
+    <div id="care-btn" class="btn" title="Care & Shop">🎀</div>
+  </div>
+
 
   <div id="levelup-pop" style="display:none;position:fixed;inset:0;z-index:10001;background:rgba(10,12,22,0.85);backdrop-filter:blur(8px);align-items:center;justify-content:center;flex-direction:column;font-family:system-ui;pointer-events:none;">
     <div style="text-align:center;animation:lupop .5s ease;">
       <div id="lu-emoji" style="font-size:72px;margin-bottom:10px;">💖</div>
       <div style="font-size:14px;color:#f0a8d0;font-weight:700;letter-spacing:2px;">RELATIONSHIP LEVEL UP</div>
-      <div id="lu-tier" style="font-size:32px;font-weight:600;font-family:'Fraunces',serif;color:#fff;margin:6px 0;">Friend</div>
+      <div id="lu-tier" style="font-size:32px;font-weight:600;font-family:var(--display);color:#fff;margin:6px 0;">Friend</div>
       <div id="lu-unlock" style="font-size:14px;color:#a78bfa;"></div>
     </div>
   </div>
   <style>@keyframes lupop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}</style>
 
-  <div id="care-panel" style="display:none;position:fixed;left:64px;bottom:20px;width:280px;z-index:9998;background:linear-gradient(180deg,rgba(22,27,46,0.98),rgba(15,19,32,0.98));border:1px solid rgba(167,139,250,0.3);border-radius:20px;padding:16px;box-shadow:0 12px 48px rgba(0,0,0,0.6);font-family:system-ui;color:#e8edf4;">
+  <div id="care-panel" style="display:none;position:fixed;left:64px;bottom:20px;width:280px;z-index:9998;background:rgba(255,255,255,0.48);border:0.5px solid rgba(255,255,255,0.55);border-radius:24px;padding:16px;box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.65),0 16px 48px rgba(0,0,0,0.10);backdrop-filter:blur(40px) saturate(1.85);font-family:var(--body);color:#141a2a;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <div style="font-size:15px;font-weight:600;font-family:'Fraunces',serif;">🎀 Care</div>
+      <div style="font-size:15px;font-weight:600;font-family:var(--display);">🎀 Care</div>
       <div style="font-size:12px;font-family:'JetBrains Mono',monospace;"><span id="care-coins">0</span> 🪙 · 🔥<span id="care-streak">0</span></div>
     </div>
-    <div id="rel-box" style="background:rgba(240,168,208,0.1);border:1px solid rgba(240,168,208,0.25);border-radius:11px;padding:9px;margin-bottom:10px;">
+    <div id="rel-box" style="background:rgba(240,168,208,0.12);border:1px solid rgba(240,168,208,0.28);border-radius:14px;padding:9px;margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:5px;">
-        <span id="rel-tier">🌱 Acquaintance</span><span id="rel-next" style="color:#94a3b8;font-weight:500;"></span>
+        <span id="rel-tier">🌱 Acquaintance</span><span id="rel-next" style="color:#6b7289;font-weight:500;"></span>
       </div>
-      <div style="height:8px;background:#1e293b;border-radius:5px;overflow:hidden;"><div id="rel-fill" style="height:100%;width:0%;background:linear-gradient(90deg,#f0a8d0,#a78bfa);border-radius:5px;transition:.4s;"></div></div>
+      <div style="height:8px;background:rgba(28,36,56,0.08);border-radius:5px;overflow:hidden;"><div id="rel-fill" style="height:100%;width:0%;background:linear-gradient(90deg,#f0a8d0,#a78bfa);border-radius:5px;transition:.4s;"></div></div>
     </div>
     <div id="care-stats" style="font-size:11px;display:flex;flex-direction:column;gap:6px;margin-bottom:12px;"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:8px;">
-      <button class="care-act" data-a="feed" style="padding:10px;border-radius:11px;border:1px solid #334155;background:#1e293b;color:#fff;cursor:pointer;font-size:13px;">🍰 Feed</button>
-      <button class="care-act" data-a="pat" style="padding:10px;border-radius:11px;border:1px solid #334155;background:#1e293b;color:#fff;cursor:pointer;font-size:13px;">🤚 Pat</button>
-      <button class="care-act" data-a="clean" style="padding:10px;border-radius:11px;border:1px solid #334155;background:#1e293b;color:#fff;cursor:pointer;font-size:13px;">🧼 Clean</button>
-      <button class="care-act" data-a="play" style="padding:10px;border-radius:11px;border:1px solid #334155;background:#1e293b;color:#fff;cursor:pointer;font-size:13px;">🎀 Play</button>
+      <button class="care-act" data-a="feed" style="padding:10px;border-radius:999px;border:1px solid rgba(28,36,56,0.08);background:rgba(255,255,255,0.88);color:#141a2a;cursor:pointer;font-size:13px;">🍰 Feed</button>
+      <button class="care-act" data-a="pat" style="padding:10px;border-radius:999px;border:1px solid rgba(28,36,56,0.08);background:rgba(255,255,255,0.88);color:#141a2a;cursor:pointer;font-size:13px;">🤚 Pat</button>
+      <button class="care-act" data-a="clean" style="padding:10px;border-radius:999px;border:1px solid rgba(28,36,56,0.08);background:rgba(255,255,255,0.88);color:#141a2a;cursor:pointer;font-size:13px;">🧼 Clean</button>
+      <button class="care-act" data-a="play" style="padding:10px;border-radius:999px;border:1px solid rgba(28,36,56,0.08);background:rgba(255,255,255,0.88);color:#141a2a;cursor:pointer;font-size:13px;">🎀 Play</button>
     </div>
-    <button id="shop-open-btn" style="width:100%;padding:11px;border-radius:11px;border:none;background:linear-gradient(135deg,#8b7cff,#c08bf0,#f3a8d0);color:#fff;cursor:pointer;font-weight:800;font-size:13px;">🛍️ Dress-Up Shop</button>
-    <div id="care-close" style="text-align:center;margin-top:8px;font-size:11px;color:#64748b;cursor:pointer;">close</div>
+    <button id="shop-open-btn" style="width:100%;padding:11px;border-radius:999px;border:none;background:linear-gradient(135deg,#8b7cff,#c08bf0,#f3a8d0);color:#fff;cursor:pointer;font-weight:800;font-size:13px;">🛍️ Dress-Up Shop</button>
+    <div id="care-close" style="text-align:center;margin-top:8px;font-size:11px;color:#6b7289;cursor:pointer;">close</div>
   </div>
 
-  <div id="quiz-box" style="display:none;position:fixed;right:12px;bottom:12px;width:min(42vw,420px);z-index:10000;background:rgba(13,20,32,0.97);border:2px solid #a78bfa;border-radius:16px;padding:14px;box-shadow:0 12px 48px rgba(0,0,0,0.6);font-family:system-ui;">
-    <div id="quiz-q" style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:10px;line-height:1.4;"></div>
+  <div id="quiz-box" style="display:none;position:fixed;right:12px;bottom:12px;width:min(42vw,420px);z-index:10000;background:rgba(255,255,255,0.48);border:0.5px solid rgba(139,124,255,0.35);border-radius:22px;padding:14px;box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.65),0 16px 48px rgba(0,0,0,0.10);backdrop-filter:blur(40px) saturate(1.85);font-family:var(--body);">
+    <div id="quiz-q" style="font-size:14px;font-weight:600;color:#141a2a;margin-bottom:10px;line-height:1.4;"></div>
     <div id="quiz-options" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
     <div id="quiz-text-row" style="display:none;gap:6px;">
-      <input id="quiz-text-input" placeholder="Type your answer..." style="flex:1;padding:9px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:13px;">
-      <button id="quiz-text-send" style="background:#a78bfa;border:none;border-radius:8px;color:#fff;cursor:pointer;padding:0 14px;font-weight:600;">Send</button>
+      <input id="quiz-text-input" placeholder="Type your answer..." style="flex:1;padding:9px;border-radius:999px;border:1px solid rgba(28,36,56,0.1);background:#fff;color:#141a2a;font-size:13px;">
+      <button id="quiz-text-send" style="background:#7c6cf0;border:none;border-radius:999px;color:#fff;cursor:pointer;padding:0 14px;font-weight:600;">Send</button>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
-      <span style="font-size:10px;color:#64748b;">🎤 or just say your answer</span>
-      <span id="quiz-skip" style="font-size:11px;color:#64748b;cursor:pointer;">skip ✕</span>
+      <span style="font-size:10px;color:#6b7289;">🎤 or just say your answer</span>
+      <span id="quiz-skip" style="font-size:11px;color:#6b7289;cursor:pointer;">skip ✕</span>
     </div>
   </div>
 
@@ -184,8 +239,8 @@
 
   <div id="history-panel">
     <div id="history-header">
-      <span>CHAT HISTORY</span>
-      <div id="history-clear">CLEAR</div>
+      <span>History</span>
+      <div id="history-clear">Clear</div>
     </div>
     <div id="history-list"></div>
   </div>
@@ -199,16 +254,16 @@
   </div>
 
   <!-- 💹 Voice trade confirmation card -->
-  <div id="trade-card" style="display:none;position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);width:min(88vw,340px);z-index:10001;background:rgba(10,12,18,0.98);border:2px solid #2dd4ff;border-radius:18px;padding:18px;box-shadow:0 16px 60px rgba(0,0,0,0.7);font-family:system-ui;">
+  <div id="trade-card" style="display:none;position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);width:min(88vw,340px);z-index:10001;background:rgba(255,255,255,0.58);border:0.5px solid rgba(255,255,255,0.55);border-radius:24px;padding:18px;box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.72),0 16px 48px rgba(0,0,0,0.12);backdrop-filter:blur(40px) saturate(1.85);font-family:var(--body);color:#1d1d1f;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <div id="tc-side" style="font-size:13px;font-weight:800;letter-spacing:1px;"></div>
-      <div id="tc-coin" style="font-size:16px;font-weight:800;font-family:ui-monospace,monospace;color:#f4f5fb;"></div>
+      <div id="tc-side" style="font-size:13px;font-weight:650;letter-spacing:-0.02em;"></div>
+      <div id="tc-coin" style="font-size:16px;font-weight:650;font-family:var(--mono);color:#1d1d1f;"></div>
     </div>
-    <div id="tc-rows" style="font-size:12px;color:#aab2c7;line-height:2;font-family:ui-monospace,monospace;"></div>
-    <div style="font-size:10px;color:#fbbf24;margin:8px 0 12px;line-height:1.5;">⚠️ Real order. Double-check before confirming.</div>
+    <div id="tc-rows" style="font-size:12px;color:#6e6e73;line-height:2;font-family:var(--mono);"></div>
+    <div style="font-size:11px;color:#c47d0e;margin:8px 0 12px;line-height:1.5;">Double-check before confirming.</div>
     <div style="display:flex;gap:8px;">
-      <button id="tc-confirm" style="flex:1;padding:12px;border:none;border-radius:11px;font-weight:800;font-size:13px;cursor:pointer;background:linear-gradient(135deg,#34d399,#10b981);color:#04120b;">✓ Confirm</button>
-      <button id="tc-cancel" style="flex:1;padding:12px;border:none;border-radius:11px;font-weight:800;font-size:13px;cursor:pointer;background:rgba(251,113,133,0.15);border:1px solid rgba(251,113,133,0.4);color:#fb7185;">✕ Cancel</button>
+      <button id="tc-confirm" style="flex:1;padding:12px;border:none;border-radius:999px;font-weight:650;font-size:13px;cursor:pointer;background:#1d9e57;color:#fff;">Confirm</button>
+      <button id="tc-cancel" style="flex:1;padding:12px;border:0.5px solid rgba(225,29,72,0.28);border-radius:999px;font-weight:650;font-size:13px;cursor:pointer;background:rgba(225,29,72,0.10);color:#e11d48;">Cancel</button>
     </div>
   </div>
 
@@ -281,20 +336,196 @@
       autoStart: true, transparent: true, backgroundAlpha: 0, width: 520, height: 720
     })
     window.pixiApp = pixiApp
-    async function loadModel() {
+    let _currentChar = null
+    let _activeMoodExpr = null
+    let _emotionTimer = null
+    /** Live2D look toggles from Dress-Up Shop (outfit / glasses / eyes) — not manual UI. */
+    const _equippedLive2d = new Set()
+    /** Owned auto-pose expression ids (bought pose packs). */
+    let _ownedAutoPoses = []
+    let _tempPoseExpr = null
+    let _autoPoseTimer = null
+    let _poseHoldTimer = null
+
+    function resetExpressionParams() {
+      if (!model) return
+      const cm = model.internalModel?.coreModel
+      if (!cm) return
+      const ids = _currentChar?.expressionParamIds || []
+      for (const id of ids) {
+        try { cm.setParameterValueById(id, 0) } catch (_) {}
+      }
+    }
+
+    /** Mood (auto) + shop looks stacked via direct params. */
+    function syncAlexiaExpressions() {
+      if (!model || !_currentChar?.expressionParamIds?.length) return
+      const cm = model.internalModel?.coreModel
+      if (!cm) return
+      resetExpressionParams()
+      const set = (id, v) => { try { cm.setParameterValueById(id, v) } catch (_) {} }
+      const find = (id) => (_currentChar.expressions || []).find((x) => x.id === id)
+
+      const OUTFIT = {
+        yf:   { Param16: 30, Param17: 0, Param61: 0 },
+        yfmz: { Param16: 30, Param17: 30, Param61: 0 },
+        zs1:  { Param61: 30, Param16: 0, Param17: 0 },
+      }
+      for (const tid of _equippedLive2d) {
+        if (OUTFIT[tid]) {
+          Object.entries(OUTFIT[tid]).forEach(([k, v]) => set(k, v))
+          continue
+        }
+        const e = find(tid)
+        for (const pid of e?.paramIds || []) set(pid, 30)
+      }
+      // Temporary auto-pose (from time to time, if bought)
+      if (_tempPoseExpr) {
+        if (OUTFIT[_tempPoseExpr]) Object.entries(OUTFIT[_tempPoseExpr]).forEach(([k, v]) => set(k, v))
+        else {
+          const e = find(_tempPoseExpr)
+          for (const pid of e?.paramIds || []) set(pid, 30)
+        }
+      }
+      if (_activeMoodExpr) {
+        const e = find(_activeMoodExpr)
+        for (const pid of e?.paramIds || []) set(pid, 30)
+      }
+    }
+
+    function playMoodExpression(exprId) {
+      if (!_currentChar?.emotionMap) return
+      _activeMoodExpr = exprId
+      syncAlexiaExpressions()
+      clearTimeout(_emotionTimer)
+      _emotionTimer = setTimeout(() => {
+        _activeMoodExpr = null
+        syncAlexiaExpressions()
+      }, 6000)
+    }
+
+    function stopAutoPoseLoop() {
+      clearTimeout(_autoPoseTimer)
+      clearTimeout(_poseHoldTimer)
+      _autoPoseTimer = null
+      _poseHoldTimer = null
+      if (_tempPoseExpr) {
+        _tempPoseExpr = null
+        try { syncAlexiaExpressions() } catch (_) {}
+      }
+    }
+
+    function doAutoPose() {
+      if (!model || !_ownedAutoPoses.length || _currentChar?.id !== 'alexia') return
+      const expr = _ownedAutoPoses[Math.floor(Math.random() * _ownedAutoPoses.length)]
+      _tempPoseExpr = expr
+      syncAlexiaExpressions()
+      try { model.motion?.('', 0) } catch (_) {}
+      clearTimeout(_poseHoldTimer)
+      _poseHoldTimer = setTimeout(() => {
+        _tempPoseExpr = null
+        syncAlexiaExpressions()
+      }, 4000 + Math.random() * 3500)
+    }
+
+    function startAutoPoseLoop() {
+      stopAutoPoseLoop()
+      if (!_ownedAutoPoses.length || _currentChar?.id !== 'alexia') return
+      const scheduleNext = () => {
+        const wait = 25000 + Math.random() * 45000 // ~25–70s
+        _autoPoseTimer = setTimeout(() => {
+          doAutoPose()
+          scheduleNext()
+        }, wait)
+      }
+      _autoPoseTimer = setTimeout(() => {
+        doAutoPose()
+        scheduleNext()
+      }, 6000 + Math.random() * 6000)
+    }
+
+    function applyEquippedFromCare(care) {
+      _equippedLive2d.clear()
+      const map = _currentChar?.shopLive2d || {}
+      const autoMap = _currentChar?.shopAutoPoses || {}
+      const eq = (care?.equippedByChar && _currentChar?.id && care.equippedByChar[_currentChar.id])
+        || care?.equipped
+        || {}
+      for (const cat of ['outfit', 'hair', 'accessory']) {
+        const id = eq[cat]
+        if (!id || id === 'default' || id === 'none') continue
+        if (autoMap[id]) continue // poses are timed autos, not permanent wear
+        const expr = map[id]
+        if (expr) _equippedLive2d.add(expr)
+      }
+      const owned = care?.owned || []
+      _ownedAutoPoses = Object.keys(autoMap).filter((id) => owned.includes(id)).map((id) => autoMap[id])
+      syncAlexiaExpressions()
+      startAutoPoseLoop()
+    }
+
+    async function refreshEquippedLooks() {
+      if (!_currentChar?.shopLive2d && !_currentChar?.shopAutoPoses) return
+      const care = await ipcRenderer.invoke('get-care').catch(() => null)
+      applyEquippedFromCare(care || {})
+    }
+
+    async function loadModel(ch) {
       try {
-        model = await Live2DModel.from('./assets/model/huohuo.model3.json')
+        if (model) {
+          try { pixiApp.stage.removeChild(model); model.destroy?.(true) } catch(_){}
+          model = null; window.model = null
+        }
+        stopAutoPoseLoop()
+        _currentChar = ch || null
+        _activeMoodExpr = null
+        _equippedLive2d.clear()
+        _ownedAutoPoses = []
+        const path = ch?.model || './assets/model/huohuo.model3.json'
+        const scale = ch?.scale != null ? ch.scale : 0.07
+        model = await Live2DModel.from(path)
         window.model = model
         pixiApp.stage.addChild(model)
-        model.x = 280; model.y = 650; model.scale.set(0.07); model.anchor.set(0.5, 1)
-        model.motion('idle')
+        model.x = 280
+        model.y = 650 + (ch?.offsetY || 0)
+        model.scale.set(scale)
+        model.anchor.set(0.5, 1)
+        try {
+          if (ch?.motionGroup) model.motion(ch.motionGroup)
+          else if (ch?.motionGroup === '') model.motion('', 0)
+          else model.motion('idle')
+        } catch(_){}
+        await refreshEquippedLooks()
       } catch(e) { setStatus('Model error: ' + e.message) }
     }
-    loadModel()
+    ;(async () => {
+      const ch = await ipcRenderer.invoke('get-character').catch(() => null)
+      await loadModel(ch)
+    })()
+
+    ipcRenderer.on('appearance-changed', (_e, payload) => {
+      const m = payload?.mode === 'dark' ? 'dark' : 'light'
+      document.documentElement.setAttribute('data-theme', m)
+      try { localStorage.setItem('asuka-appearance', m) } catch (_) {}
+    })
+
+    ipcRenderer.on('character-changed', async (_e, ch) => {
+      await loadModel(ch)
+    })
+
+    ipcRenderer.on('cosmetic-equipped', () => {
+      if (!_currentChar?.shopLive2d && !_currentChar?.shopAutoPoses) return
+      refreshEquippedLooks()
+    })
+
+    ipcRenderer.on('care-updated', (_e, care) => {
+      if (_currentChar?.shopAutoPoses) applyEquippedFromCare(care || {})
+    })
 
     // Free WebGL when dashboard opens (two Live2D contexts freeze Electron)
     ipcRenderer.on('release-live2d', () => {
       try {
+        stopAutoPoseLoop()
         if (model && pixiApp?.stage) pixiApp.stage.removeChild(model)
         model = null
         window.model = null
@@ -322,7 +553,7 @@
     let isDragging = false, dragX, dragY
     const noDragIds = ['history-btn','chat-btn','her-mute-btn','mic-mute-btn','user-input','send-btn','webcam-btn','dashboard-btn','study-btn','care-btn','confirm-yes','confirm-no','history-clear','ab-in','ab-send','ab-file','ab-chip','ab-chip-x','ab-chip-name','wp-btn','wp-pop','wp-pop-none','sd-toggle']
     document.addEventListener('mousedown', e => {
-      if (noDragIds.includes(e.target.id) || e.target.closest('#ask-bar') || e.target.closest('#wp-pop') || e.target.closest('#wp-btn') || e.target.closest('#chat-panel') || e.target.closest('#confirm-bar') || e.target.closest('#history-panel') || e.target.closest('#side-drawer')) return
+      if (noDragIds.includes(e.target.id) || e.target.closest('#chrome-dock') || e.target.closest('#ask-bar') || e.target.closest('#wp-pop') || e.target.closest('#wp-btn') || e.target.closest('#chat-panel') || e.target.closest('#confirm-bar') || e.target.closest('#history-panel') || e.target.closest('#side-drawer') || e.target.closest('#care-panel')) return
       isDragging = true; dragX = e.screenX; dragY = e.screenY; e.preventDefault()
     })
     document.addEventListener('mousemove', e => {
@@ -374,14 +605,28 @@
       const list = document.getElementById('history-list')
       list.innerHTML = chatHistory.slice(-30).map(m => `
         <div class="history-msg ${m.role}">
-          <div class="msg-label">${m.role === 'user' ? 'YOU' : 'ASUKA'} · ${m.time || ''}${m.device && m.device !== 'pc' ? ' · 📱' : ''}</div>
+          <div class="msg-label">${m.role === 'user' ? 'You' : 'Asuka'} · ${m.time || ''}${m.device && m.device !== 'pc' ? ' · phone' : ''}</div>
           ${m.text}
         </div>
       `).join('')
       list.scrollTop = list.scrollHeight
     }
 
-    historyBtn.addEventListener('click', () => { historyPanel.classList.toggle('open'); if (historyPanel.classList.contains('open')) renderHistory() })
+    function pinFlyout(panel, btn) {
+      if (!panel || !btn) return
+      const r = btn.getBoundingClientRect()
+      panel.style.left = Math.round(r.right + 10) + 'px'
+      panel.style.bottom = Math.round(window.innerHeight - r.bottom) + 'px'
+      panel.style.top = 'auto'
+    }
+
+    historyBtn.addEventListener('click', () => {
+      historyPanel.classList.toggle('open')
+      if (historyPanel.classList.contains('open')) {
+        pinFlyout(historyPanel, historyBtn)
+        renderHistory()
+      }
+    })
     historyClear.addEventListener('click', () => {
       ipcRenderer.invoke('clear-chat-log').catch(() => {})
       chatHistory = []
@@ -2108,7 +2353,7 @@ VOICE RESPONSE RULES — CRITICAL:
     const careBtn = document.getElementById('care-btn')
     function statBar(label, val, color) {
       const v = Math.round(val)
-      return `<div><div style="display:flex;justify-content:space-between;"><span>${label}</span><span>${v}%</span></div><div style="height:7px;background:#1e293b;border-radius:5px;overflow:hidden;"><div style="height:100%;width:${v}%;background:${color};border-radius:5px;transition:.3s;"></div></div></div>`
+      return `<div><div style="display:flex;justify-content:space-between;"><span>${label}</span><span>${v}%</span></div><div style="height:7px;background:rgba(28,36,56,0.08);border-radius:5px;overflow:hidden;"><div style="height:100%;width:${v}%;background:${color};border-radius:5px;transition:.3s;"></div></div></div>`
     }
     function renderCare(d) {
       document.getElementById('care-coins').textContent = d.coins ?? 0
@@ -2143,7 +2388,7 @@ VOICE RESPONSE RULES — CRITICAL:
       const p = document.getElementById('care-panel')
       const show = p.style.display === 'none'
       p.style.display = show ? 'block' : 'none'
-      if (show) { refreshCare(); refreshRelationship() }
+      if (show) { pinFlyout(p, careBtn); refreshCare(); refreshRelationship() }
     })
     document.getElementById('care-close')?.addEventListener('click', () => document.getElementById('care-panel').style.display='none')
     document.querySelectorAll('.care-act').forEach(b => b.addEventListener('click', async () => {
@@ -2188,15 +2433,25 @@ VOICE RESPONSE RULES — CRITICAL:
 
 
     // ══ REACTION SYSTEM — she reacts to live events (Comnyang-inspired) ══════
-    // Tries Live2D expression params (common names), always shows an emotion bubble fallback.
-    let _emotionTimer = null
+    // Named Live2D expressions (Alexia) + generic param fallback (Asuka/Huohuo)
     function setEmotion(emotion) {
       if (!model) return
-      // Try common Live2D expression parameters (safe — wrapped, no-op if model lacks them)
+      const map = _currentChar?.emotionMap || {}
+      const exprs = _currentChar?.expressions || []
+      if (exprs.length && Object.keys(map).length) {
+        const exprId = map[emotion]
+        if (emotion === 'neutral' || !exprId) {
+          _activeMoodExpr = null
+          syncAlexiaExpressions()
+          return
+        }
+        playMoodExpression(exprId)
+        return
+      }
+      // Fallback for models without expression packs
       const cm = model.internalModel?.coreModel
       if (!cm) return
       const tryParam = (id, val) => { try { cm.setParameterValueById(id, val) } catch(e){} }
-      // Reset common expression params
       tryParam('ParamBrowLY', 0); tryParam('ParamBrowRY', 0)
       tryParam('ParamMouthForm', 0); tryParam('ParamEyeLOpen', 1); tryParam('ParamEyeROpen', 1)
       if (emotion === 'happy') { tryParam('ParamMouthForm', 1); tryParam('ParamBrowLY', 0.5); tryParam('ParamBrowRY', 0.5) }
@@ -2205,7 +2460,6 @@ VOICE RESPONSE RULES — CRITICAL:
       else if (emotion === 'sad') { tryParam('ParamMouthForm', -1); tryParam('ParamBrowLY', -0.8); tryParam('ParamBrowRY', -0.8); tryParam('ParamEyeLOpen', 0.6); tryParam('ParamEyeROpen', 0.6) }
       else if (emotion === 'thinking') { tryParam('ParamEyeBallX', 0.5); tryParam('ParamEyeBallY', 0.5); tryParam('ParamBrowLY', -0.3); tryParam('ParamBrowRY', -0.3) }
       else if (emotion === 'love') { tryParam('ParamMouthForm', 1); tryParam('ParamEyeLOpen', 0.7); tryParam('ParamEyeROpen', 0.7) }
-      // try a named expression too (some models have these)
       try { model.expression?.(emotion) } catch(e) {}
     }
     // Visual emotion bubble (works for ANY model — the reliable feedback)
@@ -2213,7 +2467,7 @@ VOICE RESPONSE RULES — CRITICAL:
       let b = document.getElementById('emotion-bubble')
       if (!b) {
         b = document.createElement('div'); b.id = 'emotion-bubble'
-        b.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-10px);z-index:10002;background:linear-gradient(135deg,rgba(22,27,46,.97),rgba(15,19,32,.97));border:1px solid rgba(167,139,250,.4);border-radius:16px;padding:9px 15px;font-family:Outfit,system-ui;font-size:12px;color:#f4f5fb;box-shadow:0 8px 28px rgba(0,0,0,.5);opacity:0;transition:.3s;display:flex;align-items:center;gap:7px;max-width:260px;'
+        b.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-10px);z-index:10002;background:rgba(255,255,255,0.58);border:0.5px solid rgba(255,255,255,0.55);border-radius:999px;padding:9px 15px;font-family:var(--body);font-size:12px;color:#1d1d1f;box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.72),0 8px 28px rgba(0,0,0,.12);backdrop-filter:blur(40px) saturate(1.85);opacity:0;transition:.3s;display:flex;align-items:center;gap:7px;max-width:260px;'
         document.body.appendChild(b)
       }
       b.style.borderColor = color || 'rgba(167,139,250,.4)'
@@ -2331,7 +2585,7 @@ VOICE RESPONSE RULES — CRITICAL:
     ipcRenderer.on('ask-news-briefing',    () => showConfirm('news', 'Want the latest crypto news?'))
 
     // ── Confirm bar ───────────────────────────────────────────────────────
-    function showConfirm(type, text) { awaitingConfirm = type; confirmText.textContent = text; confirmBar.classList.add('open') }
+    function showConfirm(type, text) { awaitingConfirm = type; confirmText.textContent = text; pinFlyout(confirmBar, dashBtn || document.getElementById('chrome-dock')); confirmBar.classList.add('open') }
     function hideConfirm() { awaitingConfirm = null; confirmBar.classList.remove('open') }
 
     // P2: human confirm for send / OS / post actions from main process
@@ -2340,6 +2594,7 @@ VOICE RESPONSE RULES — CRITICAL:
       const { id, title, detail } = payload || {}
       awaitingConfirm = 'action:' + id
       confirmText.textContent = (title || 'Confirm') + (detail ? ' — ' + detail : '')
+      pinFlyout(confirmBar, dashBtn || document.getElementById('chrome-dock'))
       confirmBar.classList.add('open')
       _actionConfirmResolve = (ok) => {
         ipcRenderer.invoke('action-confirm-response', { id, ok }).catch(()=>{})
@@ -3051,34 +3306,34 @@ VOICE RESPONSE RULES — CRITICAL:
 
 
 <!-- ══ Quick wallpaper switcher (beside her) ══ -->
-<div id="wp-btn" title="Wallpapers" style="position:fixed;bottom:180px;left:10px;width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.14);display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;z-index:9001;backdrop-filter:blur(10px);">🖼️</div>
-<div id="wp-pop" style="display:none;position:fixed;bottom:180px;left:56px;width:210px;max-height:280px;overflow-y:auto;background:rgba(20,20,23,.95);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:8px;z-index:9001;box-shadow:0 10px 40px rgba(0,0,0,.5);">
-  <div style="font-size:11px;font-weight:700;color:#a0a0a8;margin:2px 4px 8px;">Wallpapers</div>
+<div id="wp-btn" title="Wallpapers" style="position:fixed;bottom:180px;left:10px;width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.42);border:0.5px solid rgba(255,255,255,0.55);display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;z-index:9001;backdrop-filter:blur(40px) saturate(1.85);box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.72),0 8px 28px rgba(0,0,0,0.08);">🖼️</div>
+<div id="wp-pop" style="display:none;position:fixed;bottom:180px;left:56px;width:210px;max-height:280px;overflow-y:auto;background:rgba(255,255,255,0.48);backdrop-filter:blur(40px) saturate(1.85);border:0.5px solid rgba(255,255,255,0.55);border-radius:18px;padding:8px;z-index:9001;box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.65),0 16px 48px rgba(0,0,0,0.10);">
+  <div style="font-size:11px;font-weight:700;color:#6b7289;margin:2px 4px 8px;">Wallpapers</div>
   <div id="wp-pop-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"></div>
-  <div id="wp-pop-none" style="margin-top:6px;text-align:center;font-size:11px;color:#a0a0a8;cursor:pointer;padding:6px;border:1px solid rgba(255,255,255,.1);border-radius:8px;">✕ None</div>
+  <div id="wp-pop-none" style="margin-top:6px;text-align:center;font-size:11px;color:#6b7289;cursor:pointer;padding:6px;border:1px solid rgba(28,36,56,0.08);border-radius:10px;">✕ None</div>
 </div>
 
 <!-- ══ Ask bar: type anything, attach anything ══ -->
 <!-- ── » Side drawer: recent chat + docs beside her ── -->
-<div id="sd-toggle" title="Recent chat & docs" style="position:fixed;right:0;top:42%;z-index:9500;width:26px;height:56px;border-radius:10px 0 0 10px;background:rgba(15,18,26,0.92);border:1px solid rgba(255,255,255,0.14);border-right:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#cbd5e1;font-size:15px;font-weight:800;user-select:none;">«</div>
-<div id="side-drawer" style="position:fixed;top:8%;bottom:14%;right:-300px;width:280px;z-index:9400;background:rgba(12,15,22,0.97);border:1px solid rgba(255,255,255,0.12);border-right:none;border-radius:14px 0 0 14px;box-shadow:-10px 0 40px rgba(0,0,0,0.5);display:flex;flex-direction:column;transition:right .28s cubic-bezier(.4,0,.2,1);font-family:system-ui;overflow:hidden;">
-  <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.09);flex-shrink:0;">
-    <div class="sd-tab active" data-tab="chat" style="flex:1;text-align:center;padding:10px;font-size:11px;font-weight:700;color:#e2e8f0;cursor:pointer;border-bottom:2px solid #2dd4ff;">💬 Chat</div>
-    <div class="sd-tab" data-tab="docs" style="flex:1;text-align:center;padding:10px;font-size:11px;font-weight:700;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;">📂 Docs</div>
+<div id="sd-toggle" title="Recent chat & docs" style="position:fixed;right:0;top:42%;z-index:9500;width:26px;height:56px;border-radius:14px 0 0 14px;background:rgba(255,255,255,0.42);border:0.5px solid rgba(255,255,255,0.55);border-right:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#1d1d1f;font-size:15px;font-weight:800;user-select:none;backdrop-filter:blur(40px) saturate(1.85);box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.65);">«</div>
+<div id="side-drawer" style="position:fixed;top:8%;bottom:14%;right:-300px;width:280px;z-index:9400;background:rgba(255,255,255,0.48);border:0.5px solid rgba(255,255,255,0.55);border-right:none;border-radius:18px 0 0 18px;box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.65),-10px 0 40px rgba(0,0,0,0.10);backdrop-filter:blur(40px) saturate(1.85);display:flex;flex-direction:column;transition:right .28s cubic-bezier(.4,0,.2,1);font-family:var(--body);overflow:hidden;color:#141a2a;">
+  <div style="display:flex;border-bottom:1px solid rgba(28,36,56,0.08);flex-shrink:0;">
+    <div class="sd-tab active" data-tab="chat" style="flex:1;text-align:center;padding:10px;font-size:11px;font-weight:650;cursor:pointer;">Chat</div>
+    <div class="sd-tab" data-tab="docs" style="flex:1;text-align:center;padding:10px;font-size:11px;font-weight:650;cursor:pointer;">Docs</div>
   </div>
   <div id="sd-chat" style="flex:1;overflow-y:auto;padding:10px;font-size:11.5px;line-height:1.5;"></div>
   <div id="sd-docs" style="flex:1;overflow-y:auto;padding:10px;display:none;"></div>
 </div>
 
 <div id="ask-bar" style="position:fixed;left:10px;right:10px;bottom:12px;z-index:9000;display:flex;flex-direction:column;gap:6px;">
-  <div id="ab-chip" style="display:none;align-self:flex-start;background:rgba(10,132,255,.18);border:1px solid rgba(10,132,255,.4);border-radius:10px;padding:5px 10px;font-size:11px;color:#cfe6ff;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+  <div id="ab-chip" style="display:none;align-self:flex-start;background:rgba(37,99,235,.12);border:1px solid rgba(37,99,235,.28);border-radius:999px;padding:5px 10px;font-size:11px;color:#1d4ed8;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
     <span id="ab-chip-name"></span> <span id="ab-chip-x" style="cursor:pointer;margin-left:6px;opacity:.8;">✕</span>
   </div>
-  <div style="display:flex;align-items:center;gap:6px;background:rgba(20,20,23,.92);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:7px 8px 7px 12px;box-shadow:0 8px 30px rgba(0,0,0,.4);">
+  <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.42);backdrop-filter:blur(40px) saturate(1.85);border:0.5px solid rgba(255,255,255,0.55);border-radius:999px;padding:7px 8px 7px 12px;box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.65),0 12px 40px rgba(0,0,0,0.08);">
     <label for="ab-file" style="cursor:pointer;font-size:15px;opacity:.75;flex-shrink:0;" title="Attach a file">📎</label>
     <input id="ab-file" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.pdf,.txt,.md,.csv,.xlsx,.xls,.json,.log" style="display:none;">
-    <input id="ab-in" placeholder="Ask Asuka anything…" style="flex:1;background:transparent;border:none;outline:none;color:#f5f5f7;font-size:13px;font-family:inherit;min-width:0;">
-    <button id="ab-send" style="flex-shrink:0;width:30px;height:30px;border:none;border-radius:10px;background:#0a84ff;color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➤</button>
+    <input id="ab-in" placeholder="Ask Asuka anything…" style="flex:1;background:transparent;border:none;outline:none;color:#141a2a;font-size:13px;font-family:inherit;min-width:0;">
+    <button id="ab-send" style="flex-shrink:0;width:30px;height:30px;border:none;border-radius:50%;background:#0071e3;color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➤</button>
   </div>
 </div>
 <script>
@@ -3095,16 +3350,16 @@ window.__askBarLoaded = true
         hist = hist || []
         const box = document.getElementById('sd-chat')
         box.innerHTML = hist.slice(-40).map(m =>
-          `<div style="margin-bottom:9px;"><div style="font-size:9px;color:${m.role==='user'?'#2dd4ff':'#f3a8d0'};font-weight:700;letter-spacing:.5px;">${m.role==='user'?'YOU':'ASUKA'} · ${m.time||''}${m.device&&m.device!=='pc'?' 📱':''}</div><div style="color:#d7dae0;">${String(m.text).replace(/</g,'&lt;')}</div></div>`
-        ).join('') || '<div style="color:#64748b;font-size:11px;">No messages yet~</div>'
+          `<div style="margin-bottom:9px;"><div style="font-size:9px;color:${m.role==='user'?'#0071e3':'#d98bb8'};font-weight:650;letter-spacing:.04em;">${m.role==='user'?'You':'Asuka'} · ${m.time||''}${m.device&&m.device!=='pc'?' · phone':''}</div><div style="color:inherit;">${String(m.text).replace(/</g,'&lt;')}</div></div>`
+        ).join('') || '<div style="color:#86868b;font-size:11px;">No messages yet</div>'
         box.scrollTop = box.scrollHeight
       }).catch(() => {
         let hist = []
         try { hist = JSON.parse(localStorage.getItem('asukaHistory') || '[]') } catch(e) {}
         const box = document.getElementById('sd-chat')
         box.innerHTML = hist.slice(-40).map(m =>
-          `<div style="margin-bottom:9px;"><div style="font-size:9px;color:${m.role==='user'?'#2dd4ff':'#f3a8d0'};font-weight:700;letter-spacing:.5px;">${m.role==='user'?'YOU':'ASUKA'} · ${m.time||''}</div><div style="color:#d7dae0;">${String(m.text).replace(/</g,'&lt;')}</div></div>`
-        ).join('') || '<div style="color:#64748b;font-size:11px;">No messages yet~</div>'
+          `<div style="margin-bottom:9px;"><div style="font-size:9px;color:${m.role==='user'?'#0071e3':'#d98bb8'};font-weight:650;letter-spacing:.04em;">${m.role==='user'?'You':'Asuka'} · ${m.time||''}</div><div style="color:inherit;">${String(m.text).replace(/</g,'&lt;')}</div></div>`
+        ).join('') || '<div style="color:#86868b;font-size:11px;">No messages yet</div>'
         box.scrollTop = box.scrollHeight
       })
     }
@@ -3114,9 +3369,9 @@ window.__askBarLoaded = true
       const icons = { doc:'📄', text:'✍️', sheet:'📊', gdoc:'📝' }
       box.innerHTML = works.length ? works.map((w,i) =>
         `<div class="sd-doc" data-i="${i}" style="padding:9px 10px;margin-bottom:6px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:9px;cursor:${w.path?'pointer':'default'};">
-          <div style="font-size:11.5px;font-weight:600;color:#e2e8f0;">${icons[w.kind]||'📄'} ${String(w.title||'Untitled').replace(/</g,'&lt;')}</div>
-          <div style="font-size:9px;color:#64748b;margin-top:2px;">${w.at ? new Date(w.at).toLocaleString() : ''}${w.path ? ' · tap to open' : ''}</div>
-        </div>`).join('') : '<div style="color:#64748b;font-size:11px;">Nothing made yet — ask her to write or build something~</div>'
+          <div style="font-size:11.5px;font-weight:600;color:inherit;">${String(w.title||'Untitled').replace(/</g,'&lt;')}</div>
+          <div style="font-size:9px;color:#86868b;margin-top:2px;">${w.at ? new Date(w.at).toLocaleString() : ''}${w.path ? ' · tap to open' : ''}</div>
+        </div>`).join('') : '<div style="color:#86868b;font-size:11px;">Nothing made yet — ask her to write or build something</div>'
       box.querySelectorAll('.sd-doc').forEach(el => el.onclick = () => {
         const w = works[+el.dataset.i]
         if (w?.path) ipcRenderer.invoke('open-file-path', w.path).catch(()=>{})
@@ -3130,8 +3385,8 @@ window.__askBarLoaded = true
       if (sdOpen) { sdRenderChat(); sdRenderDocs() }
     })
     document.querySelectorAll('.sd-tab').forEach(t => t.onclick = () => {
-      document.querySelectorAll('.sd-tab').forEach(x => { x.classList.remove('active'); x.style.color='#64748b'; x.style.borderBottomColor='transparent' })
-      t.classList.add('active'); t.style.color='#e2e8f0'; t.style.borderBottomColor='#2dd4ff'
+      document.querySelectorAll('.sd-tab').forEach(x => x.classList.remove('active'))
+      t.classList.add('active')
       document.getElementById('sd-chat').style.display = t.dataset.tab==='chat' ? 'block' : 'none'
       document.getElementById('sd-docs').style.display = t.dataset.tab==='docs' ? 'block' : 'none'
     })

@@ -4,29 +4,45 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Asuka</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+<link rel="stylesheet" href="asuka-design.css">
+<script>
+  (function () {
+    try {
+      var m = localStorage.getItem('asuka-appearance') === 'dark' ? 'dark' : 'light'
+      document.documentElement.setAttribute('data-theme', m)
+    } catch (e) { document.documentElement.setAttribute('data-theme', 'light') }
+  })()
+</script>
 
-  :root {
-    --ink: #f3eefc;
-    --ink-dim: #a99fc4;
-    --ink-faint: #6b6388;
-    --bg-0: #0a0710;
-    --bg-1: #120c1e;
-    --petal: #ff8fb1;
-    --petal-deep: #e0567f;
-    --iris: #9b7cff;
-    --iris-glow: #b79bff;
-    --gold: #ffd98a;
-    --card: rgba(28, 20, 44, 0.72);
-    --line: rgba(155, 124, 255, 0.18);
+<style>
+  :root, html[data-theme="light"] {
+    --ink-dim: #6e6e73;
+    --ink-faint: #86868b;
+    --petal: #e89bc4;
+    --petal-deep: #d98bb8;
+    --iris: #5b6cff;
+    --iris-glow: #6d5ef0;
+    --gold: #c47d0e;
+    --card: rgba(255,255,255,0.42);
+    --line: rgba(255,255,255,0.55);
+  }
+  html[data-theme="dark"] {
+    --ink-dim: #a1a1a6;
+    --ink-faint: #6e6e73;
+    --petal: #f0a8d0;
+    --petal-deep: #e89bc4;
+    --iris: #8b7cff;
+    --iris-glow: #a78bfa;
+    --gold: #ffd60a;
+    --card: rgba(40, 40, 44, 0.48);
+    --line: rgba(255,255,255,0.14);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; overflow: hidden; }
   body {
-    background: var(--bg-0);
+    background: var(--aurora);
     color: var(--ink);
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: var(--body);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -35,14 +51,13 @@
     user-select: none;
   }
 
-  /* ambient aurora behind everything */
   .aurora {
     position: fixed; inset: -20%;
     background:
-      radial-gradient(40% 50% at 25% 30%, rgba(155,124,255,0.22), transparent 70%),
-      radial-gradient(45% 55% at 78% 65%, rgba(224,86,127,0.18), transparent 70%),
-      radial-gradient(35% 40% at 60% 20%, rgba(255,217,138,0.08), transparent 70%);
-    filter: blur(20px);
+      radial-gradient(40% 50% at 25% 30%, rgba(160,210,255,0.55), transparent 70%),
+      radial-gradient(45% 55% at 78% 65%, rgba(255,180,210,0.40), transparent 70%),
+      radial-gradient(35% 40% at 60% 20%, rgba(255,230,180,0.35), transparent 70%);
+    filter: blur(28px);
     animation: drift 22s ease-in-out infinite alternate;
     z-index: 0;
   }
@@ -51,7 +66,6 @@
     100% { transform: translate(-3%, 2%) scale(1.08); }
   }
 
-  /* falling petals */
   .petals { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
   .petal {
     position: absolute; top: -5%;
@@ -67,16 +81,16 @@
     100% { transform: translateY(110vh) rotate(420deg); opacity: 0; }
   }
 
-  /* the card */
   .card {
     position: relative; z-index: 2;
     width: min(90vw, 420px);
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 26px;
+    background: var(--glass);
+    border: 0.5px solid var(--glass-border);
+    border-radius: 28px;
     padding: 44px 40px 36px;
-    backdrop-filter: blur(24px) saturate(140%);
-    box-shadow: 0 30px 80px -20px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.05);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    box-shadow: var(--lens), var(--shadow-float);
     text-align: center;
     animation: rise 0.9s cubic-bezier(0.16,1,0.3,1) both;
   }
@@ -85,37 +99,37 @@
     to   { opacity: 1; transform: translateY(0) scale(1); }
   }
 
-  /* her sigil / avatar mark */
   .sigil {
     width: 84px; height: 84px; margin: 0 auto 22px;
     border-radius: 50%;
     background:
       radial-gradient(circle at 35% 30%, var(--iris-glow), var(--iris) 45%, var(--petal-deep) 100%);
     display: grid; place-items: center;
-    box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 12px 40px -8px rgba(155,124,255,0.6);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.65), 0 12px 40px -8px rgba(139,124,255,0.35);
     position: relative;
     animation: pulse 4s ease-in-out infinite;
   }
   @keyframes pulse {
-    0%,100% { box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 12px 40px -8px rgba(155,124,255,0.55); }
-    50%     { box-shadow: 0 0 0 1px rgba(255,255,255,0.18), 0 14px 52px -6px rgba(255,143,177,0.6); }
+    0%,100% { box-shadow: 0 0 0 1px rgba(255,255,255,0.65), 0 12px 40px -8px rgba(139,124,255,0.32); }
+    50%     { box-shadow: 0 0 0 1px rgba(255,255,255,0.85), 0 14px 52px -6px rgba(232,155,196,0.45); }
   }
   .sigil span {
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: var(--display);
     font-size: 40px; font-weight: 700; color: #fff;
-    text-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    text-shadow: 0 2px 12px rgba(0,0,0,0.2);
     line-height: 1;
   }
 
   .name-jp {
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: var(--display);
     font-size: 13px; letter-spacing: 6px;
-    color: var(--petal); margin-bottom: 4px; font-weight: 500;
+    color: var(--petal-deep); margin-bottom: 4px; font-weight: 500;
     padding-left: 6px;
   }
   h1 {
-    font-size: 30px; font-weight: 700; letter-spacing: -0.01em;
-    margin-bottom: 10px;
+    font-family: var(--display);
+    font-size: 30px; font-weight: 600; letter-spacing: -0.03em;
+    margin-bottom: 10px; color: var(--ink);
   }
   .tagline {
     font-size: 14px; color: var(--ink-dim); line-height: 1.55;
@@ -126,17 +140,17 @@
     width: 100%;
     display: flex; align-items: center; justify-content: center; gap: 12px;
     padding: 14px 20px;
-    background: #fff;
-    color: #1a1523;
-    border: none; border-radius: 14px;
-    font-family: 'Space Grotesk', sans-serif;
+    background: var(--glass-strong);
+    color: var(--ink);
+    border: 0.5px solid var(--glass-border); border-radius: 999px;
+    font-family: var(--body);
     font-size: 15px; font-weight: 600;
     cursor: pointer;
     transition: transform 0.15s ease, box-shadow 0.2s ease;
-    box-shadow: 0 8px 24px -6px rgba(0,0,0,0.5);
+    box-shadow: var(--lens), var(--shadow-1);
   }
-  .signin-btn:hover { transform: translateY(-2px); box-shadow: 0 14px 32px -8px rgba(155,124,255,0.4); }
-  .signin-btn:active { transform: translateY(0); }
+  .signin-btn:hover { transform: scale(1.02); box-shadow: var(--lens), var(--shadow-2); }
+  .signin-btn:active { transform: scale(0.98); }
   .signin-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
 
   .status {
@@ -144,8 +158,8 @@
     font-size: 12.5px; color: var(--ink-faint);
     transition: color 0.2s;
   }
-  .status.working { color: var(--iris-glow); }
-  .status.error { color: var(--petal); }
+  .status.working { color: var(--iris); }
+  .status.error { color: #be123c; }
 
   .waiting-dots::after {
     content: ''; animation: dots 1.4s steps(4, end) infinite;
@@ -159,7 +173,6 @@
   }
   .footnote b { color: var(--ink-dim); font-weight: 500; }
 
-  /* drag region for frameless window */
   .drag { position: fixed; top: 0; left: 0; right: 0; height: 40px; -webkit-app-region: drag; z-index: 5; }
 </style>
 </head>
@@ -232,5 +245,15 @@
     status.textContent = 'Welcome back — waking Asuka…';
   });
 </script>
+<script>
+  try {
+    (window.ipcRenderer || window.asuka?.ipc)?.on?.('appearance-changed', function (_e, payload) {
+      var m = (payload && payload.mode) === 'dark' ? 'dark' : 'light'
+      document.documentElement.setAttribute('data-theme', m)
+      try { localStorage.setItem('asuka-appearance', m) } catch (e) {}
+    })
+  } catch (e) {}
+</script>
+
 </body>
 </html>

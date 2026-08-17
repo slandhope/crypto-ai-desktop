@@ -2,16 +2,36 @@
 <html>
 <head>
 <meta charset="utf-8">
+<link rel="stylesheet" href="asuka-design.css">
+<script>
+  (function () {
+    try {
+      var m = localStorage.getItem('asuka-appearance') === 'dark' ? 'dark' : 'light'
+      document.documentElement.setAttribute('data-theme', m)
+    } catch (e) { document.documentElement.setAttribute('data-theme', 'light') }
+  })()
+</script>
+
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; height:100%; background:#fbfaf7; overflow:hidden; font-family:system-ui, -apple-system, sans-serif; }
-  #bar { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#141417; border-bottom:1px solid rgba(216,179,110,0.45); -webkit-app-region:drag; cursor:move; }
-  #bar .title { font-size:13px; font-weight:600; color:#f5f5f7; letter-spacing:.2px; }
-  #bar .close { -webkit-app-region:no-drag; cursor:pointer; color:#a0a0a8; font-size:18px; padding:0 6px; }
+  html, body { width:100%; height:100%; background:var(--aurora); overflow:hidden; font-family:var(--body); color:var(--ink); }
+  #bar {
+    display:flex; justify-content:space-between; align-items:center; padding:10px 14px;
+    background:var(--glass); border-bottom:0.5px solid var(--glass-border);
+    backdrop-filter:var(--glass-blur); -webkit-backdrop-filter:var(--glass-blur);
+    box-shadow:var(--lens); -webkit-app-region:drag; cursor:move;
+  }
+  #bar .title { font-size:13px; font-weight:600; color:var(--ink); letter-spacing:-0.01em; font-family:var(--display); }
+  #bar .close {
+    -webkit-app-region:no-drag; cursor:pointer; color:var(--ink-3); font-size:15px;
+    width:28px; height:28px; border-radius:50%; display:grid; place-items:center;
+    background:var(--glass-soft); border:0.5px solid var(--glass-border);
+  }
   #wb-canvas { display:block; width:100%; background:#fbfaf7; }
+  html[data-theme="dark"] #wb-canvas { background:#1c1c1e; }
 </style>
 </head>
-<body>
+<body class="asuka-surface">
   <div id="bar">
     <div class="title">🖊️ Asuka's Whiteboard</div>
     <div class="close" id="wb-close">✕</div>
@@ -61,5 +81,15 @@
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
   ipcRenderer.on('whiteboard-draw', (e, cmds) => { if (Array.isArray(cmds) && cmds.length) wbRun(cmds) })
 </script>
+<script>
+  try {
+    (window.ipcRenderer || window.asuka?.ipc)?.on?.('appearance-changed', function (_e, payload) {
+      var m = (payload && payload.mode) === 'dark' ? 'dark' : 'light'
+      document.documentElement.setAttribute('data-theme', m)
+      try { localStorage.setItem('asuka-appearance', m) } catch (e) {}
+    })
+  } catch (e) {}
+</script>
+
 </body>
 </html>

@@ -7,103 +7,293 @@
 <meta charset="UTF-8">
 <title>Asuka — Dashboard</title>
 <link rel="stylesheet" href="asuka-design.css">
+<script>
+  (function () {
+    try {
+      var m = localStorage.getItem('asuka-appearance') === 'dark' ? 'dark' : 'light'
+      document.documentElement.setAttribute('data-theme', m)
+    } catch (e) {
+      document.documentElement.setAttribute('data-theme', 'light')
+    }
+  })()
+</script>
 <style>
-  :root {
-    /* Twilight system — dashboard is the "machine" surface (cyan-leaning) */
-    --bg:       #0a0a0c;
-    --bg1:      #101013;
-    --bg2:      #16161a;
-    --bg3:      #1e1e24;
+  :root, html[data-theme="light"] {
+    /* Liquid Glass — content quiet, chrome optical */
+    --bg:       rgba(255,255,255,0.72);
+    --bg1:      rgba(255,255,255,0.86);
+    --bg2:      rgba(255,255,255,0.90);
+    --bg3:      rgba(255,255,255,0.94);
+    --border:   rgba(15, 23, 42, 0.06);
+    --border2:  rgba(15, 23, 42, 0.04);
+    --accent:   #0071e3;
+    --accent2:  #0077ed;
+    --green:    #1d9e57;
+    --red:      #e11d48;
+    --gold:     #c47d0e;
+    --text:     #1d1d1f;
+    --text2:    #6e6e73;
+    --text3:    #86868b;
+    --glow:     rgba(0,113,227,0.14);
+    --radius:   18px;
+    --radius-sm:12px;
+    --iris:     #5b6cff;
+    --violet:   #6d5ef0;
+    --sakura:   #d98bb8;
+    --asuka-grad: linear-gradient(135deg,#8b7cff 0%,#c08bf0 45%,#f3a8d0 100%);
+    --glass: rgba(255,255,255,0.42);
+    --glass-strong: rgba(255,255,255,0.58);
+    --glass-soft: rgba(255,255,255,0.28);
+    --glass-border: rgba(255,255,255,0.55);
+    --glass-rim: rgba(255,255,255,0.72);
+    --glass-blur: blur(40px) saturate(1.85);
+    --lens: inset 0 0.5px 0 var(--glass-rim), inset 0 0 0 0.5px rgba(255,255,255,0.22);
+    --content: rgba(255,255,255,0.72);
+    --content-strong: rgba(255,255,255,0.86);
+  }
+
+  html[data-theme="dark"] {
+    --bg:       rgba(28, 28, 30, 0.78);
+    --bg1:      rgba(36, 36, 40, 0.90);
+    --bg2:      rgba(44, 44, 48, 0.92);
+    --bg3:      rgba(52, 52, 58, 0.96);
     --border:   rgba(255,255,255,0.08);
-    --border2:  rgba(255,255,255,0.04);
+    --border2:  rgba(255,255,255,0.05);
     --accent:   #0a84ff;
-    --accent2:  #0066cc;
+    --accent2:  #409cff;
     --green:    #30d158;
     --red:      #ff453a;
     --gold:     #ffd60a;
     --text:     #f5f5f7;
-    --text2:    #a0a0a8;
-    --text3:    #6a6a72;
-    --glow:     rgba(10,132,255,0.15);
-    --radius:   14px;
-    --radius-sm:9px;
-    /* Asuka accent (her gradient) available on the dashboard too */
+    --text2:    #a1a1a6;
+    --text3:    #6e6e73;
+    --glow:     rgba(10,132,255,0.22);
     --iris:     #8b7cff;
     --violet:   #a78bfa;
-    --sakura:   #f3a8d0;
-    --asuka-grad: linear-gradient(135deg,#8b7cff 0%,#c08bf0 45%,#f3a8d0 100%);
+    --sakura:   #f0a8d0;
+    --glass: rgba(40, 40, 44, 0.48);
+    --glass-strong: rgba(55, 55, 60, 0.62);
+    --glass-soft: rgba(28, 28, 32, 0.40);
+    --glass-border: rgba(255,255,255,0.14);
+    --glass-rim: rgba(255,255,255,0.18);
+    --glass-blur: blur(40px) saturate(1.6);
+    --lens: inset 0 0.5px 0 rgba(255,255,255,0.16), inset 0 0 0 0.5px rgba(255,255,255,0.08);
+    --content: rgba(28, 28, 30, 0.78);
+    --content-strong: rgba(36, 36, 40, 0.90);
   }
 
   * { margin:0; padding:0; box-sizing:border-box; -webkit-font-smoothing:antialiased; }
-  .stat-value, .price, .pnl, .stat-box .stat-value, [data-mono] { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
-  .card-title, .trade-tab, .page-tab { font-family: 'Outfit', sans-serif; }
+  .stat-value, .price, .pnl, .stat-box .stat-value, [data-mono] { font-family: 'SF Mono', 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .card-title, .trade-tab, .page-tab { font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
 
   body {
-    background:
-      radial-gradient(1000px 500px at 85% -10%, rgba(45,212,255,0.06), transparent 60%),
-      radial-gradient(800px 450px at -5% 110%, rgba(139,124,255,0.05), transparent 55%),
-      var(--bg);
+    background: var(--aurora);
     color: var(--text);
-    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    letter-spacing: -0.016em;
     height: 100vh;
     overflow: hidden;
     display: flex;
     flex-direction: column;
   }
 
-  /* ═══ TOP BAR ═══ */
+  /* Even fills — theme-aware leftovers */
+  html[data-theme="light"] [style*="rgba(15,23,42"],
+  html[data-theme="light"] [style*="rgba(15, 23, 42"],
+  html[data-theme="light"] [style*="rgba(30,41,59"],
+  html[data-theme="light"] [style*="rgba(2,6,23"] {
+    background: var(--content-strong) !important;
+    color: var(--text);
+  }
+  html[data-theme="dark"] [style*="rgba(15,23,42"],
+  html[data-theme="dark"] [style*="rgba(15, 23, 42"],
+  html[data-theme="dark"] [style*="rgba(30,41,59"],
+  html[data-theme="dark"] [style*="rgba(2,6,23"],
+  html[data-theme="dark"] [style*="rgba(255,255,255,0.9"],
+  html[data-theme="dark"] [style*="rgba(255,255,255,0.8"] {
+    background: var(--content-strong) !important;
+    color: var(--text);
+  }
+  [style*="color:var(--text)"],
+  [style*="color: var(--text)"],
+  [style*="color:#94a3b8"],
+  [style*="color:#cbd5e1"] {
+    color: var(--text) !important;
+  }
+
+  /* Type hierarchy */
+  .tg-section-title,
+  .card-title {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+    font-size: 13px !important;
+    font-weight: 650 !important;
+    letter-spacing: -0.022em;
+    color: var(--text) !important;
+  }
+  .toggle-label { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+  .caller-stats, .toggle-sub { font-size: 12px; color: var(--text2); font-weight: 450; line-height: 1.4; }
+  .trading-stat-label,
+  .sb-metric-label,
+  .prec-control-label,
+  .ov-chip-label {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text2) !important;
+  }
+  .trading-stat-val, .sb-metric-val, .ov-chip-val {
+    color: var(--text) !important;
+    letter-spacing: -0.03em;
+  }
+  .precision-title, .as-title {
+    color: var(--text) !important;
+    letter-spacing: -0.025em;
+  }
+  .precision-sub, .sb-empty { color: var(--text2) !important; font-size: 13px; line-height: 1.5; }
+  .sb-row-k { color: var(--text2) !important; font-weight: 500; }
+  .sb-row-v { color: var(--text) !important; font-weight: 600; }
+  .leverage-btn, .coin-btn, .trade-tab {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .page-tab {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  /* ═══ TOP BAR — floating Liquid Glass chrome ═══ */
   #topbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 20px;
-    height: 48px;
-    background: rgba(0,0,0,0.8);
-    backdrop-filter: blur(20px);
-    border-bottom: 1px solid var(--border);
+    padding: 14px 20px 10px;
+    height: auto;
+    min-height: 64px;
+    background: transparent;
+    backdrop-filter: none;
+    border-bottom: none;
     flex-shrink: 0;
     position: relative;
     z-index: 1000;
   }
+  #topbar::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: -28px; height: 28px;
+    background: linear-gradient(to bottom, color-mix(in srgb, var(--aurora) 0%, transparent), transparent);
+    pointer-events: none;
+    opacity: 0.6;
+  }
 
   #logo {
-    font-family: 'Fraunces', serif;
-    font-size: 17px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: -0.045em;
+    background: none;
+    -webkit-background-clip: unset;
+    -webkit-text-fill-color: unset;
+    color: var(--text);
+    opacity: 0.92;
   }
 
   #topbar-center { display: none; }
 
   #page-tabs {
     position: absolute;
-    left: 50%; 
+    left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 4px;
+    gap: 2px;
     align-items: center;
     z-index: 20;
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--glass);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 0.5px solid var(--glass-border);
+    box-shadow: var(--lens), var(--shadow-float);
   }
+  #page-tabs::before {
+    content: '';
+    position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: radial-gradient(120% 80% at 12% 0%, rgba(255,255,255,0.38), transparent 42%);
+  }
+  #tab-glider {
+    position: absolute;
+    top: 3px; left: 0;
+    height: calc(100% - 6px);
+    border-radius: 999px;
+    background: var(--glass-strong);
+    border: 0.5px solid var(--glass-border);
+    box-shadow: var(--lens), 0 2px 10px rgba(0,0,0,0.06);
+    transition: transform 0.42s cubic-bezier(0.32, 0.72, 0, 1), width 0.42s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.2s ease;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+  }
+  #tab-glider.ready { opacity: 1; }
 
   .page-tab {
-    padding: 5px 14px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 500;
+    position: relative;
+    z-index: 1;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 560;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: color 0.18s ease, transform 0.18s var(--ease, cubic-bezier(0.22,1,0.36,1));
     color: var(--text2);
     background: transparent;
-    border: 1px solid transparent;
+    border: none;
+    box-shadow: none;
   }
-  .page-tab:hover { color: var(--text); background: rgba(255,255,255,0.05); }
-  .page-tab.active { 
-    color: var(--accent); 
-    background: rgba(0,212,255,0.1);
-    border-color: rgba(0,212,255,0.2);
+  .page-tab:hover { color: var(--text); background: transparent; }
+  .page-tab:active { transform: scale(0.97); }
+  .page-tab.active {
+    color: var(--text);
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+
+  #theme-toggle {
+    width: 34px; height: 34px; border-radius: 50%;
+    display: grid; place-items: center;
+    cursor: pointer; flex-shrink: 0;
+    border: 0.5px solid var(--glass-border);
+    background: var(--glass);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    color: var(--text);
+    font-size: 16px; line-height: 1;
+    box-shadow: var(--lens), var(--shadow-1);
+    transition: transform 0.2s var(--ease, cubic-bezier(0.22,1,0.36,1)), background 0.2s;
+    padding: 0; margin: 0; font-family: inherit;
+    -webkit-app-region: no-drag;
+  }
+  #theme-toggle:hover { transform: scale(1.06); }
+  #theme-toggle:active { transform: scale(0.96); }
+  #theme-toggle .theme-toggle-icon { display: block; transform: translateY(-0.5px); }
+
+  html[data-theme="dark"] .col,
+  html[data-theme="dark"] .card,
+  html[data-theme="dark"] .stat-box,
+  html[data-theme="dark"] .prec-step,
+  html[data-theme="dark"] .sb-metric {
+    background: var(--content-strong) !important;
+    border-color: var(--border) !important;
+    color: var(--text);
+  }
+  html[data-theme="dark"] #settings-open-btn {
+    background: var(--glass);
+  }
+  html[data-theme="dark"] #mode-picker {
+    background: var(--aurora) !important;
   }
 
   /* Page containers */
@@ -131,7 +321,15 @@
     overflow: hidden;
     position: relative;
   }
-  .page.active { display: flex; }
+  .page.active { display: flex; animation: pageIn 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
+  @keyframes pageIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .page.active { animation: none; }
+    #tab-glider { transition: none; }
+  }
 
   /* Trading page needs vertical scroll */
   #trading-page {
@@ -223,6 +421,12 @@
     flex: 1;
   }
   .trade-tab-content.active {
+    display: block;
+  }
+  .others-tab-content {
+    display: none;
+  }
+  .others-tab-content.active {
     display: block;
   }
   #trading-page {
@@ -394,126 +598,225 @@
 
   /* ═══ PAGE 3 — PAPER TRADING ═══ */
   .trading-hero {
-    background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(0,136,255,0.05));
-    border: 1px solid rgba(0,212,255,0.2);
-    border-radius: var(--radius);
+    background: var(--content-strong);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 0.5px solid var(--border);
+    border-radius: 24px;
     padding: 20px;
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 16px;
     text-align: center;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.35) inset, var(--shadow-1);
   }
 
   .trading-stat-val {
     font-size: 24px;
     font-weight: 700;
-    background: linear-gradient(135deg, #fff, var(--accent));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    background: none;
+    -webkit-background-clip: unset;
+    -webkit-text-fill-color: unset;
+    color: var(--text);
   }
   .trading-stat-label { font-size: 11px; color: var(--text2); margin-top: 2px; }
 
-
-  /* ══ GLOBAL LUXURY GLASS THEME ══════════════════════════════════════ */
-  body::before {
-    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-    background:
-      radial-gradient(ellipse 80% 50% at 20% -10%, rgba(0,212,255,0.06), transparent),
-      radial-gradient(ellipse 60% 40% at 90% 110%, rgba(124,58,237,0.07), transparent);
+  /* ══ Precision Engine UI ══ */
+  .precision-panel {
+    position: relative;
+    overflow: hidden;
+    border-radius: 24px;
+    padding: 16px;
+    margin: 12px 0;
+    background: var(--content-strong);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 0.5px solid var(--border);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.35) inset, var(--shadow-1);
   }
+  .precision-panel::before {
+    content: '';
+    position: absolute; inset: 0 auto 0 0; width: 3px;
+    background: linear-gradient(180deg, #3b82f6, #8b7cff 70%, transparent);
+    border-radius: 3px 0 0 3px;
+  }
+  .precision-head {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    margin-bottom: 12px;
+  }
+  .precision-kicker {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 4px;
+  }
+  .precision-title {
+    font-family: var(--display); font-size: 16px; font-weight: 600; color: var(--text);
+  }
+  .precision-sub {
+    font-size: 11px; color: var(--text2); line-height: 1.45; margin-top: 4px; max-width: 42ch;
+  }
+  .prec-flow {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px;
+  }
+  .prec-step {
+    text-align: center; padding: 10px 6px; border-radius: 16px;
+    background: var(--content); border: 0.5px solid var(--border);
+  }
+  .prec-step-n {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--accent); margin-bottom: 2px;
+  }
+  .prec-step-l { font-size: 11px; font-weight: 600; color: var(--text); }
+  .prec-controls { display: grid; gap: 10px; }
+  .prec-control-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text3); margin-bottom: 5px;
+  }
+  .prec-seg { display: flex; gap: 4px; flex-wrap: wrap; }
+  .prec-seg .leverage-btn { flex: 1; min-width: 64px; text-align: center; }
+
+  .sb-hero {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 14px;
+  }
+  @media (min-width: 520px) {
+    .sb-hero { grid-template-columns: repeat(4, 1fr); }
+  }
+  .sb-metric {
+    background: var(--content); border: 0.5px solid var(--border);
+    border-radius: 16px; padding: 12px 10px;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.3) inset;
+  }
+  .sb-metric-label { font-size: 10px; color: var(--text3); letter-spacing: 0.04em; text-transform: uppercase; }
+  .sb-metric-val {
+    font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700;
+    margin-top: 4px; color: var(--text);
+  }
+  .sb-metric-val.accent { color: var(--accent); }
+  .sb-metric-val.up { color: var(--green); }
+  .sb-metric-val.down { color: var(--red); }
+  .sb-metric-sub { font-size: 10px; color: var(--text3); margin-top: 2px; }
+  .sb-section { margin-top: 14px; }
+  .sb-section-title {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--text2); margin-bottom: 8px;
+  }
+  .sb-row {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+    padding: 7px 0; border-bottom: 1px solid var(--border2); font-size: 12px;
+  }
+  .sb-row:last-child { border-bottom: none; }
+  .sb-row-k { color: var(--text2); }
+  .sb-row-v { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); text-align: right; }
+  .sb-empty {
+    padding: 18px 12px; text-align: center; border-radius: 16px;
+    background: var(--content); border: 0.5px dashed var(--border);
+    color: var(--text3); font-size: 12px; line-height: 1.5;
+  }
+  .sb-status {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+  }
+  .sb-status.ok { background: rgba(22,163,74,0.12); color: var(--green); }
+  .sb-status.wait { background: rgba(59,130,246,0.12); color: var(--accent); }
+  .sb-status.warn { background: rgba(217,119,6,0.14); color: var(--gold); }
+  .sb-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .sb-chip {
+    font-size: 10px; padding: 5px 10px; border-radius: 999px;
+    background: var(--glass); border: 0.5px solid var(--glass-border);
+    font-family: 'JetBrains Mono', monospace; color: var(--text2);
+    backdrop-filter: blur(16px);
+  }
+
+
+  /* ══ LIQUID GLASS THEME ══════════════════════════════════════════════ */
+  body::before { display: none; }
   .tg-section {
-    background: rgba(15,23,42,0.55) !important;
-    border: 1px solid rgba(148,163,184,0.09);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.03);
-    transition: border-color .25s ease, box-shadow .25s ease;
+    background: var(--content-strong) !important;
+    border: 0.5px solid var(--border) !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.4) inset, var(--shadow-1);
+    border-radius: 22px !important;
+    transition: border-color .25s ease, box-shadow .25s ease, transform .25s ease;
   }
   .tg-section:hover {
-    border-color: rgba(0,212,255,0.22);
-    box-shadow: 0 6px 28px rgba(0,212,255,0.05), inset 0 1px 0 rgba(255,255,255,0.04);
+    border-color: color-mix(in srgb, var(--accent) 28%, var(--border)) !important;
+    box-shadow: var(--shadow-2);
   }
   .page-tab {
-    border-radius: 10px;
-    transition: all .22s ease;
+    border-radius: 999px;
   }
-  .page-tab:hover { background: rgba(0,212,255,0.07); }
-  .page-tab.active {
-    background: linear-gradient(135deg, rgba(0,212,255,0.16), rgba(124,58,237,0.16));
-    border: 1px solid rgba(0,212,255,0.3);
-    box-shadow: 0 0 16px rgba(0,212,255,0.12), inset 0 1px 0 rgba(255,255,255,0.06);
+  input[type="text"], input[type="number"], input[type="password"], select, textarea,
+  .tg-input {
+    background: color-mix(in srgb, var(--content-strong) 88%, transparent) !important;
+    border: 0.5px solid var(--border) !important;
+    color: var(--text) !important;
+    border-radius: 14px !important;
   }
-  input[type="text"], input[type="number"], input[type="password"], select, textarea {
-    transition: border-color .2s ease, box-shadow .2s ease;
-  }
-  input[type="text"]:focus, input[type="number"]:focus, input[type="password"]:focus, select:focus, textarea:focus {
-    border-color: rgba(0,212,255,0.45) !important;
-    box-shadow: 0 0 0 3px rgba(0,212,255,0.08), 0 0 14px rgba(0,212,255,0.1);
+  input[type="text"]:focus, input[type="number"]:focus, input[type="password"]:focus, select:focus, textarea:focus,
+  .tg-input:focus {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border)) !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
     outline: none;
   }
   .tg-add-btn {
     transition: all .18s ease;
+    border-radius: 999px !important;
   }
   .tg-add-btn:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(0,212,255,0.18);
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 18%, transparent);
   }
   .overlay-topbar {
-    backdrop-filter: blur(24px) !important;
-    -webkit-backdrop-filter: blur(24px) !important;
-    background: rgba(2,6,23,0.7) !important;
+    backdrop-filter: var(--glass-blur) !important;
+    -webkit-backdrop-filter: var(--glass-blur) !important;
+    background: var(--glass) !important;
+    border-bottom: 0.5px solid var(--glass-border) !important;
+    box-shadow: var(--lens);
   }
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, rgba(0,212,255,0.25), rgba(124,58,237,0.25));
+    background: color-mix(in srgb, var(--text3) 35%, transparent);
     border-radius: 3px;
   }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(0,212,255,0.4); }
+  ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--text3) 55%, transparent); }
   ::-webkit-scrollbar-track { background: transparent; }
 
-  /* ══ LUXURY TRADING UI ══════════════════════════════════════════════ */
+  /* ══ TRADING UI — content cards, chrome elsewhere ════════════════════ */
   #trading-page .trading-hero {
-    background: linear-gradient(135deg, rgba(0,212,255,0.08), rgba(124,58,237,0.08));
-    border: 1px solid rgba(0,212,255,0.15);
-    border-radius: 16px;
-    backdrop-filter: blur(20px);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
-    padding: 16px 12px;
+    background: var(--content-strong);
+    border: 0.5px solid var(--border);
+    border-radius: 24px;
+    backdrop-filter: none;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.35) inset, var(--shadow-1);
+    padding: 18px 14px;
     position: relative;
     overflow: hidden;
   }
-  #trading-page .trading-hero::before {
-    content: ''; position: absolute; top: 0; left: -100%;
-    width: 60%; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(0,212,255,0.6), transparent);
-    animation: heroShine 4s ease-in-out infinite;
-  }
-  @keyframes heroShine { 50% { left: 140%; } 100% { left: 140%; } }
+  #trading-page .trading-hero::before { display: none; }
   #trading-page .trading-stat-val {
-    background: linear-gradient(135deg, #fff, #94a3b8);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    font-weight: 800; letter-spacing: -0.5px;
+    background: none;
+    -webkit-background-clip: unset; -webkit-text-fill-color: unset;
+    color: var(--text);
+    font-weight: 750; letter-spacing: -0.4px;
   }
   #trading-page .trading-stat-val.profit {
-    background: linear-gradient(135deg, #34d399, #10b981);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 12px rgba(52,211,153,0.4));
+    background: none; -webkit-background-clip: unset; -webkit-text-fill-color: unset;
+    color: var(--green); filter: none;
   }
   #trading-page .trading-stat-val.loss {
-    background: linear-gradient(135deg, #f87171, #ef4444);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 12px rgba(239,68,68,0.4));
+    background: none; -webkit-background-clip: unset; -webkit-text-fill-color: unset;
+    color: var(--red); filter: none;
   }
   #trading-page .tg-section {
-    background: rgba(15,23,42,0.6);
-    border: 1px solid rgba(148,163,184,0.08);
-    border-radius: 14px;
-    backdrop-filter: blur(12px);
+    background: var(--content-strong);
+    border: 0.5px solid var(--border);
+    border-radius: 22px;
+    backdrop-filter: none;
     transition: border-color .25s ease, transform .25s ease, box-shadow .25s ease;
   }
   #trading-page .tg-section:hover {
-    border-color: rgba(0,212,255,0.25);
-    box-shadow: 0 4px 24px rgba(0,212,255,0.06);
+    border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+    box-shadow: var(--shadow-1);
   }
   #trading-page .trade-tab {
     position: relative; transition: all .2s ease;
@@ -521,42 +824,44 @@
   #trading-page .trade-tab.active::after {
     content: ''; position: absolute; bottom: -1px; left: 15%; right: 15%;
     height: 2px; border-radius: 2px;
-    background: linear-gradient(90deg, #00d4ff, #7c3aed);
-    box-shadow: 0 0 12px rgba(0,212,255,0.5);
+    background: var(--accent);
+    box-shadow: none;
   }
   #trading-page .leverage-btn, #trading-page .tg-add-btn {
     transition: all .18s ease;
   }
   #trading-page .leverage-btn:hover, #trading-page .tg-add-btn:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba(0,212,255,0.15);
+    box-shadow: 0 4px 14px rgba(59,130,246,0.14);
   }
   #trading-page .leverage-btn.active {
-    background: linear-gradient(135deg, rgba(0,212,255,0.25), rgba(124,58,237,0.25));
-    border-color: rgba(0,212,255,0.5);
-    box-shadow: 0 0 16px rgba(0,212,255,0.2), inset 0 1px 0 rgba(255,255,255,0.1);
+    background: rgba(59,130,246,0.14);
+    border-color: rgba(59,130,246,0.4);
+    color: var(--accent);
+    box-shadow: none;
   }
   /* Quick-glance strip */
   .ov-strip {
     display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 0 0 10px;
   }
   .ov-chip {
-    background: rgba(15,23,42,0.7); border: 1px solid rgba(148,163,184,0.1);
-    border-radius: 12px; padding: 10px 8px; text-align: center;
-    backdrop-filter: blur(10px); transition: all .2s ease;
+    background: rgba(255,255,255,0.94); border: 1px solid rgba(255,255,255,0.90);
+    border-radius: 18px; padding: 10px 8px; text-align: center;
+    backdrop-filter: blur(12px); transition: all .2s ease;
+    box-shadow: 0 4px 16px rgba(80,100,140,0.07);
   }
-  .ov-chip:hover { border-color: rgba(0,212,255,0.3); transform: translateY(-1px); }
+  .ov-chip:hover { border-color: rgba(59,130,246,0.3); transform: translateY(-1px); }
   .ov-chip-label { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 3px; }
   .ov-chip-val { font-size: 14px; font-weight: 800; }
-  .regime-bull { color: #34d399; text-shadow: 0 0 12px rgba(52,211,153,0.5); }
-  .regime-bear { color: #ef4444; text-shadow: 0 0 12px rgba(239,68,68,0.5); }
-  .regime-side { color: #fbbf24; text-shadow: 0 0 12px rgba(251,191,36,0.5); }
+  .regime-bull { color: var(--green); text-shadow: none; }
+  .regime-bear { color: var(--red); text-shadow: none; }
+  .regime-side { color: var(--gold); text-shadow: none; }
   .scan-pulse {
     display: inline-block; width: 6px; height: 6px; border-radius: 50%;
-    background: #34d399; margin-right: 5px;
+    background: var(--green); margin-right: 5px;
     animation: scanPulse 2s ease-in-out infinite;
   }
-  @keyframes scanPulse { 50% { opacity: .3; box-shadow: 0 0 8px #34d399; } }
+  @keyframes scanPulse { 50% { opacity: .35; box-shadow: 0 0 8px rgba(22,163,74,0.45); } }
 
 
   .trade-item {
@@ -582,9 +887,9 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
-    background: var(--bg2);
-    border-radius: 10px;
-    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.92);
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.88);
   }
   .toggle-label { font-size: 13px; font-weight: 500; }
   .toggle-sub { font-size: 11px; color: var(--text2); }
@@ -608,39 +913,39 @@
     transition: transform 0.3s;
   }
   .coin-btn {
-    padding: 5px 10px;
-    border-radius: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 550;
     cursor: pointer;
-    border: 1px solid var(--border);
-    background: var(--bg3);
+    border: 1px solid rgba(30,40,70,0.10);
+    background: rgba(255,255,255,0.92);
     color: var(--text2);
     transition: all 0.15s;
   }
-  .coin-btn:hover { color: var(--text); border-color: var(--border2); }
+  .coin-btn:hover { color: var(--text); border-color: rgba(59,130,246,0.28); }
   .coin-btn.active {
-    background: rgba(0,212,255,0.15);
-    border-color: rgba(0,212,255,0.4);
+    background: rgba(59,130,246,0.12);
+    border-color: rgba(59,130,246,0.35);
     color: var(--accent);
   }
 
   .leverage-btn {
-    padding: 6px 14px;
-    border-radius: 8px;
+    padding: 7px 14px;
+    border-radius: 999px;
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
     font-family: inherit;
-    background: var(--bg3);
-    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.92);
+    border: 1px solid rgba(30,40,70,0.10);
     color: var(--text2);
     transition: all 0.2s;
   }
   .leverage-btn:hover { border-color: var(--accent); color: var(--accent); }
   .leverage-btn.active { 
-    background: rgba(0,212,255,0.15);
-    border-color: var(--accent);
+    background: rgba(59,130,246,0.12);
+    border-color: rgba(59,130,246,0.4);
     color: var(--accent);
   }
   /* Intelligence Feed */
@@ -793,26 +1098,30 @@
   #topbar-right { display: flex; gap: 8px; align-items: center; }
 
   .tb-btn {
-    padding: 5px 14px;
-    border-radius: 20px;
+    padding: 7px 14px;
+    border-radius: 999px;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: transform 0.18s ease, background 0.18s ease;
     font-family: inherit;
   }
+  .tb-btn:active { transform: scale(0.97); }
   #settings-open-btn {
-    background: rgba(255,255,255,0.08);
-    border: 1px solid var(--border);
+    background: var(--glass);
+    border: 0.5px solid var(--glass-border);
     color: var(--text);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    box-shadow: var(--lens);
   }
-  #settings-open-btn:hover { background: rgba(255,255,255,0.14); }
+  #settings-open-btn:hover { background: var(--glass-strong); }
   #close-btn {
-    background: rgba(255,69,58,0.15);
-    border: 1px solid rgba(255,69,58,0.2);
+    background: rgba(255,69,58,0.12);
+    border: 0.5px solid rgba(255,69,58,0.22);
     color: var(--red);
   }
-  #close-btn:hover { background: rgba(255,69,58,0.25); }
+  #close-btn:hover { background: rgba(255,69,58,0.2); }
 
   /* ═══ MAIN GRID ═══ */
   #page-1 { overflow: hidden; }
@@ -822,12 +1131,16 @@
     grid-template-columns: 220px 1fr 300px;
     height: 100%;
     overflow: hidden;
-    gap: 1px;
-    background: var(--border2);
+    gap: 10px;
+    padding: 0 12px 12px;
+    background: transparent;
   }
 
   .col {
-    background: var(--bg);
+    background: var(--content);
+    border: 0.5px solid var(--border);
+    border-radius: 24px;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.35) inset, var(--shadow-1, 0 4px 24px rgba(0,0,0,0.06));
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -839,16 +1152,18 @@
     font-size: 11px;
     font-weight: 600;
     color: var(--text2);
-    letter-spacing: 0.5px;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     flex-shrink: 0;
-    border-bottom: 1px solid var(--border2);
+    border-bottom: 0.5px solid var(--border2);
+    background: transparent;
   }
 
   /* ═══ COL 1 — COMPANION ═══ */
   #col-waifu {
-    background: linear-gradient(180deg, #000 0%, #050a14 100%);
+    background: linear-gradient(180deg, #0a0a0c 0%, #12141a 100%);
     position: relative;
+    border-color: rgba(255,255,255,0.08);
   }
 
   #waifu-wrap {
@@ -1204,15 +1519,21 @@
 
   /* ═══ OVERLAYS ═══ */
   .overlay {
-    display: none; position: absolute; inset: 0;
-    background: var(--bg); z-index: 50; flex-direction: column;
+    display: none; position: absolute; inset: 8px;
+    background: var(--content-strong); z-index: 50; flex-direction: column;
+    border-radius: 24px;
+    border: 0.5px solid var(--border);
+    box-shadow: var(--shadow-float);
+    overflow: hidden;
   }
   .overlay.open { display: flex; }
 
   .overlay-topbar {
     display: flex; align-items: center; gap: 14px;
-    padding: 12px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
-    background: rgba(0,0,0,0.6); backdrop-filter: blur(20px);
+    padding: 12px 20px; border-bottom: 0.5px solid var(--glass-border); flex-shrink: 0;
+    background: var(--glass); backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    box-shadow: var(--lens);
   }
   .overlay-title { font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: -0.2px; }
 
@@ -1428,8 +1749,8 @@ h1,h2,h3,.col-header,#port-label { letter-spacing:-.2px; }
 .p-price,.p-chg { font-variant-numeric:tabular-nums; }
 button { transition:all .18s cubic-bezier(.2,.8,.2,1); }
 button:active { transform:scale(.965); }
-.tg-section,.s-section { box-shadow:inset 0 1px 0 rgba(255,255,255,.045), 0 10px 30px rgba(0,0,0,.28); border-radius:var(--radius); }
-.tg-section:hover { box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 14px 38px rgba(0,0,0,.34); }
+.tg-section,.s-section { box-shadow: 0 1px 0 rgba(255,255,255,0.35) inset, var(--shadow-1); border-radius: 22px; }
+.tg-section:hover { box-shadow: 0 12px 36px rgba(80,100,140,0.14); }
 input:focus,textarea:focus,select:focus { border-color:var(--accent) !important; box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 ::-webkit-scrollbar { width:9px; height:9px; }
 ::-webkit-scrollbar-thumb { background:rgba(255,255,255,.12); border-radius:9px; border:2px solid transparent; background-clip:content-box; }
@@ -1439,9 +1760,9 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
 @keyframes shimmer { to { background-position:-200% 0; } }
 .theme-chip { padding:9px 14px; border-radius:10px; border:1px solid var(--border); background:var(--bg3); color:var(--text); cursor:pointer; font-size:12px; font-family:inherit; }
 .theme-chip.active { border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
-#cmdk { position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,.5); backdrop-filter:blur(6px); display:none; align-items:flex-start; justify-content:center; padding-top:14vh; }
+#cmdk { position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,.28); backdrop-filter:blur(18px) saturate(1.4); display:none; align-items:flex-start; justify-content:center; padding-top:14vh; }
 #cmdk.show { display:flex; }
-#cmdk-box { width:520px; max-width:92vw; background:color-mix(in srgb, var(--bg2) 88%, transparent); backdrop-filter:blur(24px); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.5); }
+#cmdk-box { width:520px; max-width:92vw; background:var(--glass); backdrop-filter:var(--glass-blur); -webkit-backdrop-filter:var(--glass-blur); border:0.5px solid var(--glass-border); border-radius:22px; overflow:hidden; box-shadow:var(--lens), var(--shadow-float); }
 #cmdk-in { width:100%; background:transparent; border:none; outline:none; color:var(--text); font-size:16px; padding:16px 18px; font-family:inherit; border-bottom:1px solid var(--border2); box-shadow:none !important; }
 #cmdk-list { max-height:320px; overflow-y:auto; padding:6px; }
 .cmdk-item { padding:11px 13px; border-radius:10px; font-size:13px; color:var(--text2); cursor:pointer; display:flex; justify-content:space-between; }
@@ -1458,7 +1779,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
 </style>
 </head>
 <body>
-<div id="boot-fallback" style="position:fixed;inset:0;z-index:999999;background:#0a0a0c;color:#a0a0a8;display:flex;align-items:center;justify-content:center;font:13px system-ui,sans-serif;pointer-events:none;">Loading dashboard…</div>
+<div id="boot-fallback" style="position:fixed;inset:0;z-index:999999;background:var(--aurora,#e8f0fa);color:var(--text2,#4a5568);display:flex;align-items:center;justify-content:center;font:13px -apple-system,BlinkMacSystemFont,sans-serif;letter-spacing:-0.02em;pointer-events:none;">Loading dashboard…</div>
 <script>
 (function() {
   function setEl(id, prop, val) { var e = document.getElementById(id); if (e) e[prop] = val; return e; }
@@ -1478,14 +1799,27 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       p.classList.toggle('active', on);
       p.style.display = on ? 'flex' : 'none';
     });
+    window.moveTabGlider(n);
   }
+  window.moveTabGlider = function(n) {
+    var tabs = document.getElementById('page-tabs');
+    var g = document.getElementById('tab-glider');
+    if (!tabs || !g) return;
+    var t = n != null
+      ? tabs.querySelector('.page-tab[data-page="' + n + '"]')
+      : tabs.querySelector('.page-tab.active');
+    if (!t || t.offsetParent === null) return;
+    g.style.width = t.offsetWidth + 'px';
+    g.style.transform = 'translateX(' + t.offsetLeft + 'px)';
+    g.classList.add('ready');
+  };
   function showTabLoading(n) {
     var pid = PAGE_IDS[n] || ('page-' + n);
     var page = document.getElementById(pid);
     if (!page || page.querySelector('.tab-loading-hint')) return;
     var hint = document.createElement('div');
     hint.className = 'tab-loading-hint';
-    hint.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,12,0.85);color:#a0a0a8;font:13px system-ui;z-index:50;pointer-events:none;';
+    hint.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb, var(--content) 70%, transparent);color:var(--text2);font:13px -apple-system,BlinkMacSystemFont,sans-serif;z-index:50;pointer-events:none;backdrop-filter:blur(16px);';
     hint.textContent = 'Loading tab features…';
     if (getComputedStyle(page).position === 'static') page.style.position = 'relative';
     page.appendChild(hint);
@@ -1494,13 +1828,27 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
   window.loadWaifuFrame = function() {
     var f = document.getElementById('waifu-frame');
     var hint = document.getElementById('waifu-load-hint');
-    if (!f || f.src) return;
+    if (!f) return;
     if (hint) hint.style.display = 'flex';
-    if (f.dataset.src) {
+    function applySrc(model, scaleDiv, motion, offsetY) {
       f.style.display = 'block';
-      f.src = f.dataset.src;
+      f.src = 'dashboard-waifu.html?model=' + encodeURIComponent(model || './assets/model/huohuo.model3.json')
+        + '&scaleDiv=' + encodeURIComponent(String(scaleDiv || 8500))
+        + '&motion=' + encodeURIComponent(motion == null ? 'idle' : motion)
+        + '&offsetY=' + encodeURIComponent(String(offsetY || 0))
+        + '&t=' + Date.now();
       f.onload = function() { if (hint) hint.style.display = 'none'; };
     }
+    try {
+      var ipc = window.ipcRenderer || window.asuka?.ipc;
+      if (ipc) {
+        ipc.invoke('get-character').then(function(ch) {
+          applySrc(ch?.model, ch?.previewScaleDivisor, ch?.motionGroup, ch?.offsetY);
+        }).catch(function() { applySrc(null, 8500, 'idle', 0); });
+        return;
+      }
+    } catch (_) {}
+    applySrc(null, 8500, 'idle', 0);
   };
   function loadPage1Lite() {
     try {
@@ -1542,7 +1890,33 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     } catch(e) {}
   }
   window.loadPage1Lite = loadPage1Lite;
+  window.applyAppearance = function (mode) {
+    var m = mode === 'dark' ? 'dark' : 'light'
+    document.documentElement.setAttribute('data-theme', m)
+    try { localStorage.setItem('asuka-appearance', m) } catch (e) {}
+    var btn = document.getElementById('theme-toggle')
+    if (btn) {
+      var icon = btn.querySelector('.theme-toggle-icon')
+      if (icon) icon.textContent = m === 'dark' ? '☀' : '☾'
+      btn.title = m === 'dark' ? 'Light mode' : 'Dark mode'
+      btn.setAttribute('aria-label', m === 'dark' ? 'Switch to light mode' : 'Switch to dark mode')
+    }
+    try {
+      var ipc = window.ipcRenderer || window.asuka?.ipc
+      ipc?.send?.('appearance-changed', { mode: m })
+    } catch (e) {}
+    requestAnimationFrame(function () {
+      if (typeof window.moveTabGlider === 'function') window.moveTabGlider()
+    })
+  }
+
   document.addEventListener('click', function(e) {
+    if (e.target.closest('#theme-toggle')) {
+      e.stopImmediatePropagation();
+      var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
+      window.applyAppearance(next)
+      return
+    }
     if (e.target.closest('#close-btn')) {
       e.stopImmediatePropagation();
       try { (window.ipcRenderer||window.asuka?.ipc).send('dashboard-closed'); window.close(); } catch(x) {}
@@ -1560,9 +1934,16 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
         setTimeout(function() { window.loadPageData(n); }, 0);
       } else if (n !== 1) {
         showTabLoading(n);
-        if (typeof window.loadDashboardApp === 'function' && !window.__dashAppLoaded && !window.__dashAppLoading) {
-          window.__dashAppLoading = true;
-          setTimeout(function() { window.loadDashboardApp(); }, 0);
+        if (typeof window.loadDashboardApp === 'function' && !window.__dashAppLoaded) {
+          // Allow retry if a previous load hung
+          if (window.__dashAppLoading && window.__dashAppLoadStarted && Date.now() - window.__dashAppLoadStarted > 12000) {
+            window.__dashAppLoading = false;
+          }
+          if (!window.__dashAppLoading) {
+            window.__dashAppLoading = true;
+            window.__dashAppLoadStarted = Date.now();
+            setTimeout(function() { window.loadDashboardApp(); }, 0);
+          }
         }
       }
       return;
@@ -1631,23 +2012,23 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
   };
 })();
 </script>
-  <div id="mode-picker" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(8,10,20,0.97);backdrop-filter:blur(12px);align-items:center;justify-content:center;flex-direction:column;font-family:system-ui;">
+  <div id="mode-picker" style="display:none;position:fixed;inset:0;z-index:99999;background:var(--aurora);backdrop-filter:blur(24px) saturate(1.5);align-items:center;justify-content:center;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,sans-serif;">
     <div style="text-align:center;max-width:560px;padding:30px;">
-      <div style="font-size:30px;font-weight:600;font-family:'Fraunces',serif;color:var(--text);margin-bottom:6px;letter-spacing:-0.01em;">Welcome to Asuka 🌸</div>
-      <div style="font-size:14px;color:#94a3b8;margin-bottom:28px;">How do you want to use her? You can switch anytime in Settings.</div>
+      <div style="font-size:30px;font-weight:600;font-family:var(--display);color:var(--text);margin-bottom:6px;letter-spacing:-0.02em;">Welcome to Asuka</div>
+      <div style="font-size:14px;color:var(--text2);margin-bottom:28px;line-height:1.5;">How do you want to use her? You can switch anytime in Settings.</div>
       <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
-        <div class="mode-card" data-mode="companion" style="cursor:pointer;width:230px;padding:24px;border-radius:18px;border:2px solid #334155;background:rgba(30,41,59,0.6);transition:.2s;">
+        <div class="mode-card" data-mode="companion" style="cursor:pointer;width:230px;padding:24px;border-radius:24px;border:0.5px solid var(--glass-border);background:var(--glass);backdrop-filter:blur(40px) saturate(1.8);box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.55),0 16px 48px rgba(0,0,0,0.08);transition:.2s;">
           <div style="font-size:38px;margin-bottom:10px;">🌸</div>
-          <div style="font-size:17px;font-weight:700;color:#e2e8f0;margin-bottom:6px;">Companion</div>
-          <div style="font-size:12px;color:#94a3b8;line-height:1.5;">Your AI friend & tutor. Learn languages, prep for interviews, study, voice chat, runs your Mac. No trading.</div>
+          <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px;letter-spacing:-0.02em;">Companion</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.5;">Your AI friend and tutor. Learn, study, voice chat, run your Mac — no trading.</div>
         </div>
-        <div class="mode-card" data-mode="trading" style="cursor:pointer;width:230px;padding:24px;border-radius:18px;border:2px solid #7c3aed;background:rgba(124,58,237,0.12);transition:.2s;">
+        <div class="mode-card" data-mode="trading" style="cursor:pointer;width:230px;padding:24px;border-radius:24px;border:0.5px solid color-mix(in srgb, var(--violet) 35%, var(--glass-border));background:var(--glass-strong);backdrop-filter:blur(40px) saturate(1.8);box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.55),0 16px 48px rgba(0,0,0,0.08);transition:.2s;">
           <div style="font-size:38px;margin-bottom:10px;">📈</div>
-          <div style="font-size:17px;font-weight:700;color:#e2e8f0;margin-bottom:6px;">Trading <span style="font-size:9px;background:rgba(124,58,237,0.3);border-radius:6px;padding:2px 7px;vertical-align:middle;">PRO</span></div>
-          <div style="font-size:12px;color:#94a3b8;line-height:1.5;">Everything in Companion PLUS the full trading engine, MiroFish agents, sniper, coin launch suite & buyback.</div>
+          <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px;letter-spacing:-0.02em;">Trading <span style="font-size:9px;background:rgba(124,58,237,0.14);color:var(--violet);border-radius:999px;padding:2px 8px;vertical-align:middle;font-weight:700;">PRO</span></div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.5;">Everything in Companion plus the trading engine, scanner, sniper, and launch tools.</div>
         </div>
       </div>
-      <div style="font-size:11px;color:#64748b;margin-top:20px;">Trading mode costs more to run (live market scanning).</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:20px;">Trading mode costs more to run (live market scanning).</div>
     </div>
   </div>
 
@@ -1659,26 +2040,43 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     <div id="session-badge"></div>
   </div>
   <div id="page-tabs">
+    <div id="tab-glider" aria-hidden="true"></div>
     <div class="page-tab active" data-page="1">Dashboard</div>
-    <div class="page-tab" data-page="2">📡 Telegram</div>
-    <div class="page-tab" data-page="3">📊 Trading</div>
-    <div class="page-tab" data-page="6" id="website-tab" style="display:none;">🌐 Website</div>
-    <div class="page-tab" data-page="7">📣 Calls</div>
-    <div class="page-tab" data-page="5">🌸 Others</div>
+    <div class="page-tab" data-page="2">Telegram</div>
+    <div class="page-tab" data-page="3">Trading</div>
+    <div class="page-tab" data-page="6" id="website-tab" style="display:none;">Website</div>
+    <div class="page-tab" data-page="7">Calls</div>
+    <div class="page-tab" data-page="5">Others</div>
     <!-- Dev tab removed — access via Settings -->
   </div>
   <div id="topbar-right">
+    <button type="button" id="theme-toggle" title="Dark mode" aria-label="Toggle dark mode">
+      <span class="theme-toggle-icon" aria-hidden="true">☾</span>
+    </button>
     <div class="tb-btn" id="settings-open-btn">Settings</div>
     <div class="tb-btn" id="close-btn">Close</div>
   </div>
 </div>
+<script>
+  if (typeof window.applyAppearance === 'function') {
+    window.applyAppearance(document.documentElement.getAttribute('data-theme') || localStorage.getItem('asuka-appearance') || 'light')
+  }
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      if (typeof window.moveTabGlider === 'function') window.moveTabGlider()
+    })
+  })
+  window.addEventListener('resize', function() {
+    if (typeof window.moveTabGlider === 'function') window.moveTabGlider()
+  })
+</script>
 
 <!-- PAGE WRAPPER -->
 <div id="pages-wrapper">
 
 <!-- PAGE 1 — DASHBOARD -->
 <div class="page active" id="page-1">
-<div id="daily-greeting" style="margin:8px 12px 0;padding:10px 14px;border-radius:12px;background:rgba(15,23,42,0.5);border:1px solid var(--border);backdrop-filter:blur(10px);display:none;">
+<div id="daily-greeting" style="margin:8px 12px 0;padding:12px 16px;border-radius:18px;background:var(--content);border:0.5px solid var(--border);display:none;">
   <div style="display:flex;justify-content:space-between;align-items:center;">
     <div id="greeting-text" style="font-size:12px;font-weight:600;"></div>
     <div id="streak-badge" style="font-size:11px;color:#fbbf24;font-weight:700;"></div>
@@ -2063,22 +2461,22 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       <div style="font-size:10px;color:var(--text2);margin-bottom:10px;">Fill what you want — tap ✨ on any field for Asuka to write it. Leave blank to skip.</div>
       <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px;">What kind of website?</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:12px;">
-        <button class="wz-type" data-type="crypto" style="padding:8px;border-radius:8px;border:2px solid #7c3aed;background:rgba(124,58,237,0.15);color:#e2e8f0;cursor:pointer;font-size:11px;">🪙 Crypto Coin</button>
-        <button class="wz-type" data-type="business" style="padding:8px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:11px;">🏢 Business</button>
-        <button class="wz-type" data-type="portfolio" style="padding:8px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:11px;">🎨 Portfolio</button>
-        <button class="wz-type" data-type="event" style="padding:8px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:11px;">🎉 Event</button>
-        <button class="wz-type" data-type="personal" style="padding:8px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:11px;">👤 Personal</button>
-        <button class="wz-type" data-type="resume" style="padding:8px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:11px;">📄 Resume</button>
+        <button class="wz-type" data-type="crypto" style="padding:8px;border-radius:8px;border:2px solid #7c3aed;background:rgba(124,58,237,0.15);color:var(--text);cursor:pointer;font-size:11px;">🪙 Crypto Coin</button>
+        <button class="wz-type" data-type="business" style="padding:8px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:11px;">🏢 Business</button>
+        <button class="wz-type" data-type="portfolio" style="padding:8px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:11px;">🎨 Portfolio</button>
+        <button class="wz-type" data-type="event" style="padding:8px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:11px;">🎉 Event</button>
+        <button class="wz-type" data-type="personal" style="padding:8px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:11px;">👤 Personal</button>
+        <button class="wz-type" data-type="resume" style="padding:8px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:11px;">📄 Resume</button>
       </div>
 
       <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:5px;">Design vibe ✨</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:10px;">
-        <button class="wz-vibe" data-vibe="animated" style="padding:7px;border-radius:8px;border:2px solid #7c3aed;background:rgba(124,58,237,0.15);color:#e2e8f0;cursor:pointer;font-size:10px;">✨ Animated</button>
-        <button class="wz-vibe" data-vibe="minimal" style="padding:7px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:10px;">◽ Minimal</button>
-        <button class="wz-vibe" data-vibe="bold" style="padding:7px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:10px;">⚡ Bold</button>
-        <button class="wz-vibe" data-vibe="luxury" style="padding:7px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:10px;">👑 Luxury</button>
-        <button class="wz-vibe" data-vibe="playful" style="padding:7px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:10px;">🎈 Playful</button>
-        <button class="wz-vibe" data-vibe="web3" style="padding:7px;border-radius:8px;border:1px solid #334155;background:rgba(30,41,59,0.5);color:#e2e8f0;cursor:pointer;font-size:10px;">🔮 Web3</button>
+        <button class="wz-vibe" data-vibe="animated" style="padding:7px;border-radius:8px;border:2px solid #7c3aed;background:rgba(124,58,237,0.15);color:var(--text);cursor:pointer;font-size:10px;">✨ Animated</button>
+        <button class="wz-vibe" data-vibe="minimal" style="padding:7px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:10px;">◽ Minimal</button>
+        <button class="wz-vibe" data-vibe="bold" style="padding:7px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:10px;">⚡ Bold</button>
+        <button class="wz-vibe" data-vibe="luxury" style="padding:7px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:10px;">👑 Luxury</button>
+        <button class="wz-vibe" data-vibe="playful" style="padding:7px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:10px;">🎈 Playful</button>
+        <button class="wz-vibe" data-vibe="web3" style="padding:7px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:10px;">🔮 Web3</button>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
@@ -2111,7 +2509,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
         <button class="tg-add-btn wz-dom-choice" id="wz-dom-no" data-c="no" style="font-size:11px;padding:4px 14px;">No — make me one</button>
       </div>
       <input class="tg-input" id="wz-domain-own" placeholder="Paste your domain (e.g. mycoin.com)" style="display:none;margin:0 0 4px;font-size:11px;">
-      <div id="wz-domain-out" style="display:none;font-size:10px;margin-bottom:6px;padding:8px;border-radius:8px;background:rgba(15,23,42,0.6);line-height:1.5;"></div>
+      <div id="wz-domain-out" style="display:none;font-size:10px;margin-bottom:6px;padding:8px;border-radius:8px;background:rgba(255,255,255,0.94);line-height:1.5;"></div>
 
       <div style="font-size:10px;font-weight:700;color:var(--text2);margin:6px 0 4px;">📣 Socials & Telegram</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
@@ -2120,7 +2518,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       </div>
 
       <button class="tg-add-btn" id="wz-create" style="width:100%;background:linear-gradient(135deg,rgba(52,211,153,0.2),rgba(0,212,255,0.15));border-color:rgba(52,211,153,0.4);padding:12px;font-size:13px;">🌐 Create Website</button>
-      <div id="wz-status" style="display:none;font-size:11px;margin-top:8px;padding:10px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid var(--border);white-space:pre-wrap;line-height:1.6;"></div>
+      <div id="wz-status" style="display:none;font-size:11px;margin-top:8px;padding:10px;border-radius:8px;background:rgba(255,255,255,0.94);border:1px solid var(--border);white-space:pre-wrap;line-height:1.6;"></div>
     </div>
 
   </div>
@@ -2167,7 +2565,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
         <button class="tg-add-btn" id="xm-save" style="flex:1;">💾 Save</button>
         <button class="tg-add-btn" id="xm-preview" style="flex:1;">👁️ Preview a post</button>
       </div>
-      <div id="xm-preview-out" style="display:none;font-size:11px;margin-top:6px;padding:9px;border-radius:8px;background:rgba(15,23,42,.6);border:1px solid var(--border);line-height:1.5;"></div>
+      <div id="xm-preview-out" style="display:none;font-size:11px;margin-top:6px;padding:9px;border-radius:8px;background:rgba(255,255,255,0.94);border:1px solid var(--border);line-height:1.5;"></div>
 
       <details style="margin-top:10px;">
         <summary style="font-size:11px;color:var(--text2);cursor:pointer;">📜 Activity log (what she posted / blocked)</summary>
@@ -2184,11 +2582,11 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
         <input class="tg-input" id="ls-ticker-check" placeholder="Check if a ticker is taken: BULL" style="margin:0;flex:1;">
         <button class="tg-add-btn" id="ls-ticker-btn" style="white-space:nowrap;">🔎 Check Ticker</button>
       </div>
-      <div id="ls-ticker-out" style="display:none;font-size:11px;margin-top:6px;padding:8px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid var(--border);line-height:1.5;"></div>
+      <div id="ls-ticker-out" style="display:none;font-size:11px;margin-top:6px;padding:8px;border-radius:8px;background:rgba(255,255,255,0.94);border:1px solid var(--border);line-height:1.5;"></div>
 
       <!-- Marketing pack -->
       <button class="tg-add-btn" id="ls-marketing-btn" style="width:100%;margin-top:8px;background:linear-gradient(135deg,rgba(236,72,153,0.15),rgba(124,58,237,0.15));border-color:rgba(236,72,153,0.35);">📣 Generate Marketing Pack (8-tweet thread + TG post + shill kit)</button>
-      <div id="ls-marketing-out" style="display:none;margin-top:8px;padding:10px;border-radius:10px;background:rgba(15,23,42,0.6);border:1px solid var(--border);font-size:11px;max-height:340px;overflow-y:auto;white-space:pre-wrap;line-height:1.55;"></div>
+      <div id="ls-marketing-out" style="display:none;margin-top:8px;padding:10px;border-radius:10px;background:rgba(255,255,255,0.94);border:1px solid var(--border);font-size:11px;max-height:340px;overflow-y:auto;white-space:pre-wrap;line-height:1.55;"></div>
       <div id="ls-post-row" style="display:none;gap:6px;margin-top:6px;flex-wrap:wrap;">
         <button class="tg-add-btn ls-post" data-what="announcement" style="flex:1;font-size:10px;min-width:90px;">📌 Post + Pin Announcement</button>
         <button class="tg-add-btn ls-post" data-what="thread" style="flex:1;font-size:10px;min-width:80px;">🧵 Post Thread</button>
@@ -2239,7 +2637,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       </div>
 
       <!-- Advanced: each step its own button -->
-      <div id="ald-advanced" style="display:none;background:rgba(15,23,42,0.5);border-radius:10px;padding:10px;margin-bottom:8px;">
+      <div id="ald-advanced" style="display:none;background:rgba(255,255,255,0.94);border-radius:10px;padding:10px;margin-bottom:8px;">
         <div style="font-size:10px;color:var(--text2);margin-bottom:6px;">Run any step on its own:</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
           <button class="tg-add-btn ald-step" data-step="site" style="font-size:11px;">🌐 Build Site</button>
@@ -2251,12 +2649,12 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
         </div>
       </div>
 
-      <div id="ald-status" style="display:none;font-size:11px;margin-bottom:8px;padding:10px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid var(--border);white-space:pre-wrap;line-height:1.6;max-height:200px;overflow-y:auto;"></div>
+      <div id="ald-status" style="display:none;font-size:11px;margin-bottom:8px;padding:10px;border-radius:8px;background:rgba(255,255,255,0.94);border:1px solid var(--border);white-space:pre-wrap;line-height:1.6;max-height:200px;overflow-y:auto;"></div>
 
       <!-- COIN OVERVIEW GRID — all launched coins at a glance -->
       <div id="ald-overview" style="display:none;margin-bottom:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div style="font-family:'Fraunces',serif;font-size:15px;font-weight:600;">Your Coins</div>
+          <div style="font-family:var(--display);font-size:15px;font-weight:600;">Your Coins</div>
           <div id="ald-count" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);"></div>
         </div>
         <div id="ald-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
@@ -2266,7 +2664,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       <div id="ald-console" style="display:none;background:linear-gradient(180deg,var(--bg2),var(--bg1));border:1px solid var(--border);border-radius:14px;padding:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <button id="ald-back" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-size:11px;padding:4px 10px;">← All coins</button>
-          <div style="font-family:'Fraunces',serif;font-size:13px;font-weight:600;" id="ald-proj-name">Project</div>
+          <div style="font-family:var(--display);font-size:13px;font-weight:600;" id="ald-proj-name">Project</div>
         </div>
         <select id="ald-proj-picker" style="display:none;"></select>
         <div id="ald-health" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);margin-bottom:8px;"></div>
@@ -2291,7 +2689,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
           <div id="aed-status" style="display:none;font-size:10px;margin-top:5px;color:var(--text2);white-space:pre-wrap;"></div>
         </details>
 
-        <div style="font-size:11px;font-weight:700;margin-bottom:6px;font-family:'Outfit',sans-serif;">💰 Buyback <span style="font-size:9px;color:var(--text2);font-weight:400;">(edit live)</span></div>
+        <div style="font-size:11px;font-weight:700;margin-bottom:6px;font-family:inherit;">💰 Buyback <span style="font-size:9px;color:var(--text2);font-weight:400;">(edit live)</span></div>
         <label style="font-size:10px;display:block;margin-bottom:5px;">Enabled <input type="checkbox" id="ald-bb-enabled"></label>
 
         <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:4px;">Execution mode</div>
@@ -2398,8 +2796,8 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
         <span style="font-size:11px;font-weight:700;">🧠 Asuka <span id="asuka-level" style="color:var(--accent);">Lv.1</span></span>
         <span id="asuka-xp" style="font-size:9px;color:var(--text2);">0 XP</span>
       </div>
-      <div style="height:6px;background:rgba(15,23,42,0.8);border-radius:3px;overflow:hidden;">
-        <div id="asuka-xp-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#00d4ff,#7c3aed);border-radius:3px;box-shadow:0 0 8px rgba(0,212,255,0.5);transition:width 1s ease;"></div>
+      <div style="height:6px;background:rgba(255,255,255,0.94);border-radius:3px;overflow:hidden;">
+        <div id="asuka-xp-bar" style="height:100%;width:0%;background:var(--asuka-grad);border-radius:3px;transition:width 1s ease;"></div>
       </div>
       <div id="asuka-xp-detail" style="font-size:9px;color:var(--text2);margin-top:4px;"></div>
     </div>
@@ -2411,28 +2809,28 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
         <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.25);border-radius:8px;padding:8px;">
           <input type="checkbox" id="rp-autopilot" style="accent-color:#7c3aed;"> 🤖 Auto Pilot (all on)
         </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(15,23,42,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(255,255,255,0.94);border:1px solid var(--border);border-radius:8px;padding:8px;">
           <input type="checkbox" id="rp-profitlock" style="accent-color:#34d399;"> 🔒 Profit Lock (+5% day)
         </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(15,23,42,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(255,255,255,0.94);border:1px solid var(--border);border-radius:8px;padding:8px;">
           <input type="checkbox" id="rp-antitilt" style="accent-color:#00d4ff;"> 🧊 Anti-Tilt (½ size)
         </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(15,23,42,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(255,255,255,0.94);border:1px solid var(--border);border-radius:8px;padding:8px;">
           <input type="checkbox" id="rp-volsizing" style="accent-color:#fbbf24;"> 🌪️ Volatility Sizing
         </label>
       </div>
       <div style="font-size:10px;color:var(--text2);margin:8px 0 6px;font-weight:600;">TRADE GUARDS (on by default — your call)</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(15,23,42,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(255,255,255,0.94);border:1px solid var(--border);border-radius:8px;padding:8px;">
           <input type="checkbox" id="rp-bench" checked style="accent-color:#f97316;"> 🪑 Coin Bench (4 losses)
         </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(15,23,42,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(255,255,255,0.94);border:1px solid var(--border);border-radius:8px;padding:8px;">
           <input type="checkbox" id="rp-cooldown" checked style="accent-color:#38bdf8;"> ⏰ Loss Cooldown
         </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(15,23,42,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(255,255,255,0.94);border:1px solid var(--border);border-radius:8px;padding:8px;">
           <input type="checkbox" id="rp-ragelock" checked style="accent-color:#ef4444;"> 🔒 Rage Lock
         </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(15,23,42,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(255,255,255,0.94);border:1px solid var(--border);border-radius:8px;padding:8px;">
           <input type="checkbox" id="rp-maxpos" checked style="accent-color:#a78bfa;"> 📊 Max Positions
         </label>
       </div>
@@ -2499,7 +2897,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     <div style="text-align:center;font-size:12px;color:var(--text2);margin-bottom:6px;">
       Balance: <span id="pt-balance" style="color:var(--accent);font-weight:600;">$100,000</span>
     </div>
-    <canvas id="equity-spark" width="600" height="56" style="width:100%;height:56px;margin-bottom:10px;border-radius:10px;background:rgba(15,23,42,0.5);border:1px solid rgba(148,163,184,0.07);"></canvas>
+    <canvas id="equity-spark" width="600" height="56" style="width:100%;height:56px;margin-bottom:10px;border-radius:10px;background:rgba(255,255,255,0.94);border:1px solid rgba(148,163,184,0.07);"></canvas>
 
     <!-- 💰 Capital Allocation -->
     <div class="tg-section" style="margin-bottom:8px;">
@@ -2523,7 +2921,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     <div class="tg-section" style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
         <div style="font-size:12px;font-weight:700;">📊 Daily Usage</div>
-        <span id="user-tier-badge" style="font-size:10px;padding:3px 8px;border-radius:12px;background:rgba(0,212,255,0.2);color:#00d4ff;font-weight:700;">PRO</span>
+          <span id="user-tier-badge" style="font-size:10px;padding:3px 8px;border-radius:12px;background:color-mix(in srgb, var(--accent) 14%, transparent);color:var(--accent);font-weight:650;">PRO</span>
       </div>
 
       <!-- Voice Messages -->
@@ -2762,6 +3160,41 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
           <div class="toggle-switch" id="independent-scanner-toggle"></div>
         </div>
 
+        <!-- Precision Engine -->
+        <div class="precision-panel">
+          <div class="precision-head">
+            <div>
+              <div class="precision-kicker">Engine</div>
+              <div class="precision-title">Precision Scanner</div>
+              <div class="precision-sub">Math builds the signal. Hard gates filter noise. AI only confirms or vetoes — it does not invent direction.</div>
+            </div>
+            <div class="toggle-switch on" id="precision-toggle" title="Toggle precision scanner"></div>
+          </div>
+          <div class="prec-flow">
+            <div class="prec-step"><div class="prec-step-n">01</div><div class="prec-step-l">Math</div></div>
+            <div class="prec-step"><div class="prec-step-n">02</div><div class="prec-step-l">Gates</div></div>
+            <div class="prec-step"><div class="prec-step-n">03</div><div class="prec-step-l">AI veto</div></div>
+          </div>
+          <div class="prec-controls">
+            <div>
+              <div class="prec-control-label">MTF Gate</div>
+              <div class="prec-seg">
+                <button class="leverage-btn mtf-btn" data-val="off">Off</button>
+                <button class="leverage-btn mtf-btn" data-val="soft">Soft</button>
+                <button class="leverage-btn mtf-btn active" data-val="hard">Hard</button>
+              </div>
+            </div>
+            <div>
+              <div class="prec-control-label">Min Confluence</div>
+              <div class="prec-seg">
+                <button class="leverage-btn tier-btn" data-val="WATCH">Watch</button>
+                <button class="leverage-btn tier-btn active" data-val="STRONG">Strong</button>
+                <button class="leverage-btn tier-btn" data-val="ULTRA">Ultra</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div style="margin-bottom:10px;">
           <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Scan Interval</div>
           <div style="display:flex;gap:4px;flex-wrap:wrap;">
@@ -2963,7 +3396,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
         <div style="font-size:12px;font-weight:700;margin-bottom:10px;">⚙️ Settings</div>
 
         <div class="auto-trade-toggle" style="margin-bottom:10px;">
-          <div><div class="toggle-label">Enable Scalp Trading</div><div class="caller-stats">Haiku Scout → 5 Agents → Sonnet</div></div>
+          <div><div class="toggle-label">Enable Scalp Trading</div><div class="caller-stats">Precision: 15m math → gates → AI veto</div></div>
           <div class="toggle-switch" id="scalp-toggle"></div>
         </div>
 
@@ -3178,7 +3611,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
 </div>
 <div class="page" id="page-7" style="display:none;flex-direction:column;padding:14px;overflow-y:auto;">
   <div style="max-width:680px;margin:0 auto;width:100%;">
-    <div style="font-family:'Fraunces',serif;font-size:24px;font-weight:500;margin-bottom:4px;">Advisor Calls</div>
+    <div style="font-family:var(--display);font-size:24px;font-weight:500;margin-bottom:4px;">Advisor Calls</div>
     <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">Follow a human advisor. Get notified, or let Asuka trade their calls for you.</div>
     <button id="global-rules-btn" style="font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:9px;padding:7px 14px;margin-bottom:12px;">⚙️ My Default Trade Rules</button>
     <div style="font-size:11px;color:var(--text3);background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-bottom:14px;">⚠️ These are the advisor's calls, not Asuka's AI. Trading them is your choice and your risk. Not financial advice.</div>
@@ -3207,55 +3640,6 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     <button class="trade-tab" data-others-tab="her">💞 Her</button>
   </div>
 
-  <!-- ══ INTELLIGENCE TAB ══ -->
-  <div class="others-tab-content" id="others-intel">
-
-    <!-- Asuka's Brain (learning stats) -->
-    <div class="as-card" style="padding:14px;margin-bottom:12px;">
-      <div style="font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin-bottom:4px;">Asuka's Brain 🧠</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">She learns from every trade. The more she runs, the sharper she gets.</div>
-      <div id="brain-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">Loading...</div>
-    </div>
-
-    <!-- Live Agent Swarm -->
-    <div class="as-card" style="padding:14px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-        <div style="font-family:'Fraunces',serif;font-size:16px;font-weight:600;">Agent Swarm 🐟</div>
-        <span id="swarm-status" class="as-pill as-pill-data" style="font-size:10px;">idle</span>
-      </div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">20 specialist agents debate every trade in parallel. Watch them vote live.</div>
-      <div id="swarm-summary" style="font-family:'JetBrains Mono',monospace;font-size:12px;margin-bottom:10px;color:var(--text2);">Waiting for the next scan...</div>
-      <div id="swarm-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;"></div>
-      <div id="swarm-args" style="margin-top:10px;font-size:11px;"></div>
-    </div>
-
-    <!-- What She Knows About You -->
-    <div class="as-card" style="padding:14px;">
-      <div style="font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin-bottom:4px;">What Asuka Knows About You 💭</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">Your relationship deepens as she learns more about you.</div>
-      <div id="knows-content">Loading...</div>
-    </div>
-    <!-- Your Rules (she enforces these) -->
-    <div class="as-card" style="padding:14px;margin-bottom:12px;">
-      <div style="font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin-bottom:4px;">Your Rules 📋</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Tell her "my rule is..." in chat, or add one here. She checks every trade against these and skips ones that break them.</div>
-      <div style="display:flex;gap:6px;margin-bottom:10px;">
-        <input id="rule-input" class="as-input" placeholder="e.g. Never trade memecoins over $50k" style="flex:1;">
-        <button id="rule-add" class="as-btn as-btn-her">Add</button>
-      </div>
-      <div id="rules-list"></div>
-    </div>
-
-    <!-- Trade Replay / Audit -->
-    <div class="as-card" style="padding:14px;margin-bottom:12px;">
-      <div style="font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin-bottom:4px;">Trade Replay 🔍</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Every decision, fully auditable. See exactly why she took or skipped each trade.</div>
-      <div id="replay-list">Loading...</div>
-      <div id="replay-detail" style="display:none;margin-top:10px;"></div>
-    </div>
-
-  </div>
-
   <!-- ══ STUDY TAB ══ -->
   <div class="others-tab-content active" id="others-study">
 
@@ -3273,6 +3657,68 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">Textbooks & lessons Asuka has learned. Tap to replay, 🗑 to remove.</div>
       <div id="study-library-list"><div style="color:var(--text3);font-size:12px;text-align:center;padding:20px;">Loading…</div></div>
     </div>
+  </div>
+
+  <!-- ══ INTELLIGENCE TAB ══ -->
+  <div class="others-tab-content" id="others-intel">
+
+    <!-- Precision Scoreboard -->
+    <div class="as-card precision-panel" style="margin-bottom:12px;">
+      <div class="precision-head" style="margin-bottom:8px;">
+        <div>
+          <div class="precision-kicker">Measure</div>
+          <div class="precision-title">Precision Scoreboard</div>
+          <div class="precision-sub">Out-of-sample holdout first. Gate A/B and setup expectancy fill as shadows resolve.</div>
+        </div>
+        <button id="precision-refresh" class="as-btn as-btn-data" style="font-size:11px;padding:6px 12px;flex-shrink:0;">Refresh</button>
+      </div>
+      <div id="precision-scoreboard"><div class="sb-empty">Loading scoreboard…</div></div>
+    </div>
+
+    <!-- Asuka's Brain (learning stats) -->
+    <div class="as-card" style="padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--display);font-size:16px;font-weight:600;margin-bottom:4px;">Asuka's Brain 🧠</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">She learns from every trade. The more she runs, the sharper she gets.</div>
+      <div id="brain-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">Loading...</div>
+    </div>
+
+    <!-- Live Agent Swarm -->
+    <div class="as-card" style="padding:14px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div style="font-family:var(--display);font-size:16px;font-weight:600;">Agent Swarm 🐟</div>
+        <span id="swarm-status" class="as-pill as-pill-data" style="font-size:10px;">idle</span>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">Legacy swarm — idle while Precision is on. Optional MiroFish veto if you enable it.</div>
+      <div id="swarm-summary" style="font-family:'JetBrains Mono',monospace;font-size:12px;margin-bottom:10px;color:var(--text2);">Waiting for the next scan...</div>
+      <div id="swarm-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;"></div>
+      <div id="swarm-args" style="margin-top:10px;font-size:11px;"></div>
+    </div>
+
+    <!-- What She Knows About You -->
+    <div class="as-card" style="padding:14px;">
+      <div style="font-family:var(--display);font-size:16px;font-weight:600;margin-bottom:4px;">What Asuka Knows About You 💭</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">Your relationship deepens as she learns more about you.</div>
+      <div id="knows-content">Loading...</div>
+    </div>
+    <!-- Your Rules (she enforces these) -->
+    <div class="as-card" style="padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--display);font-size:16px;font-weight:600;margin-bottom:4px;">Your Rules 📋</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Tell her "my rule is..." in chat, or add one here. She checks every trade against these and skips ones that break them.</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <input id="rule-input" class="as-input" placeholder="e.g. Never trade memecoins over $50k" style="flex:1;">
+        <button id="rule-add" class="as-btn as-btn-her">Add</button>
+      </div>
+      <div id="rules-list"></div>
+    </div>
+
+    <!-- Trade Replay / Audit -->
+    <div class="as-card" style="padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--display);font-size:16px;font-weight:600;margin-bottom:4px;">Trade Replay 🔍</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Every decision, fully auditable. See exactly why she took or skipped each trade.</div>
+      <div id="replay-list">Loading...</div>
+      <div id="replay-detail" style="display:none;margin-top:10px;"></div>
+    </div>
+
   </div>
 
   <div class="others-tab-content" id="others-her">
@@ -3874,17 +4320,20 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
   </div>
 </div>
 
+<script src="./characters.js"></script>
 <script>
 /* Full app — only loads on demand (never blocks open) */
 (function() {
   var loading = false;
   window.loadDashboardApp = function() {
-    if (loading || window.__dashAppLoaded) return;
+    if (window.__dashAppLoaded) return;
+    if (loading) return;
     loading = true;
     window.__dashAppLoading = true;
+    window.__dashAppLoadStarted = Date.now();
     var run = function() {
       var s = document.createElement('script');
-      s.src = './dashboard-app.js?v=20260805-tgmod';
+      s.src = './dashboard-app.js?v=20260817-sf-pro';
       s.onload = function() {
         window.__dashAppLoaded = true;
         loading = false;
@@ -3911,10 +4360,25 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       };
       document.body.appendChild(s);
     };
+    // Safety: never leave the overlay forever if idle callback / load stalls
+    setTimeout(function() {
+      document.querySelectorAll('.tab-loading-hint').forEach(function(h) {
+        if (!window.__dashAppLoaded) {
+          h.textContent = 'Still loading… tap Trading again if this sticks';
+        } else {
+          h.remove();
+        }
+      });
+      if (!window.__dashAppLoaded && !document.querySelector('script[src*="dashboard-app.js"]')) {
+        loading = false;
+        window.__dashAppLoading = false;
+        run();
+      }
+    }, 10000);
     if (typeof requestIdleCallback === 'function') {
-      requestIdleCallback(run, { timeout: 8000 });
+      requestIdleCallback(run, { timeout: 2000 });
     } else {
-      setTimeout(run, 100);
+      setTimeout(run, 50);
     }
   };
   window.scheduleDashboardAppIdle = function() {
@@ -4426,7 +4890,7 @@ if (typeof requestIdleCallback === 'function') {
 <div id="connect-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:1000;align-items:center;justify-content:center;">
   <div style="background:var(--bg1);border:1px solid var(--border);border-radius:18px;width:min(92vw,440px);max-height:88vh;overflow-y:auto;padding:22px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <div style="font-size:17px;font-weight:700;font-family:'Fraunces',serif;">🔗 Connect</div>
+      <div style="font-size:17px;font-weight:700;font-family:var(--display);">🔗 Connect</div>
       <div id="connect-close" style="cursor:pointer;color:var(--text2);font-size:20px;">✕</div>
     </div>
 

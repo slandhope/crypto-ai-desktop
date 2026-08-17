@@ -16,6 +16,8 @@ const signerHost = require('./signer-host');
 const toolBroker = require('./tool-broker');
 const tgAdmin = require('./telegram-admin');
 const tgGroupMod = require('./tg-group-mod');
+const asukaChars = require('./characters');
+const scannerPrecision = require('./scanner-precision');
 const _tgModRt = tgGroupMod.createModRuntime();
 
 // ─── SUPPRESS NOISY ELECTRON ERRORS ───────────────────────────────────────
@@ -357,9 +359,9 @@ function loadAlerts() { return loadJSON(ALERTS_FILE, []); }
 function saveAlerts(a) { saveJSON(ALERTS_FILE, a); }
 
 function loadSettings() {
-  return loadJSON(SETTINGS_FILE, {
+  const s = loadJSON(SETTINGS_FILE, {
     wallets: [], trackedWallets: [], influencerWallets: [],
-    watchlist: [], personality: 'chill', characterName: 'Asuka',
+    watchlist: [], personality: 'chill', characterName: 'Asuka', characterId: 'asuka',
     watchTogether: { enabled: false, mode: 'general', intervalSec: 50 },
     suppressedAlerts: [], tradeRules: [], aiMode: 'balanced',
     pumpFunChains: ['solana'], pumpFunEnabled: true,
@@ -371,6 +373,13 @@ function loadSettings() {
     ttsProvider: 'openai',
     tgGroupMod: { ...require('./tg-group-mod').DEFAULTS },
   });
+  // Precision scanner defaults (math-first, AI veto) — opt out with precisionScanner: false
+  if (s.precisionScanner === undefined) s.precisionScanner = true;
+  if (s.mtfMode === undefined) s.mtfMode = 'hard';
+  if (s.regimeMode === undefined) s.regimeMode = 'hard';
+  if (s.confluenceMinTier === undefined) s.confluenceMinTier = 'STRONG';
+  if (s.mirofishMode === undefined) s.mirofishMode = 'off'; // off | veto | full — precision uses AI validate instead
+  return s;
 }
 function saveSettings(s) {
   // Never persist exchange/API keys in plaintext settings.json
@@ -4494,6 +4503,20 @@ ipcMain.on('open-dashboard', () => {
   }
 });
 ipcMain.on('dashboard-closed', () => { showCompanion(); });
+ipcMain.on('appearance-changed', (_e, payload) => {
+  const mode = payload?.mode === 'dark' ? 'dark' : 'light';
+  const send = (win) => {
+    try {
+      if (win && !win.isDestroyed()) win.webContents.send('appearance-changed', { mode });
+    } catch (_) {}
+  };
+  send(mainWindow);
+  send(dashboardWindow);
+  try { if (typeof shopWindow !== 'undefined') send(shopWindow); } catch (_) {}
+  try { if (typeof classroomWindow !== 'undefined') send(classroomWindow); } catch (_) {}
+  try { if (typeof lessonWindow !== 'undefined') send(lessonWindow); } catch (_) {}
+  try { if (typeof whiteboardWindow !== 'undefined') send(whiteboardWindow); } catch (_) {}
+});
 
 // Data handlers
 // ── GEMINI LIVE HANDLERS ───────────────────────────────────────────────────
@@ -4985,6 +5008,28 @@ ipcMain.handle('stream-voice-response', async (e, text) => {
 ipcMain.handle('get-memory',      async ()            => loadMemory());
 ipcMain.handle('save-memory',     async (e, m)        => { saveMemory(m); return true; });
 ipcMain.handle('get-settings',    async ()            => loadSettings());
+ipcMain.handle('list-characters', async () => asukaChars.CHARACTERS.map((c) => ({
+  id: c.id, name: c.name, emoji: c.emoji, free: !!c.free, hasModel: !!c.model,
+})));
+ipcMain.handle('get-character', async () => {
+  return asukaChars.characterPayload(asukaChars.resolveFromSettings(loadSettings()));
+});
+ipcMain.handle('set-character', async (e, { id, name } = {}) => {
+  const ch = asukaChars.getCharacter(id) || asukaChars.getCharacter(asukaChars.DEFAULT_ID);
+  if (!ch.model) return { ok: false, error: 'character_locked' };
+  const s = loadSettings();
+  s.characterId = ch.id;
+  s.characterName = (name && String(name).trim()) || ch.name;
+  saveSettings(s);
+  const payload = asukaChars.characterPayload({ ...ch, name: s.characterName });
+  payload.name = s.characterName;
+  payload.ok = true;
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('character-changed', payload);
+    if (dashboardWindow && !dashboardWindow.isDestroyed()) dashboardWindow.webContents.send('character-changed', payload);
+  } catch (_) {}
+  return payload;
+});
 ipcMain.on('tg-intel-notify', async (e, item) => {
   const typeEmojis = { signal:'📡', warning:'⚠️', news:'📰', whale:'🐋', scan:'📊', win:'✅', loss:'❌' };
   const emoji = typeEmojis[item.type] || '💭';
@@ -5853,12 +5898,64 @@ async function runIndependentScan() {
   }
 }
 
+/**
+ * Precision scanner — math confluence → gates → AI veto
+ */
+const { runPrecisionScan, runPrecisionIndependentScalp, runPrecisionScalpForCoin } = require('./scanner-precision-run');
+
+function precisionScalpDeps() {
+  return {
+    loadSettings, loadPaperTrades, getCryptoPrice, getCandles, getOrderBook,
+    getVolumeAnalysis, getFundingRate, getFundingRateExtreme, getLongShortRatio,
+    getLiquidationZones, getTimeSignal, detectMarketRegime, getBTCLeadSignal,
+    openPaperTrade, logShadowTrade, sendIntelEvent, anthropic, CLAUDE_MODEL
+  };
+}
+
+async function scanCoinPrecision(scanCoin) {
+  try {
+    return await runPrecisionScan(scanCoin, {
+      loadSettings, loadDailySignals, loadExpectancy, saveExpectancy,
+      detectMarketRegime, getNewsSentiment, detectRSIDivergence, getTelegramGroupSentiment,
+      getWhaleSignalForTrade, getCryptoPrice, getFundingRate, getFearGreed,
+      getBTCDominanceTrend, getCryptoNews, getOpenInterest, getLongShortRatio,
+      getLiquidationZones, getVolumeAnalysis, getTechnicalAnalysis, getOrderBook,
+      getCorrelation, getTimeSignal, getAdvancedFlow, getBTCLeadSignal,
+      getFundingRateExtreme, getMultiTimeframeSignal, getCandles, getSpreadPct,
+      calculateSmartTrade, checkUserRules, getReentryPenalty,
+      loadPaperTrades, closePaperTrade, openPaperTrade, runScalpScan,
+      logShadowTrade, saveTradeReplay, sendIntelEvent, asukaReact,
+      anthropic, CLAUDE_MODEL,
+      setCachedFearGreed: (n) => { global._cachedFearGreed = n; },
+      onSignalOpened: (signal, { aiReason, confluence }) => {
+        try {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('independent-signal', {
+              ...signal,
+              reason: `${aiReason} | ${confluence.summary}`
+            });
+            mainWindow.webContents.send('play-audio-text',
+              `Precision signal: ${confluence.direction} ${scanCoin}, ${confluence.tier} confluence. ${aiReason}`
+            );
+          }
+        } catch (e) {}
+      }
+    });
+  } catch (e) {
+    console.error('Precision scan error:', e.message);
+  }
+}
+
 async function scanCoinForTrade(scanCoin) {
   try {
     const settings = loadSettings();
     if (!settings.independentScanner) return;
     if (!settings.autoPaperTrade) return;
-    // Collect market data — full intelligence suite
+    // Precision path: math signal → hard gates → AI validate/veto (default on)
+    if (settings.precisionScanner !== false) {
+      return await scanCoinPrecision(scanCoin);
+    }
+    // Collect market data — full intelligence suite (legacy Claude→MiroFish path)
     // Cache FG for hard blocks
 const fgRaw = await getFearGreed().catch(() => '50');
 global._cachedFearGreed = parseInt(fgRaw?.match(/\d+/)?.[0] || 50);
@@ -6881,6 +6978,10 @@ async function runIndependentScalpScan() {
   if (!settings.scalpTrading) return;
   if (!settings.autoPaperTrade) return;
 
+  if (settings.precisionScanner !== false) {
+    return await runPrecisionIndependentScalp(precisionScalpDeps());
+  }
+
   const pd = loadPaperTrades();
   const coins = settings.scalpCoins || settings.tradingCoins || ['BTC', 'ETH', 'SOL'];
   const scalpLeverage = settings.scalpLeverage || 10;
@@ -6942,7 +7043,7 @@ async function runIndependentScalpScan() {
       const settings2 = loadSettings();
       const scalpIndicators = settings2.scalpIndicators || { rsi: true, bb: true, sr: true, ob: true };
       
-      const [lsRatio, liq, vol, scalpRsi, scalpBb, scalpSr, scalpOb, scalpIchi] = await Promise.all([
+      const [lsRatio, liq, vol, scalpRsi, scalpBb, scalpSr, scalpOb, scalpVwap, scalpStoch, scalpEma, scalpIchi] = await Promise.all([
         getLongShortRatio(coin).catch(() => null),
         getLiquidationZones(coin).catch(() => null),
         getVolumeAnalysis(coin).catch(() => null),
@@ -7002,7 +7103,7 @@ async function runIndependentScalpScan() {
       }
 
       const extraSignals = [
-        lsRatio, liq, vol, scalpRsi, scalpBb, scalpSr, scalpOb, scalpIchi,
+        lsRatio, liq, vol, scalpRsi, scalpBb, scalpSr, scalpOb, scalpVwap, scalpStoch, scalpEma, scalpIchi,
         scalpATRInfo,
         scalpFunding?.extreme ? scalpFunding.summary : null,
         scalpPivot ? `Pivots: PP=$${scalpPivot.PP} | ${scalpPivot.abovePivot ? 'Above PP bullish' : 'Below PP bearish'}` : null,
@@ -7283,6 +7384,10 @@ async function runScalpScan(mainTrade) {
     t.isScalp === true
   );
   if (existingScalp) return;
+
+  if (settings.precisionScanner !== false) {
+    return await runPrecisionScalpForCoin(mainTrade.coin, precisionScalpDeps(), { mainTrade });
+  }
 
   const scalpLeverage = settings.scalpLeverage || 20;
   const scalpSize = settings.scalpSize || (pd.balance * 0.01); // 1% default
@@ -8331,23 +8436,43 @@ ipcMain.handle('get-agent-stats', () => {
 
 // ─── SHADOW TRADES — track rejected signals to tune the brain ──────────────
 const SHADOW_FILE = path.join(DATA_DIR, 'shadow-trades.json');
+const EXPECTANCY_FILE = path.join(DATA_DIR, 'setup-expectancy.json');
 
-function logShadowTrade(coin, direction, entry, target, stopLoss, reason, confidence) {
+function loadExpectancy() { return loadJSON(EXPECTANCY_FILE, {}); }
+function saveExpectancy(d) { saveJSON(EXPECTANCY_FILE, d); }
+
+/** Structured shadow log — supports meta for scoreboard / feature A/B */
+function logShadowTrade(coin, direction, entry, target, stopLoss, reason, confidence, meta) {
   try {
-    if (!entry) return;
+    if (!entry && !(meta && meta.allowNoEntry)) return;
     const data = loadJSON(SHADOW_FILE, { shadows: [], stats: { wouldWin: 0, wouldLose: 0, neutral: 0 } });
-    data.shadows.push({
+    const hasLevels = target != null && stopLoss != null && entry;
+    const row = {
       id: Date.now() + Math.random(),
-      coin, direction, entry,
-      target: target || (direction === 'long' ? entry * 1.03 : entry * 0.97),
-      stopLoss: stopLoss || (direction === 'long' ? entry * 0.985 : entry * 1.015),
+      coin, direction, entry: entry || meta?.entry || 0,
+      target: hasLevels ? target : null,
+      stopLoss: hasLevels ? stopLoss : null,
       reason, confidence: confidence || 0,
-      timestamp: Date.now(), resolved: false, outcome: null
-    });
-    // Keep last 300
-    if (data.shadows.length > 300) data.shadows = data.shadows.slice(-300);
+      timestamp: Date.now(), resolved: false, outcome: null,
+      unresolvable: !hasLevels
+    };
+    if (meta && typeof meta === 'object') {
+      row.meta = meta;
+      if (meta.setupType) row.setupType = meta.setupType;
+      if (meta.tier) row.tier = meta.tier;
+      if (meta.regime) row.regime = meta.regime;
+      if (meta.blockedBy) row.blockedBy = meta.blockedBy;
+      if (meta.gates) row.gates = meta.gates;
+      if (meta.ab) row.ab = meta.ab;
+      if (meta.axes) row.axes = meta.axes;
+      if (meta.independentCount != null) row.independentCount = meta.independentCount;
+      if (meta.taken) row.taken = true; // shadow of an opened trade for A/B parity
+    }
+    data.shadows.push(row);
+    // Keep last 500 structured history
+    if (data.shadows.length > 500) data.shadows = data.shadows.slice(-500);
     saveJSON(SHADOW_FILE, data);
-    console.log(`👻 Shadow trade logged: ${direction} ${coin} (rejected: ${reason})`);
+    console.log(`👻 Shadow trade logged: ${direction || '?'} ${coin} (rejected: ${reason})`);
   } catch(e) {}
 }
 
@@ -8368,8 +8493,21 @@ async function resolveShadowTrades() {
 
     let changed = false;
     for (const s of pending) {
+      if (s.taken) {
+        // Opened in paper — expectancy tracked on paper close, not shadow resolve
+        if (Date.now() - s.timestamp > 48 * 60 * 60 * 1000) {
+          s.resolved = true; s.outcome = 'taken'; changed = true;
+        }
+        continue;
+      }
       const price = prices[s.coin];
       if (!price) continue;
+      if (s.unresolvable || s.target == null || s.stopLoss == null || !s.entry) {
+        if (Date.now() - s.timestamp > 48 * 60 * 60 * 1000) {
+          s.resolved = true; s.outcome = 'unresolvable'; changed = true;
+        }
+        continue;
+      }
       const hitTarget = s.direction === 'long' ? price >= s.target : price <= s.target;
       const hitStop = s.direction === 'long' ? price <= s.stopLoss : price >= s.stopLoss;
       const expired = Date.now() - s.timestamp > 48 * 60 * 60 * 1000;
@@ -8377,6 +8515,22 @@ async function resolveShadowTrades() {
       if (hitTarget) { s.resolved = true; s.outcome = 'would_win'; data.stats.wouldWin++; changed = true; }
       else if (hitStop) { s.resolved = true; s.outcome = 'would_lose'; data.stats.wouldLose++; changed = true; }
       else if (expired) { s.resolved = true; s.outcome = 'neutral'; data.stats.neutral++; changed = true; }
+
+      // Expectancy per setup (only decisive outcomes on REJECTED signals — measures gate quality)
+      if (s.resolved && (s.outcome === 'would_win' || s.outcome === 'would_lose') && (s.setupType || s.meta?.setupType)) {
+        try {
+          const setupType = s.setupType || s.meta.setupType;
+          const entry = s.entry, tp = s.target, sl = s.stopLoss;
+          let rMult = 1;
+          if (entry && tp && sl) {
+            const risk = Math.abs(entry - sl) || 1;
+            const reward = Math.abs(tp - entry) || risk;
+            rMult = s.outcome === 'would_win' ? reward / risk : 1;
+          }
+          // For rejected signals: would_lose = gate was RIGHT (avoided loss). Don't feed as setup win.
+          // Only feed TAKEN paper closes into expectancy for setup edge.
+        } catch (e2) {}
+      }
     }
     if (changed) {
       saveJSON(SHADOW_FILE, data);
@@ -8428,6 +8582,21 @@ ipcMain.handle('get-shadow-stats', () => {
   return { stats: d.stats, recent: d.shadows.slice(-20) };
 });
 ipcMain.handle('get-coin-bench', () => loadJSON(BENCH_FILE, {}));
+ipcMain.handle('get-precision-scoreboard', () => {
+  try {
+    const d = loadJSON(SHADOW_FILE, { shadows: [], stats: {} });
+    const pd = loadPaperTrades();
+    return scannerPrecision.buildScoreboard({
+      shadows: d.shadows || [],
+      paperTrades: pd.trades || [],
+      expectancy: loadExpectancy(),
+      holdoutPct: 0.25
+    });
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+ipcMain.handle('get-setup-expectancy', () => loadExpectancy());
 
 
 // ─── INTELLIGENCE LAB: feed trades, backtest training, brain export ────────
@@ -11499,11 +11668,37 @@ function loadCare() {
       d.happiness = Math.max(0, Math.min(100, (d.happiness ?? 80) - hoursSince * 1.5));
       d.lastTick = Date.now();
     }
+    if (!d.equippedByChar || typeof d.equippedByChar !== 'object') d.equippedByChar = {};
+    if (!d.equipped) d.equipped = { outfit: 'default', hair: 'default', accessory: null };
     return d;
   }
   return { hunger: 80, happiness: 85, cleanliness: 90, affection: 0, coins: 100, bondXP: 0,
     streak: 0, lastCareDay: null, lastTick: Date.now(),
-    owned: ['default'], equipped: { outfit: 'default', hair: 'default', accessory: null } };
+    owned: ['default', 'none', 'alexia_dress'],
+    equipped: { outfit: 'default', hair: 'default', accessory: null },
+    equippedByChar: {
+      asuka: { outfit: 'default', hair: 'default', accessory: null },
+      alexia: { outfit: 'alexia_dress', hair: 'default', accessory: null },
+    } };
+}
+
+/** Per-character wardrobe — Asuka and Alexia keep separate outfits. */
+function getEquippedForChar(d, charId) {
+  if (!d.equippedByChar || typeof d.equippedByChar !== 'object') d.equippedByChar = {};
+  const id = charId || 'asuka';
+  if (!d.equippedByChar[id]) {
+    const activeId = asukaChars.resolveFromSettings(loadSettings()).id;
+    d.equippedByChar[id] = (id === activeId && d.equipped)
+      ? { outfit: d.equipped.outfit || 'default', hair: d.equipped.hair || 'default', accessory: d.equipped.accessory ?? null }
+      : { outfit: id === 'alexia' ? 'alexia_dress' : 'default', hair: 'default', accessory: null };
+  }
+  return d.equippedByChar[id];
+}
+
+function syncActiveEquipped(d) {
+  const activeId = asukaChars.resolveFromSettings(loadSettings()).id;
+  d.equipped = { ...getEquippedForChar(d, activeId) };
+  return d.equipped;
 }
 function saveCare(d, opts) { d.lastTick = Date.now(); saveJSON(CARE_FILE, d); if (!opts?.skipPush) try { require('./sync-client').pushSoon(); } catch (e) {} }
 
@@ -11520,7 +11715,11 @@ function tickStreak(d) {
   return false;
 }
 
-ipcMain.handle('get-care', () => loadCare());
+ipcMain.handle('get-care', () => {
+  const d = loadCare();
+  syncActiveEquipped(d);
+  return d;
+});
 
 // Care actions: feed, pat, clean, play
 ipcMain.handle('care-action', (e, action) => {
@@ -11659,75 +11858,151 @@ ipcMain.handle('get-relationship', () => {
 const COSMETICS = {
   outfit: [
     { id: 'default', name: 'Default', price: 0, asset: null },
-    { id: 'casual', name: 'Casual Hoodie', price: 200, asset: 'outfits/casual.png' },
-    { id: 'kimono', name: 'Sakura Kimono', price: 500, asset: 'outfits/kimono.png' },
-    { id: 'gothic', name: 'Gothic Lolita', price: 600, asset: 'outfits/gothic.png' },
-    { id: 'swimsuit', name: 'Summer Swimsuit', price: 450, asset: 'outfits/swim.png', seasonal: 'summer' },
-    { id: 'santa', name: 'Santa Outfit', price: 400, asset: 'outfits/santa.png', seasonal: 'winter', limited: true }
+    { id: 'alexia_dress', name: 'Alexia Dress', price: 0, live2dExpr: 'yf', characters: ['alexia'] },
+    { id: 'alexia_hat', name: 'Alexia Dress + Hat', price: 150, live2dExpr: 'yfmz', characters: ['alexia'] },
+    { id: 'alexia_pose', name: 'Idle Poses', price: 100, live2dExpr: 'zs1', autoPose: true, characters: ['alexia'] },
+    { id: 'casual', name: 'Casual Hoodie', price: 200, asset: 'outfits/casual.png', characters: ['asuka'] },
+    { id: 'kimono', name: 'Sakura Kimono', price: 500, asset: 'outfits/kimono.png', characters: ['asuka'] },
+    { id: 'gothic', name: 'Gothic Lolita', price: 600, asset: 'outfits/gothic.png', characters: ['asuka'] },
+    { id: 'swimsuit', name: 'Summer Swimsuit', price: 450, asset: 'outfits/swim.png', seasonal: 'summer', characters: ['asuka'] },
+    { id: 'santa', name: 'Santa Outfit', price: 400, asset: 'outfits/santa.png', seasonal: 'winter', limited: true, characters: ['asuka'] }
   ],
   hair: [
     { id: 'default', name: 'Default', price: 0, asset: null },
-    { id: 'long', name: 'Long Flowing', price: 150, asset: 'hair/long.png' },
-    { id: 'twintails', name: 'Twin Tails', price: 200, asset: 'hair/twintails.png' },
-    { id: 'short', name: 'Short Bob', price: 150, asset: 'hair/short.png' },
-    { id: 'silver', name: 'Silver (color)', price: 250, asset: 'hair/silver.png' }
+    { id: 'alexia_eyes_a', name: 'Eye Color A', price: 80, live2dExpr: 'yjys1', characters: ['alexia'] },
+    { id: 'alexia_eyes_b', name: 'Eye Color B', price: 80, live2dExpr: 'yjys2', characters: ['alexia'] },
+    { id: 'long', name: 'Long Flowing', price: 150, asset: 'hair/long.png', characters: ['asuka'] },
+    { id: 'twintails', name: 'Twin Tails', price: 200, asset: 'hair/twintails.png', characters: ['asuka'] },
+    { id: 'short', name: 'Short Bob', price: 150, asset: 'hair/short.png', characters: ['asuka'] },
+    { id: 'silver', name: 'Silver (color)', price: 250, asset: 'hair/silver.png', characters: ['asuka'] }
   ],
   accessory: [
-    { id: 'glasses', name: 'Cute Glasses', price: 100, asset: 'acc/glasses.png' },
-    { id: 'catears', name: 'Cat Ears', price: 180, asset: 'acc/catears.png' },
-    { id: 'flower', name: 'Hair Flower', price: 120, asset: 'acc/flower.png' },
-    { id: 'crown', name: 'Tiny Crown', price: 300, asset: 'acc/crown.png', limited: true }
+    { id: 'none', name: 'None', price: 0, asset: null },
+    { id: 'glasses', name: 'Cute Glasses', price: 100, asset: 'acc/glasses.png', live2dExpr: 'dyj' },
+    { id: 'sunglasses', name: 'Sunglasses', price: 120, live2dExpr: 'mj', characters: ['alexia'] },
+    { id: 'alexia_bbt', name: 'BBT Accent', price: 90, live2dExpr: 'bbt', characters: ['alexia'] },
+    { id: 'catears', name: 'Cat Ears', price: 180, asset: 'acc/catears.png', characters: ['asuka'] },
+    { id: 'flower', name: 'Hair Flower', price: 120, asset: 'acc/flower.png', characters: ['asuka'] },
+    { id: 'crown', name: 'Tiny Crown', price: 300, asset: 'acc/crown.png', limited: true, characters: ['asuka'] }
   ]
 };
 
-ipcMain.handle('shop-catalog', () => {
+ipcMain.handle('shop-catalog', (e, opts = {}) => {
   const d = loadCare();
-  // Merge in dev-added custom cosmetics
   const custom = loadCustomCosmetics();
   for (const cat of ['outfit','hair','accessory']) for (const item of (custom[cat]||[])) if (!COSMETICS[cat].some(i=>i.id===item.id)) COSMETICS[cat].push(item);
-  // Mark owned + current season
   const month = new Date().getMonth();
   const season = month >= 5 && month <= 7 ? 'summer' : month === 11 || month <= 1 ? 'winter' : 'all';
   const unlockedIds = unlockedByLevel(d.bondXP || 0);
-  // Map which items are gated behind a relationship level
+  const activeId = asukaChars.resolveFromSettings(loadSettings()).id;
+  const charId = (opts && opts.characterId) ? opts.characterId : activeId;
+  const ch = asukaChars.getCharacter(charId);
+  for (const cat of ['outfit', 'hair', 'accessory']) {
+    for (const item of COSMETICS[cat]) {
+      if (item.price === 0 && (!item.characters || item.characters.includes(ch.id)) && !d.owned.includes(item.id)) {
+        d.owned.push(item.id);
+      }
+    }
+  }
+  saveCare(d);
   const levelGate = {};
-  for (const t of getTiers()) for (const u of (t.unlocks||[])) { const [cat,id] = u.split(':'); levelGate[id] = t; }
-  const tag = (items, cat) => items.map(i => {
-    const gate = levelGate[i.id];
-    const levelLocked = gate && (d.bondXP || 0) < gate.xp && !d.owned.includes(i.id);
-    return { ...i, owned: d.owned.includes(i.id) || i.price === 0, available: !i.seasonal || i.seasonal === season,
-      levelLocked, unlockLevel: gate ? gate.level : null, unlockTierName: gate ? gate.name : null,
-      freeUnlock: unlockedIds.includes(cat + ':' + i.id) };
-  });
-  return { coins: d.coins, equipped: d.equipped, bondXP: d.bondXP || 0, tier: getTier(d.bondXP||0),
-    catalog: { outfit: tag(COSMETICS.outfit,'outfit'), hair: tag(COSMETICS.hair,'hair'), accessory: tag(COSMETICS.accessory,'accessory') } };
+  for (const t of getTiers()) for (const u of (t.unlocks||[])) { const [,id] = u.split(':'); levelGate[id] = t; }
+  const equipped = getEquippedForChar(d, ch.id);
+  const tag = (items, cat) => items
+    .filter((i) => !i.characters || i.characters.includes(ch.id))
+    .map(i => {
+      const gate = levelGate[i.id];
+      const levelLocked = gate && (d.bondXP || 0) < gate.xp && !d.owned.includes(i.id);
+      return {
+        ...i,
+        owned: d.owned.includes(i.id) || i.price === 0,
+        available: !i.seasonal || i.seasonal === season,
+        levelLocked,
+        unlockLevel: gate ? gate.level : null,
+        unlockTierName: gate ? gate.name : null,
+        freeUnlock: unlockedIds.includes(cat + ':' + i.id),
+      };
+    });
+  const characters = asukaChars.listSelectable().map((c) => ({
+    id: c.id, name: c.name, emoji: c.emoji,
+    active: c.id === activeId, viewing: c.id === ch.id,
+  }));
+  return {
+    coins: d.coins, equipped, equippedByChar: d.equippedByChar,
+    bondXP: d.bondXP || 0, tier: getTier(d.bondXP || 0),
+    characterId: ch.id, characterName: ch.name, characterEmoji: ch.emoji,
+    activeCharacterId: activeId, characters,
+    catalog: {
+      outfit: tag(COSMETICS.outfit, 'outfit'),
+      hair: tag(COSMETICS.hair, 'hair'),
+      accessory: tag(COSMETICS.accessory, 'accessory'),
+    },
+  };
 });
 
-// Buy a cosmetic with coins
-ipcMain.handle('shop-buy', (e, { category, id }) => {
+ipcMain.handle('shop-buy', (e, { category, id, characterId }) => {
   const d = loadCare();
   const item = (COSMETICS[category] || []).find(i => i.id === id);
   if (!item) return { success: false, error: 'Item not found' };
   if (d.owned.includes(id)) return { success: false, error: 'Already owned' };
-  // Check level gate
-  for (const t of getTiers()) for (const u of (t.unlocks||[])) { if (u === category+':'+id && (d.bondXP||0) < t.xp) return { success: false, error: 'locked', needLevel: t.level, tierName: t.name }; }
+  for (const t of getTiers()) for (const u of (t.unlocks||[])) {
+    if (u === category+':'+id && (d.bondXP||0) < t.xp) return { success: false, error: 'locked', needLevel: t.level, tierName: t.name };
+  }
   if ((d.coins || 0) < item.price) return { success: false, error: 'not_enough', need: item.price - d.coins };
   d.coins -= item.price;
   d.owned.push(id);
   saveCare(d);
-  return { success: true, coins: d.coins, owned: id, message: `Got the ${item.name}! Want me to wear it? 💕` };
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('care-updated', d);
+  } catch (_) {}
+  return { success: true, coins: d.coins, owned: id, characterId: characterId || null, message: item.autoPose ? `Pose unlocked — she'll pose on her own now 💃` : `Got the ${item.name}! Want me to wear it? 💕` };
 });
 
-// Equip an owned cosmetic
-ipcMain.handle('shop-equip', (e, { category, id }) => {
+ipcMain.handle('shop-equip', async (e, { category, id, characterId, switchToCharacter }) => {
   const d = loadCare();
   const item = (COSMETICS[category] || []).find(i => i.id === id);
   if (!item) return { success: false, error: 'Not found' };
   if (item.price > 0 && !d.owned.includes(id)) return { success: false, error: 'Not owned' };
-  d.equipped[category] = id;
+  const activeId = asukaChars.resolveFromSettings(loadSettings()).id;
+  const charId = characterId || activeId;
+  const eq = getEquippedForChar(d, charId);
+  eq[category] = (id === 'none') ? null : id;
+  d.equippedByChar[charId] = eq;
+  if (charId === activeId) d.equipped = { ...eq };
   saveCare(d);
-  if (mainWindow) mainWindow.webContents.send('cosmetic-equipped', { category, id, asset: item.asset });
-  return { success: true, equipped: d.equipped, asset: item.asset };
+
+  let switched = false;
+  if (switchToCharacter !== false && charId !== activeId) {
+    const ch = asukaChars.getCharacter(charId);
+    if (ch?.model) {
+      const s = loadSettings();
+      s.characterId = ch.id;
+      s.characterName = ch.name;
+      saveSettings(s);
+      syncActiveEquipped(d);
+      saveCare(d);
+      const cPayload = asukaChars.characterPayload(ch);
+      cPayload.name = ch.name;
+      try {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('character-changed', cPayload);
+        if (dashboardWindow && !dashboardWindow.isDestroyed()) dashboardWindow.webContents.send('character-changed', cPayload);
+      } catch (_) {}
+      switched = true;
+    }
+  }
+
+  const payload = {
+    category, id,
+    asset: item.asset || null,
+    live2dExpr: item.live2dExpr || null,
+    equipped: getEquippedForChar(d, charId),
+    characterId: charId,
+  };
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('cosmetic-equipped', payload);
+    if (dashboardWindow && !dashboardWindow.isDestroyed()) dashboardWindow.webContents.send('cosmetic-equipped', payload);
+  } catch (_) {}
+  return { success: true, equipped: payload.equipped, asset: item.asset || null, live2dExpr: item.live2dExpr || null, characterId: charId, switched };
 });
 
 // Buy coins with real money (Stripe/crypto wired in Phase 3) — pack definitions from pricing.json
@@ -11939,10 +12214,10 @@ async function openPaperTrade(signal) {
   if (settings.useKellyCriterion) {
     try { size = calcKellySize(signal.coin, size); } catch(e) {}
   }
-  // Conviction sizing — quality grade scales position (A=100% B=75% C=50%)
-  if (signal.sizeMultiplier && signal.sizeMultiplier > 0 && signal.sizeMultiplier < 1) {
+  // Conviction sizing — quality grade / confluence tier scales position
+  if (signal.sizeMultiplier && signal.sizeMultiplier > 0 && signal.sizeMultiplier !== 1) {
     size = size * signal.sizeMultiplier;
-    console.log(`💎 Conviction sizing: grade ${signal.qualityGrade || '?'} → $${size.toFixed(0)} position`);
+    console.log(`💎 Conviction sizing: grade ${signal.qualityGrade || '?'} ×${signal.sizeMultiplier} → $${size.toFixed(0)} position`);
   }
   // Liquidation Guard — warn on dangerous leverage
   try {
@@ -11979,7 +12254,7 @@ async function openPaperTrade(signal) {
     status: 'open',
     pnl: 0,
     useBinance: false,
-    tradeMode: signal.tradeMode || 'normal',
+    tradeMode: signal.tradeMode || (signal.isScalp ? 'scalp' : 'normal'),
     qualityGrade: signal.qualityGrade || null,
     swarmVotes: signal.swarmVotes || null,
     advisorId: signal.advisorId || null,
@@ -11989,7 +12264,14 @@ async function openPaperTrade(signal) {
     advisorCallId: signal.advisorCallId || null,
     trailingLevels: signal.trailingLevels || [],
     partialTp: signal.partialTp || 1.0,
-    partialTpDone: false
+    partialTpDone: false,
+    setupType: signal.setupType || null,
+    confluenceTier: signal.confluenceTier || null,
+    confluenceScore: signal.confluenceScore || null,
+    independentAxes: signal.independentAxes || null,
+    precisionMeta: signal.precisionMeta || null,
+    isScalp: !!signal.isScalp,
+    scalpExpiry: signal.scalpExpiry || null
   };
 
   // Use Binance testnet if configured AND coin is supported
@@ -12091,6 +12373,27 @@ async function closePaperTrade(tradeId, closePrice, reason) {
   updateCoinBench(trade.coin, actualPnl > 0); // 4 consecutive losses → 7-day bench
   if (actualPnl < 0 && /stop/i.test(reason || '')) noteStopOut(trade.coin); // re-entry discipline
   if (trade.swarmVotes) updateAgentStats(trade.swarmVotes, actualPnl > 0); // agents learn from outcomes
+
+  // Precision expectancy — learn which setup types actually pay
+  if (trade.setupType) {
+    try {
+      const risk = Math.abs((trade.entry || 0) - (trade.stopLoss || trade.entry)) || 1;
+      const rMult = Math.abs(actualPnl) / (trade.size || risk) / Math.max(trade.leverage || 1, 1);
+      // Prefer R from price distance when available
+      let r = rMult;
+      if (trade.entry && trade.stopLoss) {
+        const riskPx = Math.abs(trade.entry - trade.stopLoss) || 1;
+        r = Math.abs(closePrice - trade.entry) / riskPx;
+      }
+      const exp = scannerPrecision.updateExpectancy(loadExpectancy(), {
+        coin: trade.coin,
+        setupType: trade.setupType,
+        won: actualPnl > 0,
+        rMultiple: r
+      });
+      saveExpectancy(exp);
+    } catch (e) {}
+  }
 
   // Close on Binance testnet if linked
   if (trade.useBinance && trade.binanceSymbol) {
@@ -13514,37 +13817,17 @@ async function detectMarketRegime() {
 async function getMultiTimeframeSignal(coin, direction) {
   try {
     const [candles1h, candles4h, candles1d] = await Promise.all([
-      getCandles(coin, '1h', 20).catch(() => null),
-      getCandles(coin, '4h', 20).catch(() => null),
-      getCandles(coin, '1d', 20).catch(() => null)
+      getCandles(coin, '1h', 60).catch(() => null),
+      getCandles(coin, '4h', 60).catch(() => null),
+      getCandles(coin, '1d', 60).catch(() => null)
     ]);
 
+    const structured = scannerPrecision.analyzeMultiTimeframe(candles1h, candles4h, candles1d, direction);
+    // Keep legacy RSI fields for any old consumers
     const rsi1h = candles1h ? calcRSI(candles1h, 14) : null;
     const rsi4h = candles4h ? calcRSI(candles4h, 14) : null;
     const rsi1d = candles1d ? calcRSI(candles1d, 14) : null;
-
-    let aligned = 0;
-    let total = 0;
-
-    const checkRSI = (rsi, tf) => {
-      if (!rsi) return;
-      total++;
-      if (direction === 'long' && rsi < 50) aligned++;
-      else if (direction === 'short' && rsi > 50) aligned++;
-    };
-
-    checkRSI(rsi1h, '1h');
-    checkRSI(rsi4h, '4h');
-    checkRSI(rsi1d, '1d');
-
-    const alignmentPct = total > 0 ? Math.round(aligned / total * 100) : 0;
-    const isAligned = alignmentPct >= 67; // at least 2/3 timeframes agree
-
-    return {
-      rsi1h, rsi4h, rsi1d,
-      aligned, total, alignmentPct, isAligned,
-      summary: `MTF Confirmation: ${aligned}/${total} timeframes agree (1h:${rsi1h?.toFixed(0)} 4h:${rsi4h?.toFixed(0)} 1d:${rsi1d?.toFixed(0)}) — ${isAligned ? '✅ ALIGNED' : '⚠️ MIXED'}`
-    };
+    return { ...structured, rsi1h, rsi4h, rsi1d };
   } catch(e) { return null; }
 }
 

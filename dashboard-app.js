@@ -624,6 +624,7 @@ function navigateToPage(pageNum) {
     p.classList.toggle('active', on)
     p.style.display = on ? 'flex' : 'none'
   })
+  if (typeof window.moveTabGlider === 'function') window.moveTabGlider(pageNum)
   loadPageData(pageNum)
 }
 window.navigateToPage = navigateToPage
@@ -660,6 +661,7 @@ function syncVisiblePageFromActiveTab() {
     p.classList.toggle('active', on)
     p.style.display = on ? 'flex' : 'none'
   })
+  if (typeof window.moveTabGlider === 'function') window.moveTabGlider(n)
 }
 syncVisiblePageFromActiveTab()
 
@@ -669,6 +671,7 @@ pagesWrapper?.addEventListener('scroll', () => {
   document.querySelectorAll('.page-tab').forEach(t => {
     t.classList.toggle('active', parseInt(t.dataset.page) === pageNum)
   })
+  if (typeof window.moveTabGlider === 'function') window.moveTabGlider(pageNum)
 })
 
 // ── Dot Trust Selector ──
@@ -1687,7 +1690,7 @@ async function loadMarketRegime() {
   const el = document.getElementById('regime-display')
   if (!el) return
   try {
-    const regime = await ipcRenderer.invoke('get-market-regime')
+    const regime = await ipcTimeout('get-market-regime', undefined, 8000)
     if (!regime) { el.textContent = 'Unable to detect'; return }
     const colors = { bull: 'var(--green)', bear: 'var(--red)', sideways: '#fbbf24', unknown: 'var(--text2)' }
     el.innerHTML = `
@@ -1700,7 +1703,7 @@ async function loadTradeAnalytics() {
   const el = document.getElementById('analytics-display')
   if (!el) return
   try {
-    const analytics = await ipcRenderer.invoke('get-trade-analytics')
+    const analytics = await ipcTimeout('get-trade-analytics', undefined, 8000)
     if (!analytics) { el.textContent = 'Not enough trades yet (need 5+)'; return }
     el.innerHTML = `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
@@ -1751,6 +1754,19 @@ document.querySelectorAll('.mtf-btn').forEach(btn => {
   })
 })
 
+document.getElementById('precision-toggle')?.addEventListener('click', function() {
+  this.classList.toggle('on')
+  ipcRenderer.send('set-setting', 'precisionScanner', this.classList.contains('on'))
+})
+
+document.querySelectorAll('.tier-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.tier-btn').forEach(b => b.classList.remove('active'))
+    this.classList.add('active')
+    ipcRenderer.send('set-setting', 'confluenceMinTier', this.dataset.val)
+  })
+})
+
 // Load analytics when trading tab opens
 // regime/analytics loaded inline below
 
@@ -1766,6 +1782,13 @@ function restoreAdvancedSettings(settings) {
   if (settings.mtfMode) {
     document.querySelectorAll('.mtf-btn').forEach(b =>
       b.classList.toggle('active', b.dataset.val === settings.mtfMode)
+    )
+  }
+  const prec = document.getElementById('precision-toggle')
+  if (prec) prec.classList.toggle('on', settings.precisionScanner !== false)
+  if (settings.confluenceMinTier) {
+    document.querySelectorAll('.tier-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.val === settings.confluenceMinTier)
     )
   }
 }
@@ -2685,14 +2708,23 @@ document.querySelectorAll('[data-others-tab]').forEach(tab => {
   })
 })
 
-// add active class to others-tab-content
-document.querySelectorAll('.others-tab-content').forEach((el, i) => {
-  if (i > 0) el.classList.remove('active')
+// Keep Study as the default Others tab (do not rely on DOM order)
+document.querySelectorAll('.others-tab-content').forEach((el) => {
+  el.classList.toggle('active', el.id === 'others-study')
+})
+document.querySelectorAll('[data-others-tab]').forEach((t) => {
+  t.classList.toggle('active', t.dataset.othersTab === 'study')
 })
 
 
 // ── ✨ Intelligence tab (brain stats + live swarm + what she knows) ─────────
-async function loadIntel() { loadBrainStats(); loadWhatSheKnows(); loadRules(); loadReplays() }
+async function loadIntel() {
+  loadBrainStats()
+  loadPrecisionScoreboard()
+  loadWhatSheKnows()
+  loadRules()
+  loadReplays()
+}
 
 // ── Study Library (Others → Study) ──
 document.getElementById('open-classroom-btn')?.addEventListener('click', () => ipcRenderer.invoke('open-classroom').catch(()=>{}))
@@ -2762,7 +2794,7 @@ function showReplay(id, replays) {
   const agreeVotes = (r.agentVotes||[]).filter(v=>v.agree).length
   d.style.display = 'block'
   d.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;">
-    <div style="font-family:'Fraunces',serif;font-size:14px;margin-bottom:8px;">${(r.direction||'').toUpperCase()} ${r.coin} <span style="font-size:10px;color:var(--text2);">${when}</span></div>
+    <div style="font-family:var(--display);font-size:14px;margin-bottom:8px;">${(r.direction||'').toUpperCase()} ${r.coin} <span style="font-size:10px;color:var(--text2);">${when}</span></div>
     <div style="font-size:11px;line-height:1.6;">
       <div><b>Claude's read:</b> ${r.claudeReason||'—'}</div>
       <div><b>Market bias:</b> ${r.marketBias||'—'} · <b>Quality:</b> ${r.qualityGrade||'—'} · <b>Mode:</b> ${r.mode||'—'}</div>
@@ -2797,6 +2829,78 @@ async function loadBrainStats() {
     card('Veteran agents', `${b.vetAgents}/${b.totalAgents}`, '5+ votes each', 'var(--violet)') +
     card('Lessons learned', b.lessonsLearned, b.topAgent?`top: ${b.topAgent.role} ${b.topAgent.accuracy}%`:'', 'var(--sakura)')
 }
+
+async function loadPrecisionScoreboard() {
+  const el = document.getElementById('precision-scoreboard')
+  if (!el) return
+  const s = await ipcRenderer.invoke('get-precision-scoreboard').catch(() => null)
+  if (!s || s.error) {
+    el.innerHTML = `<div class="sb-empty">${s?.error || 'No precision data yet.'}<br><span style="color:var(--text2);">Turn on Independent Scanner + Precision, then let shadows resolve.</span></div>`
+    return
+  }
+  const t = s.totals || {}
+  const hold = t.holdoutWinRate
+  const holdClass = hold == null ? '' : hold >= 55 ? 'up' : hold < 45 ? 'down' : 'accent'
+  const status = (t.holdout || 0) < 10
+    ? '<span class="sb-status wait">collecting holdout</span>'
+    : hold != null && hold >= 55
+      ? '<span class="sb-status ok">holdout ok</span>'
+      : '<span class="sb-status warn">review edge</span>'
+
+  let html = `<div class="sb-hero">
+    <div class="sb-metric"><div class="sb-metric-label">Resolved</div><div class="sb-metric-val">${t.resolved || 0}</div><div class="sb-metric-sub">${t.structuredShadows || 0} structured</div></div>
+    <div class="sb-metric"><div class="sb-metric-label">Holdout WR</div><div class="sb-metric-val ${holdClass}">${hold != null ? hold + '%' : '—'}</div><div class="sb-metric-sub">${t.holdout || 0} OOS · ${status}</div></div>
+    <div class="sb-metric"><div class="sb-metric-label">In-sample WR</div><div class="sb-metric-val">${t.inSampleWinRate != null ? t.inSampleWinRate + '%' : '—'}</div><div class="sb-metric-sub">${t.inSample || 0} samples</div></div>
+    <div class="sb-metric"><div class="sb-metric-label">Setups tracked</div><div class="sb-metric-val accent">${(s.expectancy || []).length}</div><div class="sb-metric-sub">expectancy rows</div></div>
+  </div>`
+
+  const ab = s.featureAB || {}
+  html += '<div class="sb-section"><div class="sb-section-title"><span>Gate quality</span></div>'
+  const abEntries = Object.entries(ab)
+  if (!abEntries.length) html += '<div class="sb-empty" style="padding:12px;">Gates will appear after blocked shadows resolve.</div>'
+  else {
+    for (const [feat, v] of abEntries) {
+      const val = v.status === 'need_more_data' || v.status === 'collecting'
+        ? `n=${v.n} · collecting`
+        : `${v.precision ?? '—'}% good blocks · ${v.status} (n=${v.n})`
+      html += `<div class="sb-row"><span class="sb-row-k">${feat}</span><span class="sb-row-v">${val}</span></div>`
+    }
+  }
+  html += '</div>'
+
+  html += '<div class="sb-section"><div class="sb-section-title"><span>Expectancy</span></div>'
+  const exp = (s.expectancy || []).slice(0, 8)
+  if (!exp.length) html += '<div class="sb-empty" style="padding:12px;">Closes with setupType fill this table.</div>'
+  else for (const e of exp) {
+    const eClass = (e.expectancy || 0) > 0.15 ? 'color:var(--green)' : (e.expectancy || 0) <= 0 ? 'color:var(--red)' : ''
+    html += `<div class="sb-row"><span class="sb-row-k">${e.key}</span><span class="sb-row-v" style="${eClass}">E=${e.expectancy ?? '—'} · ${e.winRate ?? '—'}% · n=${e.n}</span></div>`
+  }
+  html += '</div>'
+
+  const tiers = (s.byTier || []).slice(0, 5)
+  const regimes = (s.byRegime || []).slice(0, 5)
+  if (tiers.length || regimes.length) {
+    html += '<div class="sb-section"><div class="sb-section-title"><span>Tier / regime</span></div><div class="sb-chip-row">'
+    for (const b of tiers) html += `<span class="sb-chip">tier ${b.key} · ${b.winRate}% (${b.n})</span>`
+    for (const b of regimes) html += `<span class="sb-chip">regime ${b.key} · ${b.winRate}% (${b.n})</span>`
+    html += '</div></div>'
+  }
+
+  const blocked = (s.byBlockedBy || []).slice(0, 6)
+  if (blocked.length) {
+    html += '<div class="sb-section"><div class="sb-section-title"><span>Blocked by</span></div>'
+    for (const b of blocked) {
+      html += `<div class="sb-row"><span class="sb-row-k">${b.key}</span><span class="sb-row-v">${b.n} · avoid-proxy ${b.winRate}%</span></div>`
+    }
+    html += '</div>'
+  }
+
+  el.innerHTML = html
+}
+document.getElementById('precision-refresh')?.addEventListener('click', () => loadPrecisionScoreboard())
+document.querySelector('[data-others-tab="intel"]')?.addEventListener('click', () => {
+  setTimeout(() => { loadPrecisionScoreboard(); loadBrainStats(); }, 300)
+})
 async function loadWhatSheKnows() {
   const k = await ipcRenderer.invoke('get-what-she-knows').catch(()=>null)
   const el = document.getElementById('knows-content')
@@ -4887,9 +4991,9 @@ document.querySelectorAll('.interval-btn').forEach(btn => {
     // Cost estimate
     const scansPerDay = 1440 / minutes
     const coinsCount = document.querySelectorAll('.coin-btn[data-coin].active').length || 4
-    const dailyCost = (scansPerDay * coinsCount * 0.3 * 0.006).toFixed(2)
+    const dailyCost = (scansPerDay * coinsCount * 0.18 * 0.009 + coinsCount * 0.007).toFixed(2)
     setEl('scan-interval-hint','textContent',`Every ${minutes} min — ${scansPerDay} scans/day`)
-    setEl('scan-cost-hint','textContent',`Est. cost: ~$${dailyCost}/day (~$${(dailyCost * 30).toFixed(0)}/month)`)
+    setEl('scan-cost-hint','textContent',`Est. precision cost: ~$${dailyCost}/day (~$${(dailyCost * 30).toFixed(0)}/month)`)
   })
 })
 
@@ -5025,33 +5129,32 @@ async function renderTradeHistory(stats) {
 }
 
 async function loadTradingUI() {
-  // Load settings immediately - never times out
-  const settings = await ipcRenderer.invoke('get-settings').catch(() => ({}))
+  // Never hang forever on a stuck main-process IPC
+  const settings = await ipcTimeout('get-settings', undefined, 5000) || {}
   window._cachedSettings = settings
 
-  // Restore UI from settings right away (no waiting for trades)
   try { applySettingsToUI(settings) } catch(e) { console.error('applySettingsToUI error:', e.message) }
 
-  // Load trades separately in background
+  // Populate main/overview widgets without blocking each other
+  try { loadMainTradeTab() } catch(e) {}
+  try { loadOverviewTab() } catch(e) {}
   loadOpenPositions()
   loadTradeHistory()
 
-  // Load regime and analytics in background
-  setTimeout(loadMarketRegime, 800)
-  setTimeout(loadTradeAnalytics, 1200)
+  setTimeout(loadMarketRegime, 400)
+  setTimeout(loadTradeAnalytics, 800)
   setTimeout(loadUsageStats, 500)
+  setTimeout(loadDailySignals, 600)
 
-  // Load TG stats
   let tgStats = { stats: {} }
-  try { tgStats = await ipcRenderer.invoke('telegram-get-stats') } catch(e) {}
+  try { tgStats = await ipcTimeout('telegram-get-stats', undefined, 4000) || { stats: {} } } catch(e) {}
 
-  // Update stats display
   try {
-    const stats = await Promise.race([
-      ipcRenderer.invoke('get-paper-stats'),
-      new Promise(r => setTimeout(() => r(null), 5000))
-    ])
-    if (stats) updateStatsDisplay(stats, tgStats)
+    const stats = await ipcTimeout('get-paper-stats', undefined, 5000)
+    if (stats) {
+      updateStatsDisplay(stats, tgStats)
+      try { renderMainTrades(stats) } catch(e) {}
+    }
   } catch(e) {}
 }
 
@@ -5086,14 +5189,11 @@ async function loadTradeHistory() {
 function applySettingsToUI(settings) {
   if (!settings) return
   try {
-    // Toggles
+    // Toggles — never early-return; missing nodes must not abort the rest of the restore
     const autoEl = document.getElementById('auto-trade-toggle')
-    if(!autoEl) return
     const scanEl = document.getElementById('independent-scanner-toggle')
-    if(!scanEl) return
     const chartEl = chartAnalysisToggleEl()
     const scalpEl = document.getElementById('scalp-toggle')
-    if(!scalpEl) return
     if (autoEl) autoEl.classList.toggle('on', !!settings.autoPaperTrade)
     if (scanEl) scanEl.classList.toggle('on', !!settings.independentScanner)
     if (chartEl) chartEl.classList.toggle('on', !!settings.chartAnalysis)
@@ -5105,7 +5205,6 @@ function applySettingsToUI(settings) {
         b.classList.toggle('active', parseInt(b.dataset.lev) === settings.paperLeverage)
       )
       const warn = document.getElementById('lev-warning')
-      if(!warn) return
       if (warn) warn.textContent = levWarnings[settings.paperLeverage] || ''
     }
 
@@ -5139,17 +5238,14 @@ function applySettingsToUI(settings) {
 
     // Trade size
     const sizeEl = document.getElementById('trade-size-input')
-    if(!sizeEl) return
     if (sizeEl && settings.paperTradeSize) sizeEl.value = settings.paperTradeSize
 
     // Scalp size
     const scalpSizeEl = document.getElementById('scalp-size-input')
-    if(!scalpSizeEl) return
     if (scalpSizeEl && settings.scalpSize) scalpSizeEl.value = settings.scalpSize
 
     // Drawdown
     const ddEl = document.getElementById('max-drawdown-input')
-    if(!ddEl) return
     if (ddEl && settings.maxDrawdown) ddEl.value = settings.maxDrawdown
 
     // TP/SL mode
@@ -5167,7 +5263,6 @@ function applySettingsToUI(settings) {
       document.getElementById('ta-manual-btn')?.classList.add('active')
       document.getElementById('ta-auto-btn')?.classList.remove('active')
       const panel = document.getElementById('ta-manual-panel')
-      if(!panel) return
       if (panel) panel.style.display = 'block'
     }
 
@@ -5214,7 +5309,6 @@ function applySettingsToUI(settings) {
 
     // Scalp panel visibility
     const scalpPanel = document.getElementById('scalp-settings-panel')
-    if(!scalpPanel) return
     if (scalpPanel) scalpPanel.style.display = settings.scalpTrading ? 'block' : 'none'
 
     // Rage lock settings
@@ -5719,46 +5813,119 @@ async function loadPortfolio() {
 }
 
 // ── Edit page ──
-const chars=[
-  {name:'Asuka',emoji:'🌸',free:true},  {name:'Aria',emoji:'🌙',free:true},
-  {name:'Nova',emoji:'⚡',free:true},   {name:'Ghost',emoji:'👻',free:false},
-  {name:'Lyra',emoji:'🎵',free:false},  {name:'Vex',emoji:'🔮',free:false},
-  {name:'Kira',emoji:'🌺',free:false},  {name:'Zero',emoji:'🤖',free:false},
-  {name:'Echo',emoji:'🌊',free:false},
-]
+let editModel = null
+let selectedCharId = 'asuka'
+
+function getCharCatalog() {
+  return (window.AsukaCharacters && window.AsukaCharacters.CHARACTERS) || [
+    { id:'asuka', name:'Asuka', emoji:'🌸', free:true, model:'./assets/model/huohuo.model3.json', previewScaleDivisor:8500, motionGroup:'idle', scale:0.07, offsetY:0 },
+    { id:'alexia', name:'Alexia', emoji:'💜', free:true, model:'./assets/model/alexia/Alexia.model3.json', previewScaleDivisor:8500, motionGroup:'', scale:0.07, offsetY:28 },
+  ]
+}
+
 document.getElementById('edit-btn')?.addEventListener('click',()=>{
   document.getElementById('edit-page').classList.add('open')
   buildCharRow(); initEditWaifu()
 })
 document.getElementById('back-from-edit')?.addEventListener('click',()=>document.getElementById('edit-page').classList.remove('open'))
+
 function buildCharRow() {
   const row=document.getElementById('char-row')
   if(!row) return
-  row.innerHTML=chars.map((c,i)=>`<div class="char-card ${!c.free?'locked':''} ${i===0?'active':''}" data-idx="${i}">
-    <div class="char-badge ${c.free?'free':'pro'}">${c.free?'Free':'Pro'}</div>
+  const chars = getCharCatalog()
+  const activeId = settings.characterId || selectedCharId || 'asuka'
+  row.innerHTML=chars.map((c)=>`<div class="char-card ${(!c.free || !c.model)?'locked':''} ${c.id===activeId?'active':''}" data-id="${c.id}">
+    <div class="char-badge ${c.free && c.model?'free':'pro'}">${c.free && c.model?'Free':'Pro'}</div>
     <div class="char-emoji">${c.emoji}</div>
     <div class="char-name">${c.name}</div>
   </div>`).join('')
   row.querySelectorAll('.char-card:not(.locked)').forEach(card=>{
-    card.addEventListener('click',()=>{
+    card.addEventListener('click', async ()=>{
       row.querySelectorAll('.char-card').forEach(c=>c.classList.remove('active')); card.classList.add('active')
-      const chosen = chars[parseInt(card.dataset.idx)].name
-      setEl('edit-char-name','textContent',chosen)
-      setEl('waifu-name','textContent',chosen)
+      const id = card.dataset.id
+      selectedCharId = id
+      const ch = getCharCatalog().find(x => x.id === id)
+      if (!ch) return
+      setEl('edit-char-name','textContent',ch.name)
+      setEl('waifu-name','textContent',ch.name)
+      setEl('c-name','value',ch.name)
+      await applySelectedCharacter(ch)
     })
   })
 }
+
+async function applySelectedCharacter(ch) {
+  try {
+    const r = await ipcRenderer.invoke('set-character', { id: ch.id, name: ch.name })
+    if (!r?.ok) return
+    settings.characterId = r.id
+    settings.characterName = r.name
+    await loadPreviewModel(editApp, 'edit', r)
+    reloadDashboardWaifuFrame(r)
+  } catch (e) { console.error('set-character:', e) }
+}
+
+async function loadPreviewModel(app, kind, ch) {
+  if (!app || !ch?.model) return
+  try {
+    if (!(await ensurePixiLive2D())) return
+    const { Live2DModel } = PIXI.live2d
+    if (kind === 'edit' && editModel) {
+      try { app.stage.removeChild(editModel); editModel.destroy?.(true); } catch (_) {}
+      editModel = null
+    }
+    const canvas = document.getElementById(kind === 'edit' ? 'edit-canvas' : 'cust-canvas')
+    const w = canvas.width || 220, h = canvas.height || 360
+    const m = await Live2DModel.from(ch.model)
+    app.stage.addChild(m)
+    m.x = w / 2
+    m.y = h + (ch.offsetY || 0) * 0.35
+    m.scale.set(h / (ch.previewScaleDivisor || 8500))
+    m.anchor.set(0.5, 1)
+    try {
+      if (ch.motionGroup) m.motion(ch.motionGroup)
+      else m.motion('', 0)
+    } catch (_) {}
+    if (kind === 'edit') editModel = m
+  } catch (e) { console.error('preview model:', e) }
+}
+
+function reloadDashboardWaifuFrame(ch) {
+  const f = document.getElementById('waifu-frame')
+  if (!f) return
+  const model = encodeURIComponent(ch?.model || './assets/model/huohuo.model3.json')
+  const scale = encodeURIComponent(String(ch?.previewScaleDivisor || 8500))
+  const motion = encodeURIComponent(ch?.motionGroup == null ? 'idle' : ch.motionGroup)
+  const oy = encodeURIComponent(String(ch?.offsetY || 0))
+  f.style.display = 'block'
+  f.src = `dashboard-waifu.html?model=${model}&scaleDiv=${scale}&motion=${motion}&offsetY=${oy}&t=${Date.now()}`
+  const hint = document.getElementById('waifu-load-hint')
+  if (hint) hint.style.display = 'none'
+}
+
+ipcRenderer.on('character-changed', (_e, ch) => {
+  if (!ch) return
+  settings.characterId = ch.id
+  settings.characterName = ch.name
+  setEl('waifu-name','textContent', ch.name)
+  setEl('edit-char-name','textContent', ch.name)
+  reloadDashboardWaifuFrame(ch)
+})
+
 async function initEditWaifu() {
-  if (editApp) return
   try {
     if (!(await ensurePixiLive2D())) return
     const { Live2DModel } = PIXI.live2d
     const canvas=document.getElementById('edit-canvas')
     const w=220,h=360; canvas.width=w; canvas.height=h
-    editApp=new PIXI.Application({view:canvas,autoStart:true,transparent:true,backgroundAlpha:0,width:w,height:h})
-    const m=await Live2DModel.from('./assets/model/huohuo.model3.json')
-    editApp.stage.addChild(m); m.x=w/2; m.y=h; m.scale.set(h/8500); m.anchor.set(0.5,1); m.motion('idle')
-  } catch(e){}
+    if (!editApp) editApp=new PIXI.Application({view:canvas,autoStart:true,transparent:true,backgroundAlpha:0,width:w,height:h})
+    const ch = await ipcRenderer.invoke('get-character').catch(()=>null)
+      || window.AsukaCharacters?.resolveFromSettings?.(settings)
+      || getCharCatalog().find(c => c.id === 'asuka')
+    selectedCharId = ch.id
+    setEl('edit-char-name','textContent', ch.name || 'Asuka')
+    await loadPreviewModel(editApp, 'edit', ch)
+  } catch(e){ console.error('initEditWaifu:', e) }
 }
 
 // ── Customize ──
@@ -5777,8 +5944,10 @@ async function initCustWaifu() {
     const canvas=document.getElementById('cust-canvas')
     const w=220,h=360; canvas.width=w; canvas.height=h
     custApp=new PIXI.Application({view:canvas,autoStart:true,transparent:true,backgroundAlpha:0,width:w,height:h})
-    const m=await Live2DModel.from('./assets/model/huohuo.model3.json')
-    custApp.stage.addChild(m); m.x=w/2; m.y=h; m.scale.set(h/8500); m.anchor.set(0.5,1); m.motion('idle')
+    const ch = await ipcRenderer.invoke('get-character').catch(()=>null) || getCharCatalog().find(c => c.id === 'asuka')
+    const m=await Live2DModel.from(ch.model)
+    custApp.stage.addChild(m); m.x=w/2; m.y=h+(ch.offsetY||0)*0.35; m.scale.set(h/(ch.previewScaleDivisor||8500)); m.anchor.set(0.5,1)
+    try { ch.motionGroup ? m.motion(ch.motionGroup) : m.motion('', 0) } catch(_){}
   } catch(e){}
 }
 
@@ -5808,7 +5977,9 @@ document.getElementById('cust-save')?.addEventListener('click',async()=>{
   const personality=document.querySelector('[data-personality].active')?.dataset.personality||'chill'
   const level=document.querySelector('[data-level].active')?.dataset.level||'intermediate'
   const aiMode=document.querySelector('[data-ai].active')?.dataset.ai||'balanced'
-  settings.characterName=name; settings.aiMode=aiMode
+  const charId = settings.characterId || selectedCharId || 'asuka'
+  await ipcRenderer.invoke('set-character', { id: charId, name }).catch(()=>{})
+  settings.characterName=name; settings.characterId=charId; settings.aiMode=aiMode
   memory.wakeName=wake; memory.voiceSpeed=speed; memory.personality=personality; memory.learningLevel=level
   await ipcRenderer.invoke('save-settings',settings)
   await ipcRenderer.invoke('save-memory',memory)
@@ -6186,6 +6357,9 @@ function applyMode(mode) {
       navigateToPage(1)
     }
   }
+  requestAnimationFrame(() => {
+    if (typeof window.moveTabGlider === 'function') window.moveTabGlider()
+  })
 }
 document.querySelectorAll('.mode-card').forEach(c => {
   c.addEventListener('mouseover', () => c.style.transform = 'translateY(-4px)')

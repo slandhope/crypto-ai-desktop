@@ -53,8 +53,27 @@ const DEFAULT_TIERS = [
 ];
 
 const ALL_COINS = ['BTC','ETH','SOL','BNB','XRP','DOGE','AVAX','LINK','ARB','PEPE','BONK','TRUMP','WIF','SUI','APT'];
-const COST_PER_COIN_MAIN = 1.79;  // $/day per coin in main scanner
-const COST_PER_COIN_SCALP = 0.21; // $/day per coin in scalp scanner
+const LEGACY_COST_MAIN = 1.79;
+const LEGACY_COST_SCALP = 0.21;
+const SONNET_PER_CALL = 0.009;
+const NEWS_PER_COIN_DAY = 0.007;
+const AI_FIRE_RATE_MAIN = 0.18;
+const AI_FIRE_RATE_SCALP = 0.06;
+
+function precisionCostRates(settings) {
+  const precision = settings.precisionScanner !== false;
+  const interval = Number(settings.scanIntervalMinutes || settings.scanInterval || 30) || 30;
+  if (!precision) {
+    return { main: LEGACY_COST_MAIN, scalp: LEGACY_COST_SCALP, precision: false, interval };
+  }
+  const scansPerDay = 1440 / interval;
+  return {
+    main: scansPerDay * AI_FIRE_RATE_MAIN * SONNET_PER_CALL + NEWS_PER_COIN_DAY,
+    scalp: (1440 / 5) * AI_FIRE_RATE_SCALP * SONNET_PER_CALL,
+    precision: true,
+    interval
+  };
+}
 // No hardcoded default password — set DEV_PANEL_PASSWORD or change via panel after first bootstrap
 function resolvePanelPassword(state) {
   if (process.env.DEV_PANEL_PASSWORD && process.env.DEV_PANEL_PASSWORD.length >= 8) {
@@ -116,17 +135,23 @@ function getMasterCoins() {
 }
 
 function getCostEstimate(master) {
+  const settings = loadJSON(SETTINGS_FILE, {});
+  const rates = precisionCostRates(settings);
   const mainActive = (master.main||[]).filter(c => !(master.disabled?.main||[]).includes(c));
   const scalpActive = (master.scalp||[]).filter(c => !(master.disabled?.scalp||[]).includes(c));
-  const mainCost = mainActive.length * COST_PER_COIN_MAIN;
-  const scalpCost = scalpActive.length * COST_PER_COIN_SCALP;
+  const mainCost = mainActive.length * rates.main;
+  const scalpCost = scalpActive.length * rates.scalp;
   return {
     mainCoins: mainActive.length,
     scalpCoins: scalpActive.length,
     mainCostDay: mainCost,
     scalpCostDay: scalpCost,
     totalDay: mainCost + scalpCost,
-    totalMonth: (mainCost + scalpCost) * 30
+    totalMonth: (mainCost + scalpCost) * 30,
+    costPerCoinMain: rates.main,
+    costPerCoinScalp: rates.scalp,
+    precisionScanner: rates.precision,
+    scanInterval: rates.interval
   };
 }
 
@@ -176,6 +201,9 @@ function getStats() {
     recentLessons: Array.isArray(lessons) ? lessons.slice(-5).reverse() : [],
     analytics, master,
     costEstimate: getCostEstimate(master),
+    precisionScanner: settings.precisionScanner !== false,
+    confluenceMinTier: settings.confluenceMinTier || 'STRONG',
+    mtfMode: settings.mtfMode || 'hard',
     ...devState,
     timestamp: new Date().toISOString(),
   };
@@ -302,6 +330,11 @@ const server = http.createServer((req, res) => {
         if (cmd.action === 'resumeAll') { state.pauseAll = false; state.pauseScalp = false; state.pauseMain = false; }
         if (cmd.action === 'toggleScalp') state.pauseScalp = !state.pauseScalp;
         if (cmd.action === 'toggleMain') state.pauseMain = !state.pauseMain;
+        if (cmd.action === 'setPrecision') {
+          const settings = loadJSON(SETTINGS_FILE, {});
+          settings.precisionScanner = cmd.value !== false && cmd.value !== 'off';
+          saveJSON(SETTINGS_FILE, settings);
+        }
         if (cmd.action === 'setInterval') {
           state.intervalOverride = cmd.value || null;
           const settings = loadJSON(SETTINGS_FILE, {});
@@ -709,6 +742,7 @@ input:focus{border-color:#00d4ff}
           <div class="row"><span class="row-label">Auto Trading</span><span id="st-auto" class="pill pill-red">OFF</span></div>
           <div class="row"><span class="row-label">Main Scanner</span><span id="st-main" class="pill pill-green">RUNNING</span></div>
           <div class="row"><span class="row-label">Scalp Scanner</span><span id="st-scalp" class="pill pill-green">RUNNING</span></div>
+          <div class="row"><span class="row-label">Precision (math-first)</span><span id="st-precision" class="pill pill-green">ON</span></div>
           <div class="row"><span class="row-label">Daily Bot</span><span id="st-daily" class="pill pill-red">OFF</span></div>
           <div class="row"><span class="row-label">Scan Interval</span><span class="yellow" id="st-interval">30min</span></div>
           <div class="row"><span class="row-label">Total Users</span><span class="blue" id="st-users">0</span></div>
@@ -723,6 +757,7 @@ input:focus{border-color:#00d4ff}
           <button class="btn-success" id="resume-all-btn" style="padding:14px;">▶️ Resume ALL</button>
           <button class="btn-warning" id="toggle-scalp-btn">⚡ Toggle Scalp</button>
           <button class="btn-warning" id="toggle-main-btn">📈 Toggle Main</button>
+          <button class="btn-warning" id="toggle-precision-btn">🎯 Toggle Precision</button>
         </div>
         <div id="emergency-status" style="font-size:12px;text-align:center;padding:8px;background:#0f172a;border-radius:8px;color:#34d399;">✅ All systems running normally</div>
       </div>
@@ -822,7 +857,7 @@ input:focus{border-color:#00d4ff}
           <div class="stat-box">
             <div class="stat-label">Total Monthly</div>
             <div class="stat-val green" id="cc-total">$0/mo</div>
-            <div class="stat-sub">all scanners</div>
+            <div class="stat-sub" id="cc-mode-note">all scanners</div>
           </div>
         </div>
       </div>
@@ -1136,6 +1171,8 @@ function updateOverview() {
   el('st-main').className = 'pill '+(stats.pauseMain?'pill-red':'pill-green');
   el('st-scalp').textContent = stats.pauseScalp?'PAUSED':'RUNNING';
   el('st-scalp').className = 'pill '+(stats.pauseScalp?'pill-red':'pill-green');
+  el('st-precision').textContent = stats.precisionScanner!==false?'ON':'OFF';
+  el('st-precision').className = 'pill '+(stats.precisionScanner!==false?'pill-green':'pill-red');
   el('st-daily').textContent = stats.dailyTradeEnabled?'ON':'OFF';
   el('st-daily').className = 'pill '+(stats.dailyTradeEnabled?'pill-green':'pill-red');
   el('st-interval').textContent = (stats.intervalOverride||stats.scanInterval||30)+' min';
@@ -1175,6 +1212,9 @@ function updateOverview() {
   el('cc-scalp-cost').textContent = '$'+(est2.scalpCostDay||0).toFixed(2)+'/day';
   el('cc-scalp-coins').textContent = (est2.scalpCoins||0)+' coins active';
   el('cc-total').textContent = '$'+(est2.totalMonth||0).toFixed(0)+'/mo';
+  const modeNote = est2.precisionScanner!==false ? 'Precision (math→AI veto)' : 'Legacy MiroFish';
+  const ccNote = el('cc-mode-note');
+  if (ccNote) ccNote.textContent = modeNote+' · main $'+(est2.costPerCoinMain||0).toFixed(3)+'/coin/day';
 }
 
 function renderCoinGrid() {
@@ -1186,7 +1226,8 @@ function renderCoinGrid() {
   const allCoins = master[type]||['BTC','ETH','SOL','BNB','XRP','DOGE','AVAX','LINK','ARB','PEPE'];
   const coinStats = analytics.coinStats?.[type]||{};
   const totalUsers = analytics.totalUsers||1;
-  const costPerCoin = type==='main' ? 1.79 : type==='scalp' ? 0.21 : 0.003;
+  const est = stats.costEstimate || {};
+  const costPerCoin = type==='main' ? (est.costPerCoinMain||0.05) : type==='scalp' ? (est.costPerCoinScalp||0.16) : 0.003;
   const titleMap = {'main':'📈 Main Trade','scalp':'⚡ Scalp','day':'📅 Day Trade'};
   const activeCount = allCoins.filter(c=>!disabled.includes(c)).length;
   el('coin-grid-title').textContent = titleMap[type]+' Coins';
@@ -1315,6 +1356,11 @@ window.onload = () => {
   document.getElementById('resume-all-btn')?.addEventListener('click', () => ctrl('resumeAll'));
   document.getElementById('toggle-scalp-btn')?.addEventListener('click', () => ctrl('toggleScalp'));
   document.getElementById('toggle-main-btn')?.addEventListener('click', () => ctrl('toggleMain'));
+  document.getElementById('toggle-precision-btn')?.addEventListener('click', async () => {
+    const on = !(stats && stats.precisionScanner !== false);
+    await api('/api/control','POST',{action:'setPrecision',value:on});
+    refresh();
+  });
   document.getElementById('auto-optimize-btn')?.addEventListener('click', autoOptimize);
   document.getElementById('reset-all-btn')?.addEventListener('click', resetAll);
   document.getElementById('change-pwd-btn')?.addEventListener('click', changePwd);

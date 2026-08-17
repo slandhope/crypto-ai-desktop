@@ -20,6 +20,9 @@ const { getSecret } = require('./secrets');          // 🔐 key vault
 const https = require('https');                       // for voice proxy
 const credits = require('./credits');                // 🎟️ credit engine
 const { authRequired, authOptional, userIdOf } = require('./auth');  // 🔑 real login
+const scannerPrecision = require('./scanner-precision');
+const { runPrecisionScan, runPrecisionIndependentScalp, runPrecisionScalpForCoin } = require('./scanner-precision-run');
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
 // pull the real Claude key from the vault at boot (Secrets Manager → .env fallback)
 (async () => { try { const k = await getSecret('ANTHROPIC_API_KEY'); if (k) anthropic.apiKey = k; } catch (e) {} })();
 
@@ -107,7 +110,7 @@ function saveJSON(file, data) {
 
 // ── loadSettings ──
 function loadSettings() {
-  return loadJSON(SETTINGS_FILE, {
+  const s = loadJSON(SETTINGS_FILE, {
     wallets: [], trackedWallets: [], influencerWallets: [],
     watchlist: [], personality: 'chill', characterName: 'Asuka',
     suppressedAlerts: [], tradeRules: [], aiMode: 'balanced',
@@ -119,6 +122,12 @@ function loadSettings() {
     elevenLabsKey: null, elevenLabsVoiceId: null,
     ttsProvider: 'openai',
   });
+  if (s.precisionScanner === undefined) s.precisionScanner = true;
+  if (s.mtfMode === undefined) s.mtfMode = 'hard';
+  if (s.regimeMode === undefined) s.regimeMode = 'hard';
+  if (s.confluenceMinTier === undefined) s.confluenceMinTier = 'STRONG';
+  if (s.mirofishMode === undefined) s.mirofishMode = 'off';
+  return s;
 }
 
 // ── saveSettings ──
@@ -252,6 +261,256 @@ async function getCandles(coin, interval = '1h', limit = 100) {
     close: parseFloat(k[4]),
     volume: parseFloat(k[5])
   }));
+}
+
+// ── Precision / shared helpers (were missing after main.js extract) ──
+const SHADOW_FILE = path.join(DATA_DIR, 'shadow-trades.json');
+const EXPECTANCY_FILE = path.join(DATA_DIR, 'setup-expectancy.json');
+function loadExpectancy() { return loadJSON(EXPECTANCY_FILE, {}); }
+function saveExpectancy(d) { saveJSON(EXPECTANCY_FILE, d); }
+function calcRSI(candles, period = 14) {
+  if (!candles || candles.length < period + 1) return null;
+  let gains = 0, losses = 0;
+  for (let i = candles.length - period; i < candles.length; i++) {
+    const d = candles[i].close - candles[i - 1].close;
+    if (d >= 0) gains += d; else losses -= d;
+  }
+  const rs = losses === 0 ? 100 : gains / losses;
+  return Math.round((100 - 100 / (1 + rs)) * 10) / 10;
+}
+function logShadowTrade(coin, direction, entry, target, stopLoss, reason, confidence, meta) {
+  try {
+    if (!entry && !(meta && meta.allowNoEntry)) return;
+    const data = loadJSON(SHADOW_FILE, { shadows: [], stats: { wouldWin: 0, wouldLose: 0, neutral: 0 } });
+    // Only invent TP/SL when we have a real entry AND caller didn't pass levels (keep gate rejects unresolvable)
+    const hasLevels = target != null && stopLoss != null && entry;
+    const row = {
+      id: Date.now() + Math.random(), coin, direction, entry: entry || 0,
+      target: hasLevels ? target : (target != null ? target : null),
+      stopLoss: hasLevels ? stopLoss : (stopLoss != null ? stopLoss : null),
+      reason, confidence: confidence || 0, timestamp: Date.now(), resolved: false, outcome: null,
+      unresolvable: !hasLevels
+    };
+    if (meta && typeof meta === 'object') {
+      Object.assign(row, { meta, setupType: meta.setupType, tier: meta.tier, regime: meta.regime,
+        blockedBy: meta.blockedBy, gates: meta.gates, ab: meta.ab, taken: meta.taken });
+    }
+    data.shadows.push(row);
+    if (data.shadows.length > 500) data.shadows = data.shadows.slice(-500);
+    saveJSON(SHADOW_FILE, data);
+    console.log(`👻 Shadow: ${direction || '?'} ${coin} — ${reason}`);
+  } catch (e) {}
+}
+async function getMultiTimeframeSignal(coin, direction) {
+  try {
+    const [c1, c4, cd] = await Promise.all([
+      getCandles(coin, '1h', 60), getCandles(coin, '4h', 60), getCandles(coin, '1d', 60)
+    ]);
+    return scannerPrecision.analyzeMultiTimeframe(c1, c4, cd, direction);
+  } catch (e) { return null; }
+}
+async function detectMarketRegime() {
+  try {
+    const c = await getCandles('BTC', '1d', 40);
+    if (!c || c.length < 30) return { regime: 'unknown', bias: 'neutral', summary: 'Regime unknown' };
+    const close = c[c.length - 1].close;
+    const sma20 = c.slice(-20).reduce((a, x) => a + x.close, 0) / 20;
+    const sma7 = c.slice(-7).reduce((a, x) => a + x.close, 0) / 7;
+    const chg = ((close - c[c.length - 30].close) / c[c.length - 30].close) * 100;
+    let regime = 'sideways', bias = 'neutral';
+    if (close > sma20 && sma7 > sma20 && chg > 5) { regime = 'bull'; bias = 'long'; }
+    else if (close < sma20 && sma7 < sma20 && chg < -5) { regime = 'bear'; bias = 'short'; }
+    return { regime, bias, strength: 'moderate', summary: `Market Regime: ${regime.toUpperCase()} | Bias: ${bias}` };
+  } catch (e) { return { regime: 'unknown', bias: 'neutral', summary: 'Regime unknown' }; }
+}
+async function getNewsSentiment() { return null; }
+async function detectRSIDivergence() { return null; }
+async function getTelegramGroupSentiment() { return null; }
+function getWhaleSignalForTrade() { return null; }
+async function getBTCDominanceTrend() { return null; }
+async function getAdvancedFlow() { return null; }
+async function getBTCLeadSignal() { return null; }
+async function getSpreadPct() { return null; }
+function getReentryPenalty() { return 0; }
+async function checkUserRules() { return { violated: false }; }
+async function closePaperTrade(tradeId, closePrice, reason) {
+  try {
+    const pd = loadPaperTrades();
+    const trade = (pd.trades || []).find(t => t.id === tradeId);
+    if (!trade || trade.status !== 'open') return;
+    const lev = trade.leverage || 1;
+    const diff = trade.direction === 'long' ? closePrice - trade.entry : trade.entry - closePrice;
+    const pnl = (trade.size || 0) * (diff / trade.entry) * lev;
+    trade.pnl = parseFloat(pnl.toFixed(2));
+    trade.status = pnl >= 0 ? 'win' : 'loss';
+    trade.closePrice = closePrice;
+    trade.closeTime = Date.now();
+    trade.closeReason = reason || 'closed';
+    pd.balance = Math.max(0, (pd.balance || 0) + pnl);
+    pd.stats = pd.stats || { wins: 0, losses: 0, totalPnl: 0 };
+    if (pnl > 0) pd.stats.wins++; else pd.stats.losses++;
+    pd.stats.totalPnl = parseFloat(((pd.stats.totalPnl || 0) + pnl).toFixed(2));
+    if (trade.setupType) {
+      const riskPx = Math.abs(trade.entry - (trade.stopLoss || trade.entry)) || 1;
+      const r = Math.abs(closePrice - trade.entry) / riskPx;
+      saveExpectancy(scannerPrecision.updateExpectancy(loadExpectancy(), {
+        coin: trade.coin, setupType: trade.setupType, won: pnl > 0, rMultiple: r
+      }));
+    }
+    savePaperTrades(pd);
+  } catch (e) { console.error('closePaperTrade', e.message); }
+}
+
+// Safe stubs — headless server lacks desktop risk helpers; fail-open so opens don't crash
+function checkRageLock() { return false; }
+function isTradingPaused() { return !!getDevOverrides()?.pauseAll; }
+function checkMaxPositions() { return false; }
+function isCoinOnCooldown() { return false; }
+function loadTradingLessons() { return []; }
+function loadTradeRules() { return { global: {} }; }
+function eventBlackoutCheck() { return null; }
+function getCoinBench() { return null; }
+function getAntiTiltMultiplier() { return 1; }
+function getEquityCurveMultiplier() { return 1; }
+function getStreakMultiplier() { return 1; }
+async function getVolatilityMultiplier() { return 1; }
+function liqGuardCheck() { return null; }
+function calcKellySize(_coin, size) { return size; }
+function isBinanceTestnet() { return false; }
+function isSupportedOnTestnet() { return false; }
+async function openBinancePosition() { return null; }
+function resolveShadowTrades() { return Promise.resolve(); }
+function allocationAllows() { return { ok: true }; }
+async function getCVD() { return null; }
+function buildLessonsContext() { return ''; }
+
+function calcEMA(candles, period) {
+  if (!candles?.length) return null;
+  const closes = candles.map(c => c.close);
+  const k = 2 / (period + 1);
+  let ema = closes[0];
+  for (let i = 1; i < closes.length; i++) ema = closes[i] * k + ema * (1 - k);
+  return parseFloat(ema.toFixed(6));
+}
+function calcSMA(candles, period) {
+  if (!candles || candles.length < period) return null;
+  const slice = candles.slice(-period).map(c => c.close);
+  return parseFloat((slice.reduce((s, v) => s + v, 0) / slice.length).toFixed(6));
+}
+function calcMACD(candles) {
+  if (!candles || candles.length < 26) return null;
+  const ema12 = calcEMA(candles.slice(-12), 12);
+  const ema26 = calcEMA(candles.slice(-26), 26);
+  return { macdLine: parseFloat((ema12 - ema26).toFixed(6)), ema12, ema26 };
+}
+function calcBollingerBands(candles, period = 20, multiplier = 2) {
+  if (!candles || candles.length < period) return null;
+  const closes = candles.slice(-period).map(c => c.close);
+  const sma = closes.reduce((s, v) => s + v, 0) / period;
+  const variance = closes.reduce((s, v) => s + Math.pow(v - sma, 2), 0) / period;
+  const stdDev = Math.sqrt(variance);
+  return {
+    upper: parseFloat((sma + multiplier * stdDev).toFixed(6)),
+    middle: parseFloat(sma.toFixed(6)),
+    lower: parseFloat((sma - multiplier * stdDev).toFixed(6)),
+    stdDev: parseFloat(stdDev.toFixed(6))
+  };
+}
+function calcSupportResistance(candles) {
+  if (!candles?.length) return { nearestSupport: null, nearestResistance: null };
+  const highs = candles.map(c => c.high).sort((a, b) => b - a);
+  const lows = candles.map(c => c.low).sort((a, b) => a - b);
+  const currentPrice = candles[candles.length - 1].close;
+  const nearestResistance = highs.find(h => h > currentPrice) || null;
+  const nearestSupport = lows.find(l => l < currentPrice) || null;
+  return {
+    nearestResistance: nearestResistance != null ? parseFloat(nearestResistance.toFixed(6)) : null,
+    nearestSupport: nearestSupport != null ? parseFloat(nearestSupport.toFixed(6)) : null,
+    distToResistance: nearestResistance ? ((nearestResistance - currentPrice) / currentPrice * 100).toFixed(2) : null,
+    distToSupport: nearestSupport ? ((currentPrice - nearestSupport) / currentPrice * 100).toFixed(2) : null
+  };
+}
+function calcATR(candles, period = 14) {
+  if (!candles || candles.length < period + 1) return null;
+  const trs = [];
+  for (let i = 1; i < candles.length; i++) {
+    const high = candles[i].high, low = candles[i].low, prevClose = candles[i - 1].close;
+    trs.push(Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose)));
+  }
+  let atr = trs.slice(0, period).reduce((s, v) => s + v, 0) / period;
+  for (let i = period; i < trs.length; i++) atr = (atr * (period - 1) + trs[i]) / period;
+  return parseFloat(atr.toFixed(6));
+}
+function calcATRTargets(candles, direction, entry, settings = {}) {
+  const atr = calcATR(candles, settings.atrPeriod || 14);
+  if (!atr || !entry) return null;
+  const tpM = settings.atrTpMultiplier || 2, slM = settings.atrSlMultiplier || 1;
+  const target = direction === 'long' ? entry + atr * tpM : entry - atr * tpM;
+  const stopLoss = direction === 'long' ? entry - atr * slM : entry + atr * slM;
+  return {
+    atr, target: parseFloat(target.toFixed(6)), stopLoss: parseFloat(stopLoss.toFixed(6)),
+    tpPct: (Math.abs(target - entry) / entry * 100).toFixed(2),
+    slPct: (Math.abs(stopLoss - entry) / entry * 100).toFixed(2)
+  };
+}
+function calcStochRSI(candles, rsiPeriod = 14) {
+  if (!candles || candles.length < rsiPeriod + 15) return null;
+  const rsis = [];
+  for (let i = rsiPeriod; i < candles.length; i++) {
+    const slice = candles.slice(i - rsiPeriod, i + 1);
+    const r = calcRSI(slice, rsiPeriod);
+    if (r != null) rsis.push(r);
+  }
+  if (rsis.length < 14) return null;
+  const window = rsis.slice(-14);
+  const hi = Math.max(...window), lo = Math.min(...window);
+  const k = hi === lo ? 50 : ((rsis[rsis.length - 1] - lo) / (hi - lo)) * 100;
+  let signal = 'neutral';
+  if (k < 20) signal = 'oversold K < 20';
+  else if (k > 80) signal = 'overbought K > 80';
+  return { k, summary: `StochRSI: K=${k.toFixed(1)} — ${signal}` };
+}
+function detectEMACross(candles, fastPeriod = 9, slowPeriod = 21) {
+  if (!candles || candles.length < slowPeriod + 2) return null;
+  const emaAt = (period, endIdx) => {
+    const k = 2 / (period + 1);
+    let ema = candles[0].close;
+    for (let i = 1; i <= endIdx; i++) ema = candles[i].close * k + ema * (1 - k);
+    return ema;
+  };
+  const len = candles.length;
+  const fastNow = emaAt(fastPeriod, len - 1), slowNow = emaAt(slowPeriod, len - 1);
+  const fastPrev = emaAt(fastPeriod, len - 2), slowPrev = emaAt(slowPeriod, len - 2);
+  const crossedUp = fastPrev <= slowPrev && fastNow > slowNow;
+  const crossedDown = fastPrev >= slowPrev && fastNow < slowNow;
+  const summary = crossedUp
+    ? `EMA Cross: BULLISH CROSS EMA${fastPeriod}>EMA${slowPeriod}`
+    : crossedDown
+      ? `EMA Cross: BEARISH CROSS EMA${fastPeriod}<EMA${slowPeriod}`
+      : `EMA Cross: EMA${fastPeriod} ${fastNow > slowNow ? 'above' : 'below'} EMA${slowPeriod}`;
+  return { crossedUp, crossedDown, summary, fastAbove: fastNow > slowNow };
+}
+function calcIchimoku(candles, settings = {}) {
+  const tenkanP = settings.tenkan || 9, kijunP = settings.kijun || 26, senkouBP = settings.senkouB || 52;
+  if (!candles || candles.length < senkouBP + 26) return null;
+  const hl = (period, idx) => {
+    const slice = candles.slice(Math.max(0, idx - period + 1), idx + 1);
+    return { high: Math.max(...slice.map(c => c.high)), low: Math.min(...slice.map(c => c.low)) };
+  };
+  const i = candles.length - 1;
+  const tenkan = (hl(tenkanP, i).high + hl(tenkanP, i).low) / 2;
+  const kijun = (hl(kijunP, i).high + hl(kijunP, i).low) / 2;
+  const cloudIdx = Math.max(0, i - 26);
+  const pastA = ((hl(tenkanP, cloudIdx).high + hl(tenkanP, cloudIdx).low) / 2 + (hl(kijunP, cloudIdx).high + hl(kijunP, cloudIdx).low) / 2) / 2;
+  const pastB = (hl(senkouBP, cloudIdx).high + hl(senkouBP, cloudIdx).low) / 2;
+  const cloudTop = Math.max(pastA, pastB), cloudBottom = Math.min(pastA, pastB);
+  const px = candles[i].close;
+  const aboveCloud = px > cloudTop, belowCloud = px < cloudBottom;
+  return {
+    aboveCloud, belowCloud, tenkanAboveKijun: tenkan > kijun,
+    futureCloudBullish: pastA > pastB,
+    overallBias: aboveCloud ? 'bullish' : belowCloud ? 'bearish' : 'neutral'
+  };
 }
 
 // ── getTechnicalAnalysis ──
@@ -988,13 +1247,38 @@ async function applyTrailingStop(trade, currentPrice) {
   return null;
 }
 
+function precisionScalpDeps() {
+  return {
+    loadSettings, loadPaperTrades, getCryptoPrice, getCandles, getOrderBook,
+    getVolumeAnalysis, getFundingRate, getFundingRateExtreme, getLongShortRatio,
+    getLiquidationZones, getTimeSignal, detectMarketRegime, getBTCLeadSignal,
+    openPaperTrade, logShadowTrade, sendIntelEvent: () => {}, anthropic, CLAUDE_MODEL
+  };
+}
+
 // ── scanCoinForTrade ──
 async function scanCoinForTrade(scanCoin) {
   try {
     const settings = loadSettings();
     if (!settings.independentScanner) return;
     if (!settings.autoPaperTrade) return;
-    // Collect market data — full intelligence suite
+    if (settings.precisionScanner !== false) {
+      return await runPrecisionScan(scanCoin, {
+        loadSettings, loadDailySignals, loadExpectancy, saveExpectancy,
+        detectMarketRegime, getNewsSentiment, detectRSIDivergence, getTelegramGroupSentiment,
+        getWhaleSignalForTrade, getCryptoPrice, getFundingRate, getFearGreed,
+        getBTCDominanceTrend, getCryptoNews, getOpenInterest, getLongShortRatio,
+        getLiquidationZones, getVolumeAnalysis, getTechnicalAnalysis, getOrderBook,
+        getCorrelation, getTimeSignal, getAdvancedFlow, getBTCLeadSignal,
+        getFundingRateExtreme, getMultiTimeframeSignal, getCandles, getSpreadPct,
+        calculateSmartTrade, checkUserRules, getReentryPenalty,
+        loadPaperTrades, closePaperTrade, openPaperTrade, runScalpScan,
+        logShadowTrade, saveTradeReplay, sendIntelEvent: () => {}, asukaReact,
+        anthropic, CLAUDE_MODEL,
+        setCachedFearGreed: (n) => { global._cachedFearGreed = n; }
+      });
+    }
+    // Collect market data — full intelligence suite (legacy)
     // Cache FG for hard blocks
 const fgRaw = await getFearGreed().catch(() => '50');
 global._cachedFearGreed = parseInt(fgRaw?.match(/\d+/)?.[0] || 50);
@@ -1674,6 +1958,10 @@ function startIndependentScanner() {
   if (settings.independentScanner) {
     setTimeout(runIndependentScan, 5000);
   }
+  if (scalpScanInterval) clearInterval(scalpScanInterval);
+  scalpScanInterval = setInterval(runIndependentScalpScan, 5 * 60 * 1000);
+  if (settings.scalpTrading) setTimeout(runIndependentScalpScan, 15000);
+  console.log('⚡ Independent scalp scanner started (every 5 min)');
 }
 
 // ── runIndependentScalpScan ──
@@ -1686,6 +1974,10 @@ async function runIndependentScalpScan() {
   const settings = loadSettings();
   if (!settings.scalpTrading) return;
   if (!settings.autoPaperTrade) return;
+
+  if (settings.precisionScanner !== false) {
+    return await runPrecisionIndependentScalp(precisionScalpDeps());
+  }
 
   const pd = loadPaperTrades();
   const coins = settings.scalpCoins || settings.tradingCoins || ['BTC', 'ETH', 'SOL'];
@@ -1748,7 +2040,7 @@ async function runIndependentScalpScan() {
       const settings2 = loadSettings();
       const scalpIndicators = settings2.scalpIndicators || { rsi: true, bb: true, sr: true, ob: true };
       
-      const [lsRatio, liq, vol, scalpRsi, scalpBb, scalpSr, scalpOb, scalpIchi] = await Promise.all([
+      const [lsRatio, liq, vol, scalpRsi, scalpBb, scalpSr, scalpOb, scalpVwap, scalpStoch, scalpEma, scalpIchi] = await Promise.all([
         getLongShortRatio(coin).catch(() => null),
         getLiquidationZones(coin).catch(() => null),
         getVolumeAnalysis(coin).catch(() => null),
@@ -1808,7 +2100,7 @@ async function runIndependentScalpScan() {
       }
 
       const extraSignals = [
-        lsRatio, liq, vol, scalpRsi, scalpBb, scalpSr, scalpOb, scalpIchi,
+        lsRatio, liq, vol, scalpRsi, scalpBb, scalpSr, scalpOb, scalpVwap, scalpStoch, scalpEma, scalpIchi,
         scalpATRInfo,
         scalpFunding?.extreme ? scalpFunding.summary : null,
         scalpPivot ? `Pivots: PP=$${scalpPivot.PP} | ${scalpPivot.abovePivot ? 'Above PP bullish' : 'Below PP bearish'}` : null,
@@ -2088,6 +2380,10 @@ async function runScalpScan(mainTrade) {
     t.isScalp === true
   );
   if (existingScalp) return;
+
+  if (settings.precisionScanner !== false) {
+    return await runPrecisionScalpForCoin(mainTrade.coin, precisionScalpDeps(), { mainTrade });
+  }
 
   const scalpLeverage = settings.scalpLeverage || 20;
   const scalpSize = settings.scalpSize || (pd.balance * 0.01); // 1% default
@@ -2575,10 +2871,10 @@ async function openPaperTrade(signal) {
   if (settings.useKellyCriterion) {
     try { size = calcKellySize(signal.coin, size); } catch(e) {}
   }
-  // Conviction sizing — quality grade scales position (A=100% B=75% C=50%)
-  if (signal.sizeMultiplier && signal.sizeMultiplier > 0 && signal.sizeMultiplier < 1) {
+  // Conviction sizing — quality grade / confluence scales position
+  if (signal.sizeMultiplier && signal.sizeMultiplier > 0 && signal.sizeMultiplier !== 1) {
     size = size * signal.sizeMultiplier;
-    console.log(`💎 Conviction sizing: grade ${signal.qualityGrade || '?'} → $${size.toFixed(0)} position`);
+    console.log(`💎 Conviction sizing: grade ${signal.qualityGrade || '?'} ×${signal.sizeMultiplier} → $${size.toFixed(0)} position`);
   }
   // Liquidation Guard — warn on dangerous leverage
   try {
@@ -2615,7 +2911,7 @@ async function openPaperTrade(signal) {
     status: 'open',
     pnl: 0,
     useBinance: false,
-    tradeMode: signal.tradeMode || 'normal',
+    tradeMode: signal.tradeMode || (signal.isScalp ? 'scalp' : 'normal'),
     qualityGrade: signal.qualityGrade || null,
     swarmVotes: signal.swarmVotes || null,
     advisorId: signal.advisorId || null,
@@ -2625,7 +2921,14 @@ async function openPaperTrade(signal) {
     advisorCallId: signal.advisorCallId || null,
     trailingLevels: signal.trailingLevels || [],
     partialTp: signal.partialTp || 1.0,
-    partialTpDone: false
+    partialTpDone: false,
+    setupType: signal.setupType || null,
+    confluenceTier: signal.confluenceTier || null,
+    confluenceScore: signal.confluenceScore || null,
+    independentAxes: signal.independentAxes || null,
+    precisionMeta: signal.precisionMeta || null,
+    isScalp: !!signal.isScalp,
+    scalpExpiry: signal.scalpExpiry || null
   };
 
   // Use Binance testnet if configured AND coin is supported
@@ -3061,6 +3364,25 @@ async function handleAiChat(req, res) {
 api.post('/ai/chat', authRequired, handleAiChat);
 // Mobile / legacy clients that still POST /api/chat
 api.post('/api/chat', authRequired, handleAiChat);
+
+// Precision scoreboard (math-first scanner measurement)
+api.get('/scanner/precision-scoreboard', authOptional, (req, res) => {
+  try {
+    const shadows = loadJSON(SHADOW_FILE, { shadows: [] }).shadows || [];
+    const pd = loadPaperTrades();
+    res.json(scannerPrecision.buildScoreboard({
+      shadows,
+      paperTrades: pd.trades || [],
+      expectancy: loadExpectancy(),
+      holdoutPct: 0.25
+    }));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+api.get('/scanner/setup-expectancy', authOptional, (req, res) => {
+  res.json(loadExpectancy());
+});
 
 // ── 🎙️ GEMINI LIVE — mint a short-lived ephemeral token (metered) ──
 // The app asks for a token, we mint one with OUR key, LOCKED to a model

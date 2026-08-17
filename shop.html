@@ -3,47 +3,102 @@
 <head>
 <meta charset="utf-8">
 <link rel="stylesheet" href="asuka-design.css">
+<script>
+  (function () {
+    try {
+      var m = localStorage.getItem('asuka-appearance') === 'dark' ? 'dark' : 'light'
+      document.documentElement.setAttribute('data-theme', m)
+    } catch (e) { document.documentElement.setAttribute('data-theme', 'light') }
+  })()
+</script>
+
 <style>
   * { margin:0; padding:0; box-sizing:border-box; font-family:var(--body); -webkit-user-select:none; }
   html,body { width:100%; height:100%; overflow:hidden; }
-  #top { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; -webkit-app-region:drag; border-bottom:1px solid #1e293b; }
-  #top .title { font-size:18px; font-weight:600; font-family:var(--display); }
+  #top {
+    display:flex; align-items:center; justify-content:space-between; padding:14px 18px;
+    -webkit-app-region:drag; border-bottom:0.5px solid var(--glass-border);
+    background:var(--glass); backdrop-filter:var(--glass-blur); -webkit-backdrop-filter:var(--glass-blur);
+    box-shadow:var(--lens);
+  }
+  #top .title { font-size:18px; font-weight:600; font-family:var(--display); color:var(--ink); letter-spacing:-0.02em; }
+  #top .sub { font-size:11px; color:var(--ink-3); margin-top:2px; }
   #coins { font-size:14px; font-weight:700; color:var(--coin); font-family:var(--mono); -webkit-app-region:no-drag; }
-  #close { -webkit-app-region:no-drag; cursor:pointer; color:#64748b; font-size:20px; margin-left:12px; }
-  #tabs { display:flex; gap:8px; padding:12px 18px; }
-  .tab { cursor:pointer; padding:7px 16px; border-radius:10px; background:#1e293b; font-size:13px; font-weight:700; }
-  .tab.active { background:var(--asuka-grad); }
-  #grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; padding:8px 18px; height:calc(100% - 200px); overflow-y:auto; }
-  .item { background:var(--night-2); border:1px solid var(--hair); border-radius:14px; padding:14px; text-align:center; }
-  .item .thumb { width:100%; height:80px; border-radius:10px; background:linear-gradient(135deg,#2d3748,#1a202c); display:flex; align-items:center; justify-content:center; font-size:32px; margin-bottom:8px; }
-  .item .name { font-size:13px; font-weight:700; margin-bottom:8px; }
-  .item button { width:100%; padding:8px; border-radius:9px; border:none; cursor:pointer; font-weight:700; font-size:12px; }
+  #close {
+    -webkit-app-region:no-drag; cursor:pointer; color:var(--ink-3); font-size:16px; margin-left:12px;
+    width:30px; height:30px; border-radius:50%; display:grid; place-items:center;
+    background:var(--glass-soft); border:0.5px solid var(--glass-border);
+  }
+  #chars { display:flex; gap:6px; padding:14px 18px 0; -webkit-app-region:no-drag; overflow-x:auto; }
+  .char-pill {
+    flex-shrink:0; cursor:pointer; padding:8px 14px; border-radius:999px;
+    background:var(--glass); border:0.5px solid var(--glass-border); font-size:13px; font-weight:600; color:var(--ink-2);
+    display:flex; align-items:center; gap:6px;
+    backdrop-filter:var(--glass-blur); -webkit-backdrop-filter:var(--glass-blur);
+    box-shadow:var(--lens);
+  }
+  .char-pill:hover { color:var(--ink); }
+  .char-pill.active { background:var(--glass-strong); color:var(--ink); border-color:var(--glass-border); box-shadow:var(--lens), var(--shadow-1); }
+  .char-pill .live { font-size:9px; opacity:.85; font-weight:800; letter-spacing:.3px; }
+  #tabs {
+    display:flex; gap:2px; padding:4px; margin:12px 18px 0; -webkit-app-region:no-drag; width:fit-content;
+    background:var(--glass); border:0.5px solid var(--glass-border); border-radius:999px;
+    backdrop-filter:var(--glass-blur); box-shadow:var(--lens);
+  }
+  .tab {
+    cursor:pointer; padding:7px 14px; border-radius:999px; background:transparent;
+    border:0.5px solid transparent; font-size:12px; font-weight:600; color:var(--ink-3);
+  }
+  .tab.active { background:var(--glass-strong); color:var(--ink); border-color:var(--glass-border); box-shadow:var(--lens); }
+  #grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; padding:14px 18px; height:calc(100% - 250px); overflow-y:auto; -webkit-app-region:no-drag; }
+  .item {
+    background:var(--content); border:0.5px solid var(--content-border); border-radius:var(--r-lg); padding:14px; text-align:center;
+    box-shadow:0 1px 0 rgba(255,255,255,0.35) inset, var(--shadow-1);
+  }
+  .item .thumb {
+    width:100%; height:80px; border-radius:14px;
+    background:linear-gradient(135deg,rgba(190,225,255,.4),rgba(255,220,235,.35));
+    display:flex; align-items:center; justify-content:center; font-size:32px; margin-bottom:8px;
+  }
+  .item .name { font-size:13px; font-weight:700; margin-bottom:8px; color:var(--ink); }
+  .item button { width:100%; padding:8px; border-radius:999px; border:none; cursor:pointer; font-weight:700; font-size:12px; }
   .buy { background:var(--coin); color:#1a1426; }
   .equip { background:var(--asuka-grad); color:#fff; }
-  .equipped { background:var(--up); color:#06210f; }
-  .owned-tag { background:#334155; color:#94a3b8; }
-  .limited { border-color:#f0a8d0; }
+  .equipped { background:var(--up); color:#fff; }
+  .owned-tag { background:var(--content-strong); color:var(--ink-3); border:0.5px solid var(--hair); }
+  .limited { border-color:rgba(232,155,196,.55); }
   .badge { font-size:9px; background:#f0a8d0; color:#1a1a2e; border-radius:5px; padding:1px 6px; margin-left:4px; font-weight:800; }
-  #packs { padding:12px 18px; border-top:1px solid #1e293b; }
-  #packs .ptitle { font-size:12px; color:#94a3b8; margin-bottom:8px; }
+  #packs {
+    padding:12px 18px; border-top:0.5px solid var(--glass-border); -webkit-app-region:no-drag;
+    background:var(--glass); backdrop-filter:var(--glass-blur); box-shadow:var(--lens);
+  }
+  #packs .ptitle { font-size:12px; color:var(--ink-3); margin-bottom:8px; }
   #pack-row { display:flex; gap:8px; }
-  .pack { flex:1; background:#1e293b; border:1px solid #334155; border-radius:11px; padding:10px; text-align:center; cursor:pointer; }
-  .pack:hover { border-color:#fbbf24; }
+  .pack {
+    flex:1; background:var(--content); border:0.5px solid var(--content-border); border-radius:16px;
+    padding:10px; text-align:center; cursor:pointer;
+  }
+  .pack:hover { border-color:color-mix(in srgb, var(--coin) 45%, var(--content-border)); }
   .pack .c { font-size:14px; font-weight:800; color:var(--coin); font-family:var(--mono); }
-  .pack .p { font-size:11px; color:#94a3b8; }
-  .pack .b { font-size:9px; color:#34d399; font-weight:700; }
-  #toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--asuka-grad); color:#fff; padding:10px 20px; border-radius:12px; font-size:13px; font-weight:700; opacity:0; transition:.3s; pointer-events:none; }
+  .pack .p { font-size:11px; color:var(--ink-3); }
+  .pack .b { font-size:9px; color:var(--up); font-weight:700; }
+  #toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--asuka-grad); color:#fff; padding:10px 20px; border-radius:999px; font-size:13px; font-weight:700; opacity:0; transition:.3s; pointer-events:none; z-index:20; box-shadow:var(--shadow-2); }
   #toast.show { opacity:1; }
+  #empty { grid-column:1/-1; text-align:center; color:var(--ink-3); font-size:13px; padding:40px 12px; }
 </style>
 </head>
 <body class="asuka-surface">
   <div id="top">
-    <div><div class="title">🛍️ Dress-Up Shop</div><div id="shop-tier" style="font-size:11px;color:#f0a8d0;font-weight:700;margin-top:2px;"></div></div>
+    <div>
+      <div class="title">🛍️ Dress-Up Shop</div>
+      <div class="sub" id="shop-sub">Pick a character, then buy & wear looks for her</div>
+    </div>
     <div style="display:flex;align-items:center;"><span id="coins">0 🪙</span><span id="close">✕</span></div>
   </div>
+  <div id="chars"></div>
   <div id="tabs">
     <div class="tab active" data-cat="outfit">👗 Outfits</div>
-    <div class="tab" data-cat="hair">💇 Hair</div>
+    <div class="tab" data-cat="hair">💇 Hair / Eyes</div>
     <div class="tab" data-cat="accessory">🎀 Accessories</div>
   </div>
   <div id="grid"></div>
@@ -54,66 +109,141 @@
   <div id="toast"></div>
 
 <script>
-  // ipcRenderer global from preload.js
   document.getElementById('close').addEventListener('click', () => ipcRenderer.invoke('close-shop').catch(()=>{}))
-  let CAT = 'outfit', DATA = null
+  let CAT = 'outfit', CHAR = null, DATA = null
 
-  const icons = { outfit:'👗', hair:'💇', accessory:'🎀' }
-  function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 2200) }
+  const catIcons = { outfit:'👗', hair:'💇', accessory:'🎀' }
+  const itemEmoji = {
+    default:'✨', none:'∅',
+    alexia_dress:'👗', alexia_hat:'🎩', alexia_pose:'💃',
+    alexia_eyes_a:'👁️', alexia_eyes_b:'🧿',
+    glasses:'👓', sunglasses:'🕶️', alexia_bbt:'🎀',
+    casual:'hoodie', kimono:'👘', gothic:'🖤', swimsuit:'👙', santa:'🎅',
+    long:'💇', twintails:'🎀', short:'✂️', silver:'🩶',
+    catears:'🐱', flower:'🌸', crown:'👑',
+  }
+
+  function toast(msg) {
+    const t = document.getElementById('toast')
+    t.textContent = msg
+    t.classList.add('show')
+    setTimeout(() => t.classList.remove('show'), 2200)
+  }
+
+  function renderChars() {
+    const box = document.getElementById('chars')
+    const list = DATA?.characters || []
+    box.innerHTML = list.map(c => `
+      <div class="char-pill ${c.id === CHAR ? 'active' : ''}" data-char="${c.id}">
+        <span>${c.emoji}</span><span>${c.name}</span>
+        ${c.active ? '<span class="live">ON STAGE</span>' : ''}
+      </div>
+    `).join('')
+    box.querySelectorAll('.char-pill').forEach(el => {
+      el.onclick = () => { CHAR = el.dataset.char; load() }
+    })
+    const viewing = list.find(c => c.id === CHAR)
+    const sub = document.getElementById('shop-sub')
+    if (viewing) {
+      sub.textContent = viewing.active
+        ? `${viewing.emoji} ${viewing.name}'s wardrobe — buy & wear (she's on stage)`
+        : `${viewing.emoji} ${viewing.name}'s wardrobe — wear switches her on stage`
+    }
+  }
 
   async function load() {
-    DATA = await ipcRenderer.invoke('shop-catalog').catch(()=>null)
+    DATA = await ipcRenderer.invoke('shop-catalog', { characterId: CHAR || undefined }).catch(() => null)
     if (!DATA) return
+    if (!CHAR) CHAR = DATA.characterId
     document.getElementById('coins').textContent = (DATA.coins ?? 0) + ' 🪙'
-    if (DATA.tier) document.getElementById('shop-tier').textContent = DATA.tier.emoji + ' ' + DATA.tier.name
+    if (DATA.tier) {
+      document.getElementById('shop-sub').dataset.tier = DATA.tier.emoji + ' ' + DATA.tier.name
+    }
+    renderChars()
     render()
     loadPacks()
   }
+
   function render() {
-    const items = DATA.catalog[CAT] || []
-    const equippedId = DATA.equipped[CAT]
-    document.getElementById('grid').innerHTML = items.filter(i=>i.available!==false).map(i => {
-      const isEq = equippedId === i.id
+    const items = (DATA.catalog[CAT] || []).filter(i => i.available !== false)
+    const equippedId = DATA.equipped?.[CAT]
+    const grid = document.getElementById('grid')
+    if (!items.length) {
+      grid.innerHTML = `<div id="empty">No ${CAT} items for this character yet</div>`
+      return
+    }
+    grid.innerHTML = items.map(i => {
+      const isEq = equippedId === i.id || (CAT === 'accessory' && !equippedId && (i.id === 'none' || i.id === 'default'))
       let btn, lockBadge = ''
       if (isEq) btn = `<button class="equipped" disabled>Wearing ✓</button>`
       else if (i.owned) btn = `<button class="equip" data-eq="${i.id}">Wear</button>`
-      else if (i.levelLocked) { btn = `<button class="owned-tag" disabled>🔒 Lvl ${i.unlockLevel}</button>`; lockBadge = `<div style="font-size:9px;color:#f0a8d0;margin-bottom:4px;">Unlocks at ${i.unlockTierName}</div>` }
-      else btn = `<button class="buy" data-buy="${i.id}">${i.price} 🪙</button>`
-      return `<div class="item ${i.limited?'limited':''}" style="${i.levelLocked?'opacity:.6;':''}">
-        <div class="thumb">${icons[CAT]}</div>
-        <div class="name">${i.name}${i.limited?'<span class="badge">LIMITED</span>':''}</div>
+      else if (i.levelLocked) {
+        btn = `<button class="owned-tag" disabled>🔒 Lvl ${i.unlockLevel}</button>`
+        lockBadge = `<div style="font-size:9px;color:#f0a8d0;margin-bottom:4px;">Unlocks at ${i.unlockTierName}</div>`
+      } else btn = `<button class="buy" data-buy="${i.id}">${i.price} 🪙 Buy</button>`
+      const emo = i.emoji || itemEmoji[i.id] || catIcons[CAT]
+      return `<div class="item ${i.limited ? 'limited' : ''}" style="${i.levelLocked ? 'opacity:.6;' : ''}">
+        <div class="thumb">${emo}</div>
+        <div class="name">${i.name}${i.limited ? '<span class="badge">LIMITED</span>' : ''}</div>
         ${lockBadge}${btn}
       </div>`
     }).join('')
-    document.querySelectorAll('[data-buy]').forEach(b => b.onclick = () => buy(b.dataset.buy))
-    document.querySelectorAll('[data-eq]').forEach(b => b.onclick = () => equip(b.dataset.eq))
+    grid.querySelectorAll('[data-buy]').forEach(b => b.onclick = () => buy(b.dataset.buy))
+    grid.querySelectorAll('[data-eq]').forEach(b => b.onclick = () => equip(b.dataset.eq))
   }
+
   async function buy(id) {
-    const r = await ipcRenderer.invoke('shop-buy', { category:CAT, id }).catch(()=>null)
+    const r = await ipcRenderer.invoke('shop-buy', { category: CAT, id, characterId: CHAR }).catch(() => null)
     if (r?.success) { toast(r.message || 'Purchased!'); DATA.coins = r.coins; await load() }
     else if (r?.error === 'not_enough') toast(`Need ${r.need} more coins!`)
     else if (r?.error === 'locked') toast(`🔒 Reach ${r.tierName} (Lvl ${r.needLevel}) to unlock!`)
     else toast(r?.error || 'Could not buy')
   }
+
   async function equip(id) {
-    const r = await ipcRenderer.invoke('shop-equip', { category:CAT, id }).catch(()=>null)
-    if (r?.success) { toast('Equipped! 💕'); DATA.equipped = r.equipped; render() }
+    const r = await ipcRenderer.invoke('shop-equip', {
+      category: CAT, id, characterId: CHAR, switchToCharacter: true,
+    }).catch(() => null)
+    if (r?.success) {
+      toast(r.switched ? `Wearing on stage 💕` : 'Equipped! 💕')
+      DATA.equipped = r.equipped
+      await load()
+    } else toast(r?.error || 'Could not equip')
   }
+
   async function loadPacks() {
-    const packs = await ipcRenderer.invoke('coin-packs').catch(()=>[])
+    const packs = await ipcRenderer.invoke('coin-packs').catch(() => [])
     document.getElementById('pack-row').innerHTML = packs.map(p =>
-      `<div class="pack" data-pack="${p.id}"><div class="c">${p.coins} 🪙</div><div class="p">$${p.usd}</div>${p.bonus?`<div class="b">${p.bonus}</div>`:''}</div>`
+      `<div class="pack" data-pack="${p.id}"><div class="c">${p.coins} 🪙</div><div class="p">$${p.usd}</div>${p.bonus ? `<div class="b">${p.bonus}</div>` : ''}</div>`
     ).join('')
     document.querySelectorAll('[data-pack]').forEach(b => b.onclick = async () => {
-      const r = await ipcRenderer.invoke('buy-coins', { packId: b.dataset.pack }).catch(()=>null)
-      if (r?.success) { toast(`+${r.granted} coins!` + (r.testMode?' (test)':'')); DATA.coins = r.coins; document.getElementById('coins').textContent = r.coins + ' 🪙'; render() }
+      const r = await ipcRenderer.invoke('buy-coins', { packId: b.dataset.pack }).catch(() => null)
+      if (r?.success) {
+        toast(`+${r.granted} coins!` + (r.testMode ? ' (test)' : ''))
+        DATA.coins = r.coins
+        document.getElementById('coins').textContent = r.coins + ' 🪙'
+      }
     })
   }
+
   document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
     document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'))
-    t.classList.add('active'); CAT = t.dataset.cat; render()
+    t.classList.add('active')
+    CAT = t.dataset.cat
+    render()
   })
+
   load()
 </script>
+<script>
+  try {
+    (window.ipcRenderer || window.asuka?.ipc)?.on?.('appearance-changed', function (_e, payload) {
+      var m = (payload && payload.mode) === 'dark' ? 'dark' : 'light'
+      document.documentElement.setAttribute('data-theme', m)
+      try { localStorage.setItem('asuka-appearance', m) } catch (e) {}
+    })
+  } catch (e) {}
+</script>
+
 </body>
 </html>

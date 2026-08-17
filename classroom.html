@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Study with Asuka</title>
+<link rel="stylesheet" href="asuka-design.css">
+<script>
+  (function () {
+    try {
+      var m = localStorage.getItem('asuka-appearance') === 'dark' ? 'dark' : 'light'
+      document.documentElement.setAttribute('data-theme', m)
+    } catch (e) { document.documentElement.setAttribute('data-theme', 'light') }
+  })()
+</script>
+
 <script src="./assets/live2dcubismcore.min.js"></script>
 <script src="./node_modules/pixi.js/dist/browser/pixi.min.js"></script>
 <script src="./node_modules/pixi-live2d-display/dist/cubism4.min.js"></script>
@@ -11,45 +21,62 @@
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   :root {
-    --bg:#0a0a0c; --bg2:#141417; --bg3:#1e1e24; --border:rgba(255,255,255,.08);
-    --text:#f5f5f7; --text2:#a0a0a8; --text3:#6a6a72; --accent:#0a84ff; --pink:#5e9eff;
-    --green:#30d158; --gold:#ffd60a;
+    --bg: var(--night-0);
+    --bg2: var(--content-strong);
+    --bg3: var(--content);
+    --border: var(--content-border);
+    --text: var(--ink);
+    --text2: var(--ink-2);
+    --text3: var(--ink-3);
+    --accent: var(--data);
+    --pink: var(--violet);
+    --green: var(--up);
+    --gold: var(--coin);
   }
-  html,body { height:100%; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); overflow:hidden; }
+  html,body {
+    height:100%; font-family:var(--body);
+    background: var(--aurora);
+    color:var(--text); overflow:hidden;
+  }
   .hidden { display:none !important; }
 
-  /* window drag bar */
   #titlebar { height:34px; -webkit-app-region:drag; display:flex; align-items:center; justify-content:center; color:var(--text3); font-size:12px; position:fixed; top:0; left:0; right:0; z-index:50; }
-  #close-x { position:fixed; top:8px; right:12px; -webkit-app-region:no-drag; width:26px; height:26px; border-radius:50%; background:rgba(255,90,95,.15); color:#ff5a5f; border:none; cursor:pointer; font-size:15px; z-index:51; }
+  #close-x {
+    position:fixed; top:8px; right:12px; -webkit-app-region:no-drag; width:28px; height:28px; border-radius:50%;
+    background:rgba(255,69,58,.12); color:var(--red); border:0.5px solid rgba(255,69,58,.22); cursor:pointer; font-size:15px; z-index:51;
+  }
 
-  /* ── SETUP / UPLOAD SCREEN ── */
-  #setup { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:24px; background:radial-gradient(1200px 600px at 50% -10%, rgba(10,132,255,.06), transparent); }
-  .card { width:520px; max-width:94vw; background:var(--bg2); border:1px solid var(--border); border-radius:22px; padding:28px; box-shadow:0 20px 60px rgba(0,0,0,.4); }
-  .card h1 { font-size:24px; font-weight:600; letter-spacing:-.3px; margin-bottom:4px; }
+  #setup { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:24px; background:transparent; }
+  .card {
+    width:520px; max-width:94vw; background:var(--glass); border:0.5px solid var(--glass-border);
+    border-radius:28px; padding:28px; box-shadow:var(--lens), var(--shadow-float);
+    backdrop-filter:var(--glass-blur); -webkit-backdrop-filter:var(--glass-blur);
+  }
+  .card h1 { font-size:24px; font-weight:600; letter-spacing:-.3px; margin-bottom:4px; font-family:var(--display); }
   .card .sub { color:var(--text2); font-size:13px; margin-bottom:22px; }
-  .drop { border:2px dashed var(--pink); border-radius:16px; padding:34px 20px; text-align:center; cursor:pointer; transition:all .2s; background:rgba(243,168,208,.05); }
-  .drop:hover { background:rgba(243,168,208,.1); }
+  .drop { border:1.5px dashed color-mix(in srgb, var(--violet) 45%, transparent); border-radius:18px; padding:34px 20px; text-align:center; cursor:pointer; transition:all .2s; background:rgba(109,94,240,.06); }
+  .drop:hover { background:rgba(109,94,240,.12); }
   .drop .big { font-size:15px; font-weight:600; margin-bottom:4px; }
   .drop .small { font-size:11px; color:var(--text3); }
   .toggles { display:flex; gap:12px; margin:18px 0; }
-  .toggle { flex:1; background:var(--bg3); border:1px solid var(--border); border-radius:12px; padding:12px; cursor:pointer; display:flex; align-items:center; gap:10px; font-size:12px; transition:all .2s; }
-  .toggle.on { border-color:var(--accent); background:rgba(124,196,255,.1); }
-  .toggle .dot { width:34px; height:20px; border-radius:20px; background:#33405a; position:relative; flex-shrink:0; transition:all .2s; }
+  .toggle { flex:1; background:var(--content); border:0.5px solid var(--border); border-radius:16px; padding:12px; cursor:pointer; display:flex; align-items:center; gap:10px; font-size:12px; transition:all .2s; }
+  .toggle.on { border-color:color-mix(in srgb, var(--accent) 40%, var(--border)); background:color-mix(in srgb, var(--accent) 8%, var(--content)); }
+  .toggle .dot { width:34px; height:20px; border-radius:20px; background:color-mix(in srgb, var(--ink) 15%, transparent); position:relative; flex-shrink:0; transition:all .2s; }
   .toggle.on .dot { background:var(--accent); }
   .toggle .dot::after { content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; transition:all .2s; }
   .toggle.on .dot::after { left:16px; }
   #file-list { margin:12px 0; display:flex; flex-direction:column; gap:6px; }
-  .file-chip { display:flex; align-items:center; justify-content:space-between; background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:8px 12px; font-size:12px; }
-  .file-chip .rm { cursor:pointer; color:#ff5a5f; font-size:14px; }
-  .btn-primary { width:100%; padding:14px; border:none; border-radius:14px; background:var(--accent); color:#001; font-size:15px; font-weight:700; cursor:pointer; transition:opacity .2s; }
+  .file-chip { display:flex; align-items:center; justify-content:space-between; background:var(--content); border:0.5px solid var(--border); border-radius:12px; padding:8px 12px; font-size:12px; }
+  .file-chip .rm { cursor:pointer; color:var(--red); font-size:14px; }
+  .btn-primary { width:100%; padding:14px; border:none; border-radius:999px; background:var(--accent); color:#fff; font-size:15px; font-weight:700; cursor:pointer; transition:transform .15s, opacity .2s; }
+  .btn-primary:active { transform:scale(0.98); }
   .btn-primary:disabled { opacity:.4; cursor:not-allowed; }
-  .btn-ghost { width:100%; padding:11px; margin-top:8px; border:1px solid var(--border); border-radius:12px; background:transparent; color:var(--text2); font-size:12px; cursor:pointer; }
+  .btn-ghost { width:100%; padding:11px; margin-top:8px; border:0.5px solid var(--glass-border); border-radius:999px; background:var(--glass); color:var(--text2); font-size:12px; cursor:pointer; backdrop-filter:blur(16px); }
 
-  /* ── TEACHING SCENE ── */
-  #scene { position:absolute; inset:0; display:flex; flex-direction:column; background:linear-gradient(180deg,#10151f 0%,#0b0e15 100%); }
+  #scene { position:absolute; inset:0; display:flex; flex-direction:column; background:transparent; }
   #scene.hidden { display:none; }
   #stage { flex:1; position:relative; overflow:hidden; }
-  #classroom-bg { position:absolute; inset:0; background:linear-gradient(160deg,#141417,#0a0a0c); }
+  #classroom-bg { position:absolute; inset:0; background:linear-gradient(160deg,rgba(255,255,255,.25),rgba(238,245,252,.4)); }
   #board { position:absolute; top:6%; left:6%; right:6%; height:52%; background:#14342b; border:8px solid #6b4b2f; border-radius:8px; box-shadow:inset 0 0 40px rgba(0,0,0,.5); padding:22px 26px; overflow-y:auto; }
   #board-title { color:#9fe; font-size:13px; letter-spacing:2px; text-transform:uppercase; opacity:.7; margin-bottom:12px; font-family:'Courier New',monospace; }
   #board-content { color:#eafff5; font-size:19px; line-height:1.7; font-family:'Courier New',monospace; white-space:pre-wrap; }
@@ -57,40 +84,40 @@
   #canvas-wrap { position:absolute; bottom:0; right:4%; width:300px; height:62%; pointer-events:none; }
   #live2d { width:100%; height:100%; }
 
-  /* dialogue box */
-  #dialogue { flex-shrink:0; min-height:150px; background:rgba(10,13,20,.94); border-top:1px solid var(--border); padding:18px 26px 20px; position:relative; }
-  #speaker { display:inline-block; background:var(--accent); color:#001; font-weight:700; font-size:13px; padding:3px 14px; border-radius:12px 12px 0 0; position:absolute; top:-24px; left:26px; }
+  #dialogue {
+    flex-shrink:0; min-height:150px; background:var(--glass); border-top:0.5px solid var(--glass-border);
+    padding:18px 26px 20px; position:relative; backdrop-filter:var(--glass-blur); box-shadow:var(--lens);
+  }
+  #speaker { display:inline-block; background:var(--asuka-grad); color:#fff; font-weight:700; font-size:13px; padding:3px 14px; border-radius:12px 12px 0 0; position:absolute; top:-24px; left:26px; }
   #line { font-size:17px; line-height:1.6; color:var(--text); min-height:52px; }
   #line .hl { color:var(--accent); font-weight:600; }
   #controls { display:flex; gap:8px; margin-top:14px; align-items:center; }
-  .ctrl { padding:8px 16px; border-radius:20px; border:1px solid var(--border); background:var(--bg3); color:var(--text2); font-size:12px; font-weight:500; cursor:pointer; display:flex; align-items:center; gap:5px; transition:all .15s; }
-  .ctrl:hover { background:var(--bg2); color:var(--text); }
-  .ctrl.active { background:var(--accent); color:#001; border-color:var(--accent); }
+  .ctrl { padding:8px 16px; border-radius:999px; border:0.5px solid var(--glass-border); background:var(--glass); color:var(--text2); font-size:12px; font-weight:500; cursor:pointer; display:flex; align-items:center; gap:5px; transition:all .15s; box-shadow:var(--lens); }
+  .ctrl:hover { background:var(--glass-strong); color:var(--text); }
+  .ctrl.active { background:var(--accent); color:#fff; border-color:transparent; box-shadow:none; }
   #tap-hint { margin-left:auto; color:var(--text3); font-size:11px; }
   #progress-bar { position:absolute; top:0; left:0; height:3px; background:var(--accent); transition:width .3s; }
 
-  /* Ask input */
   #ask-bar { display:none; gap:8px; margin-top:10px; }
   #ask-bar.show { display:flex; }
-  #ask-input { flex:1; background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:10px 14px; color:var(--text); font-size:13px; outline:none; }
-  #ask-send { padding:10px 18px; border:none; border-radius:10px; background:var(--pink); color:#001; font-weight:700; cursor:pointer; }
+  #ask-input { flex:1; background:var(--content-strong); border:0.5px solid var(--border); border-radius:999px; padding:10px 14px; color:var(--text); font-size:13px; outline:none; }
+  #ask-send { padding:10px 18px; border:none; border-radius:999px; background:var(--pink); color:#fff; font-weight:700; cursor:pointer; }
 
-  /* Log overlay */
-  #log-overlay { position:absolute; inset:0; background:rgba(8,10,16,.96); z-index:40; padding:40px; overflow-y:auto; display:none; }
+  #log-overlay { position:absolute; inset:0; background:var(--content-strong); z-index:40; padding:40px; overflow-y:auto; display:none; backdrop-filter:blur(24px); }
   #log-overlay.show { display:block; }
   #log-overlay h2 { font-size:18px; margin-bottom:16px; }
-  .log-item { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:10px; }
+  .log-item { background:var(--content); border:0.5px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:10px; }
   .log-item .n { color:var(--text3); font-size:11px; margin-bottom:4px; }
   .log-item .t { font-size:14px; line-height:1.5; }
 
-  #loading { position:absolute; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:16px; background:var(--bg); z-index:60; }
+  #loading { position:absolute; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:16px; background:var(--aurora); z-index:60; }
   #loading.show { display:flex; }
   .spinner { width:44px; height:44px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 1s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
   #loading .msg { color:var(--text2); font-size:13px; }
 </style>
 </head>
-<body>
+<body class="asuka-surface">
   <div id="titlebar">📚 Study with Asuka</div>
   <button id="close-x">×</button>
 
@@ -117,7 +144,7 @@
       <div style="display:flex;align-items:center;gap:8px;margin:14px 0 8px;"><div style="flex:1;height:1px;background:var(--border);"></div><span style="font-size:10px;color:var(--text3);">OR — NO FILE NEEDED</span><div style="flex:1;height:1px;background:var(--border);"></div></div>
       <div style="display:flex;gap:8px;margin-bottom:8px;">
         <input id="topic-inp" placeholder="Teach me… (any topic — e.g. Japanese particles, RSI)" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:11px;padding:11px 14px;color:var(--text);font-size:13px;outline:none;">
-        <button id="topic-btn" style="padding:11px 16px;border:none;border-radius:11px;background:var(--accent);color:#000;font-weight:700;font-size:12px;cursor:pointer;">Teach me</button>
+        <button id="topic-btn" style="padding:11px 16px;border:none;border-radius:999px;background:var(--accent);color:#fff;font-weight:700;font-size:12px;cursor:pointer;">Teach me</button>
       </div>
       <div style="display:flex;gap:8px;">
         <button id="photo-btn" style="flex:1;padding:10px;border-radius:11px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px;cursor:pointer;">📷 Solve a photo</button>
@@ -651,12 +678,24 @@ async function initLive2D(){
   try {
     const { Live2DModel } = PIXI.live2d;
     const app = new PIXI.Application({ view: document.getElementById('live2d'), autoStart:true, transparent:true, backgroundAlpha:0, width:300, height:460 });
-    const model = await Live2DModel.from('./assets/model/huohuo.model3.json');
+    const model = await Live2DModel.from(
+      (await ipcRenderer.invoke('get-character').catch(()=>null))?.model || './assets/model/huohuo.model3.json'
+    );
     app.stage.addChild(model);
     model.anchor.set(0.5, 1);
     model.x = 150; model.y = 460; model.scale.set(0.055);
   } catch(e) { /* model optional; scene still works */ }
 }
 </script>
+<script>
+  try {
+    (window.ipcRenderer || window.asuka?.ipc)?.on?.('appearance-changed', function (_e, payload) {
+      var m = (payload && payload.mode) === 'dark' ? 'dark' : 'light'
+      document.documentElement.setAttribute('data-theme', m)
+      try { localStorage.setItem('asuka-appearance', m) } catch (e) {}
+    })
+  } catch (e) {}
+</script>
+
 </body>
 </html>

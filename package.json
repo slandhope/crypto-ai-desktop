@@ -28,6 +28,7 @@
     "@walletconnect/sign-client": "^2.23.10",
     "axios": "^1.9.0",
     "dotenv": "^17.4.2",
+    "expo": "^54.0.36",
     "groq-sdk": "^1.2.0",
     "imapflow": "^1.4.6",
     "mailparser": "^3.9.14",

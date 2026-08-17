@@ -1,0 +1,96 @@
+{
+  "at": "2026-08-17T00:21:12.835Z",
+  "coins": [
+    "BTC",
+    "ETH",
+    "SOL"
+  ],
+  "size": 100,
+  "leverage": 5,
+  "aiVeto": true,
+  "results": [
+    {
+      "coin": "BTC",
+      "tier": "main",
+      "result": "blocked"
+    },
+    {
+      "coin": "BTC",
+      "tier": "scalp",
+      "result": "blocked"
+    },
+    {
+      "coin": "ETH",
+      "tier": "main",
+      "result": "blocked"
+    },
+    {
+      "coin": "ETH",
+      "tier": "scalp",
+      "result": "blocked"
+    },
+    {
+      "coin": "SOL",
+      "tier": "main",
+      "result": "blocked"
+    },
+    {
+      "coin": "SOL",
+      "tier": "scalp",
+      "result": "blocked"
+    }
+  ],
+  "opened": [],
+  "shadows": [
+    {
+      "coin": "BTC",
+      "direction": "long",
+      "entry": 62849.9,
+      "reason": "no confluence",
+      "confidence": 28,
+      "blockedBy": "confluence"
+    },
+    {
+      "coin": "BTC",
+      "direction": "long",
+      "entry": 62827.7,
+      "reason": "scalp no confluence",
+      "confidence": 30,
+      "blockedBy": "confluence"
+    },
+    {
+      "coin": "ETH",
+      "direction": "long",
+      "entry": 1874.17,
+      "reason": "no confluence",
+      "confidence": 21,
+      "blockedBy": "confluence"
+    },
+    {
+      "coin": "ETH",
+      "direction": "long",
+      "entry": 1874.68,
+      "reason": "scalp no confluence",
+      "confidence": 17,
+      "blockedBy": "confluence"
+    },
+    {
+      "coin": "SOL",
+      "direction": "long",
+      "entry": 74.55,
+      "reason": "no confluence",
+      "confidence": 8,
+      "blockedBy": "confluence"
+    },
+    {
+      "coin": "SOL",
+      "direction": "long",
+      "entry": 74.55,
+      "reason": "scalp no confluence",
+      "confidence": 4,
+      "blockedBy": "confluence"
+    }
+  ],
+  "markToMarket": [],
+  "unrealizedPnlOnStake": 0
+}
