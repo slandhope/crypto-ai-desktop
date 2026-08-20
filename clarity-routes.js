@@ -92,18 +92,28 @@ Return JSON exactly:
 // ── register all routes onto the existing api (scanner-server) ──
 function register(api, { authRequired, callAsuka }) {
 
-  // sync (save wellness data)
+  // sync (save wellness data + coach goals)
   api.post('/api/sync', authRequired, async (req, res) => {
     try {
       const userId = req.user.userId;
-      const { name, history, seenMilestones, steps, sleepHours, pushToken } = req.body || {};
+      const {
+        name, history, seenMilestones, steps, sleepHours, pushToken,
+        aiGoals, aiGoalsDate, aiNewHabit, aiInsight, aiIntent,
+      } = req.body || {};
       await ensureRow(userId, name);
       await db.pool.query(
         `UPDATE user_data SET history=$1, seen_milestones=$2,
            steps=COALESCE($3,steps), sleep_hours=COALESCE($4,sleep_hours),
-           push_token=COALESCE($5,push_token), updated_at=NOW() WHERE user_id=$6`,
+           push_token=COALESCE($5,push_token),
+           ai_goals=COALESCE($6,ai_goals), ai_goals_date=COALESCE($7,ai_goals_date),
+           ai_new_habit=COALESCE($8,ai_new_habit), ai_insight=COALESCE($9,ai_insight),
+           ai_intent=COALESCE($10,ai_intent), updated_at=NOW() WHERE user_id=$11`,
         [JSON.stringify(history || {}), JSON.stringify(seenMilestones || []),
-         steps ?? null, sleepHours ?? null, pushToken || null, userId]
+         steps ?? null, sleepHours ?? null, pushToken || null,
+         aiGoals != null ? JSON.stringify(aiGoals) : null,
+         aiGoalsDate ?? null,
+         aiNewHabit != null ? JSON.stringify(aiNewHabit) : null,
+         aiInsight ?? null, aiIntent ?? null, userId]
       );
       res.json({ success: true });
     } catch (e) { console.error('sync:', e.message); res.status(500).json({ error: 'sync failed' }); }
@@ -115,9 +125,20 @@ function register(api, { authRequired, callAsuka }) {
       const userId = req.user.userId;
       const data = await getData(userId);
       if (!data) return res.json({ exists: false });
-      res.json({ exists: true, name: req.user.name,
-        history: data.history || {}, seenMilestones: data.seen_milestones || [],
-        steps: data.steps || 0, sleepHours: data.sleep_hours || 0 });
+      res.json({
+        exists: true,
+        name: req.user.name,
+        history: data.history || {},
+        seenMilestones: data.seen_milestones || [],
+        steps: data.steps || 0,
+        sleepHours: data.sleep_hours || 0,
+        aiGoals: data.ai_goals || [],
+        aiGoalsDate: data.ai_goals_date || null,
+        aiNewHabit: data.ai_new_habit || null,
+        aiInsight: data.ai_insight || null,
+        aiIntent: data.ai_intent || null,
+        updatedAt: data.updated_at ? new Date(data.updated_at).getTime() : 0,
+      });
     } catch (e) { res.status(500).json({ error: 'load failed' }); }
   });
 

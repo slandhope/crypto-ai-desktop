@@ -16,11 +16,102 @@ function stripSync(mem) {
   return rest;
 }
 
+function applyStudyFromCloud(lessons) {
+  if (!lessons || !cfg.saveLessonLibrary) return;
+  const cloudLib = lessons.studyLibrary;
+  if (cloudLib?.lessons?.length) {
+    const local = cfg.loadLessonLibrary ? cfg.loadLessonLibrary() : { lessons: [] };
+    const byId = new Map();
+    for (const l of [...(local.lessons || []), ...(cloudLib.lessons || [])]) {
+      const id = l.id || `les_${l.ts || Date.now()}`;
+      const prev = byId.get(id);
+      const ts = l.ts || (l.date ? new Date(l.date).getTime() : 0);
+      const prevTs = prev?.ts || (prev?.date ? new Date(prev.date).getTime() : 0);
+      if (!prev || ts >= prevTs) {
+        byId.set(id, {
+          id,
+          topic: l.topic,
+          source: l.source || [],
+          beats: l.beats || l.steps || [],
+          beatCount: l.beatCount ?? (l.beats || l.steps || []).length,
+          ts: ts || Date.now(),
+        });
+      }
+    }
+    const merged = {
+      streak: Math.max(local.streak || 0, cloudLib.streak || 0),
+      lastStudyDay: cloudLib.lastStudyDay || local.lastStudyDay || null,
+      lessons: [...byId.values()].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 100),
+    };
+    cfg.saveLessonLibrary(merged, { skipPush: true });
+  }
+  const cloudCards = lessons.flashcards;
+  if (cloudCards?.cards?.length && cfg.saveSrsFlashcards) {
+    const local = cfg.loadSrsFlashcards ? cfg.loadSrsFlashcards() : { cards: [] };
+    const byKey = new Map();
+    for (const c of [...(local.cards || []), ...(cloudCards.cards || [])]) {
+      const key = c.id || `${c.q}|${c.a}`;
+      const prev = byKey.get(key);
+      const due = c.nextReview ?? c.due ?? 0;
+      const prevDue = prev?.nextReview ?? prev?.due ?? 0;
+      if (!prev || due >= prevDue) {
+        byKey.set(key, {
+          id: c.id || key,
+          q: c.q,
+          a: c.a,
+          book: c.topic || c.book || '',
+          page: c.page || 0,
+          interval: c.interval || 0,
+          due: c.nextReview ?? c.due ?? Date.now(),
+          reps: c.reps || 0,
+        });
+      }
+    }
+    cfg.saveSrsFlashcards({ cards: [...byKey.values()].slice(-300) }, { skipPush: true });
+  }
+}
+
 // map local files → the /state shape
 function localToState() {
   const mem = stripSync(cfg.loadMemory() || {});
   const care = cfg.loadCare() || {};
   const sync = buildSyncBundle(cfg);
+  const studyLib = cfg.loadLessonLibrary ? cfg.loadLessonLibrary() : null;
+  const flashcards = cfg.loadSrsFlashcards ? cfg.loadSrsFlashcards() : null;
+  const lessons = {
+    ...(mem.lessons || {}),
+    ...(studyLib ? {
+      studyLibrary: {
+        streak: studyLib.streak || 0,
+        lastStudyDay: studyLib.lastStudyDay || null,
+        lessons: (studyLib.lessons || []).map((l) => ({
+          id: l.id,
+          topic: l.topic,
+          source: l.source || [],
+          steps: l.steps || l.beats || [],
+          beats: l.beats || l.steps || [],
+          beatCount: l.beatCount ?? (l.beats || l.steps || []).length,
+          ts: l.ts || Date.now(),
+          date: l.date || (l.ts ? new Date(l.ts).toISOString() : new Date().toISOString()),
+        })),
+        updatedAt: Date.now(),
+      },
+    } : {}),
+    ...(flashcards ? {
+      flashcards: {
+        cards: (flashcards.cards || []).map((c) => ({
+          id: c.id || `${c.q}|${c.a}`,
+          q: c.q,
+          a: c.a,
+          topic: c.topic || c.book || '',
+          interval: c.interval || 0,
+          nextReview: c.nextReview ?? c.due ?? Date.now(),
+          ease: c.ease || 2.5,
+        })),
+        updatedAt: Date.now(),
+      },
+    } : {}),
+  };
   return {
     memory: { ...mem, __sync: sync },
     bond: care.bondXP || 0,
@@ -28,10 +119,10 @@ function localToState() {
     personality: mem.personality || 'chill',
     level: 1,
     streaks: {},
-    lessons: mem.lessons || {},
+    lessons,
     cosmetics: { owned: care.owned || [], care: { hunger: care.hunger, happiness: care.happiness, cleanliness: care.cleanliness, affection: care.affection } },
     allocations: mem.allocations || {},
-    updatedAt: Math.max(mem.lastSeen || 0, care.lastTick || 0, latestSyncTs(sync)),
+    updatedAt: Math.max(mem.lastSeen || 0, care.lastTick || 0, latestSyncTs(sync), lessons.studyLibrary?.updatedAt || 0),
   };
 }
 
@@ -52,7 +143,10 @@ function stateToLocal(state, opts = {}) {
 
   const newMem = { ...stripSync(mem), ...stripSync(cloudMem) };
   if (state.personality) newMem.personality = state.personality;
-  if (state.lessons) newMem.lessons = state.lessons;
+  if (state.lessons) {
+    newMem.lessons = state.lessons;
+    applyStudyFromCloud(state.lessons);
+  }
   if (state.allocations) newMem.allocations = state.allocations;
   cfg.saveMemory(newMem, { skipPush: true });
 

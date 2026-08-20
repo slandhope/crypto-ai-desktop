@@ -10202,6 +10202,11 @@ ipcMain.handle('get-predictions', () => loadJSON(DAILY_PRED_FILE, { items: [], g
 
 // ─── FLASHCARDS — spaced repetition from your textbook ──────────────────────
 const SRS_CARDS_FILE = path.join(DATA_DIR, 'srs-flashcards.json');
+function loadSrsFlashcards() { return loadJSON(SRS_CARDS_FILE, { cards: [] }); }
+function saveSrsFlashcards(d, opts) {
+  saveJSON(SRS_CARDS_FILE, d);
+  if (!opts?.skipPush) try { require('./sync-client').pushSoon(); } catch (e) {}
+}
 async function makeFlashcardsFromPage() {
   const activeBook = getActiveBook();
   if (!activeBook) return null;
@@ -11234,7 +11239,10 @@ ipcMain.handle('close-lesson', () => { if (lessonWindow && !lessonWindow.isDestr
 // ═══════════════════════════════════════════════════════════════════
 const LESSON_LOG_FILE = path.join(app.getPath('userData'), 'lesson-library.json');
 function loadLessonLibrary() { try { return JSON.parse(fs.readFileSync(LESSON_LOG_FILE,'utf8')); } catch { return { lessons: [] }; } }
-function saveLessonLibrary(d) { try { fs.writeFileSync(LESSON_LOG_FILE, JSON.stringify(d,null,2)); } catch(e){} }
+function saveLessonLibrary(d, opts) {
+  try { fs.writeFileSync(LESSON_LOG_FILE, JSON.stringify(d, null, 2)); } catch (e) {}
+  if (!opts?.skipPush) try { require('./sync-client').pushSoon(); } catch (e) {}
+}
 
 let classroomWindow = null;
 
@@ -17904,6 +17912,7 @@ function proceedAfterLogin() {
   bootMainApp();
   try {
     require('./sync-client').pullOnLogin().catch(() => {});
+    require('./clarity-sync').pullOnLogin().catch(() => {});
     startSyncPolling();
   } catch (e) {}
 }
@@ -18013,7 +18022,9 @@ asukaAuth.init({ app: require('electron').app, BrowserWindow, shell: require('el
 
 // ☁️ sync client — her brain to/from Postgres via /state
 const asukaSync = require('./sync-client');
+const claritySync = require('./clarity-sync');
 const SYNC_API_BASE = require('./api-base').getApiBase();
+const CLARITY_WELLNESS_FILE = path.join(DATA_DIR, 'clarity-wellness.json');
 asukaSync.init({
   getIdToken: () => asukaAuth.getIdToken(),
   loadMemory, saveMemory, loadCare, saveCare,
@@ -18028,10 +18039,24 @@ asukaSync.init({
   loadUserProfile: getUserProfile,
   saveUserProfile,
   loadEpisodes, saveEpisodes,
+  loadLessonLibrary, saveLessonLibrary,
+  loadSrsFlashcards, saveSrsFlashcards,
   onSyncApplied: (merged) => {
     if (mainWindow && merged?.chatLog) mainWindow.webContents.send('chat-log-updated', merged.chatLog);
   },
   apiBase: SYNC_API_BASE,
+});
+claritySync.init({
+  getIdToken: () => asukaAuth.getIdToken(),
+  apiBase: SYNC_API_BASE,
+  wellnessFile: CLARITY_WELLNESS_FILE,
+  onWellnessApplied: (data) => {
+    try {
+      if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+        dashboardWindow.webContents.send('clarity-wellness-updated', data);
+      }
+    } catch (_) {}
+  },
 });
 app.whenReady().then(async () => {
   // Hakko-style screen share: Electron routes getDisplayMedia → desktop capture (no screenshot lib)
@@ -18089,7 +18114,11 @@ app.whenReady().then(async () => {
   if (token && asukaAuth.isLoggedIn()) {
     bootMainApp();               // already signed in — skip login
     // pull her cloud brain in the background (same as after a fresh login)
-    try { asukaSync.pullOnLogin().catch(() => {}); startSyncPolling(); } catch (e) {}
+    try {
+      asukaSync.pullOnLogin().catch(() => {});
+      claritySync.pullOnLogin().catch(() => {});
+      startSyncPolling();
+    } catch (e) {}
   } else {
     createLoginWindow();         // first time — show login
   }

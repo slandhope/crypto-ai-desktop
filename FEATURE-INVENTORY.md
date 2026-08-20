@@ -29,8 +29,8 @@ Update when marketing or launch claims change. Crypto rows are marked **discuss*
 | Screen chart (Cmd+Shift+A) | **Functional** | Claude vision |
 | Grok voice agent | **Stub** | Disabled |
 | Payments / Stripe | **Stub** | Placeholder URLs; no processor |
-| Mobile Coach chat | **Server alias ready** | Client still in `waifu-ai-mobile` |
-| Mobile keys in bundle | **Open** | Fix in mobile repo |
+| Mobile Coach chat | **Functional** | `POST /asuka/chat` on scanner-server; client in `asuka-mobile` |
+| Mobile keys in bundle | **Open** | Mobile talks to AWS with Cognito token — no keys in the app |
 
 ## Ops checklist (not features)
 - TLS on EC2 + `ASUKA_API_BASE=https://…`

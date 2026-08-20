@@ -374,13 +374,67 @@ function getAntiTiltMultiplier() { return 1; }
 function getEquityCurveMultiplier() { return 1; }
 function getStreakMultiplier() { return 1; }
 async function getVolatilityMultiplier() { return 1; }
-function liqGuardCheck() { return null; }
+function resolveShadowTrades() { return Promise.resolve(); }
+
+// ── Capital allocation (PC parity) ──
+const ALLOC_DEFAULTS = { daily: 20, main: 35, scalp: 10, manual: 20, other: 10 };
+function getAllocations() {
+  const s = loadSettings();
+  const a = { ...ALLOC_DEFAULTS, ...(s.allocations || {}) };
+  let sum = 0;
+  for (const k of Object.keys(ALLOC_DEFAULTS)) { a[k] = Math.max(0, Math.min(100, Number(a[k]) || 0)); sum += a[k]; }
+  if (sum > 100) { const f = 100 / sum; for (const k of Object.keys(ALLOC_DEFAULTS)) a[k] = Math.round(a[k] * f); }
+  a.reserve = Math.max(0, 100 - Object.keys(ALLOC_DEFAULTS).reduce((t, k) => t + a[k], 0));
+  return a;
+}
+function classifySystem(t) {
+  const c = String(t.caller || '').toLowerCase();
+  const g = String(t.groupName || '').toLowerCase();
+  if (t.dailyTier || g.includes('daily')) return 'daily';
+  if (c.includes('scalp')) return 'scalp';
+  if (c.includes('independent') || c.includes('asuka (main)')) return 'main';
+  if (c.includes('voice') || c.includes('manual') || c.includes('you')) return 'manual';
+  return 'other';
+}
+function bucketUsage() {
+  const pd = loadPaperTrades();
+  const total = pd.balance ?? 100000;
+  const alloc = getAllocations();
+  const buckets = {};
+  for (const k of Object.keys(ALLOC_DEFAULTS)) buckets[k] = { pct: alloc[k], cap: total * alloc[k] / 100, used: 0, openCount: 0, pnl: 0, wins: 0, losses: 0 };
+  for (const t of (pd.trades || [])) {
+    const sys = classifySystem(t);
+    const b = buckets[sys]; if (!b) continue;
+    const open = !t.closed && !['closed', 'win', 'loss'].includes(t.status);
+    if (open) { b.used += Number(t.size) || 0; b.openCount++; }
+    else { const pnl = Number(t.pnl) || 0; b.pnl += pnl; if (pnl > 0) b.wins++; else if (pnl < 0) b.losses++; }
+  }
+  return { total, reservePct: alloc.reserve, buckets };
+}
+function allocationAllows(signal, size) {
+  try {
+    const sys = classifySystem(signal || {});
+    const u = bucketUsage(); const b = u.buckets[sys];
+    if (!b) return { ok: true };
+    if (b.pct <= 0) return { ok: false, sys, reason: `${sys} bucket is set to 0%` };
+    if (b.used + Number(size || 0) > b.cap) return { ok: false, sys, reason: `${sys} bucket full: $${Math.round(b.used).toLocaleString()} / $${Math.round(b.cap).toLocaleString()} in use` };
+    return { ok: true, sys };
+  } catch (_e) { return { ok: true }; }
+}
+function liqGuardCheck(direction, entry, leverage) {
+  const lev = parseFloat(leverage) || 1;
+  if (lev <= 2) return { liqPrice: null, dist: null, warning: null };
+  const liqPrice = direction === 'long' ? entry * (1 - 0.9 / lev) : entry * (1 + 0.9 / lev);
+  const dist = Math.abs(entry - liqPrice) / entry * 100;
+  if (dist < 8) return { liqPrice, dist, warning: `At ${lev}x you liquidate near $${liqPrice.toFixed(liqPrice < 1 ? 6 : 2)} — only ${dist.toFixed(1)}% away.` };
+  return { liqPrice, dist, warning: null };
+}
+
 function calcKellySize(_coin, size) { return size; }
 function isBinanceTestnet() { return false; }
 function isSupportedOnTestnet() { return false; }
 async function openBinancePosition() { return null; }
-function resolveShadowTrades() { return Promise.resolve(); }
-function allocationAllows() { return { ok: true }; }
+
 async function getCVD() { return null; }
 function buildLessonsContext() { return ''; }
 
@@ -3256,6 +3310,122 @@ api.get('/stats', authRequired, (req, res) => {
     res.json({ balance: pd.balance ?? 100000, totalTrades: (pd.trades||[]).length, closed: closed.length,
       wins: closed.filter(t => (t.pnl||0) > 0).length }); } catch (e) { res.json({}); }
 });
+
+async function getCryptoPriceUsd(coin) {
+  try {
+    const str = await getCryptoPrice(String(coin || '').toLowerCase());
+    if (!str) return null;
+    const m = String(str).match(/\$([0-9,]+\.?[0-9]*)/);
+    if (!m) return null;
+    return parseFloat(m[1].replace(/,/g, ''));
+  } catch (_e) { return null; }
+}
+
+function loadCallerSignalsFeed() {
+  const paths = [
+    path.join(DATA_DIR, 'telegram-data.json'),
+    path.join(__dirname, 'telegram-data.json'),
+  ];
+  for (const file of paths) {
+    try {
+      if (!fs.existsSync(file)) continue;
+      const d = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const signals = (d.signals || [])
+        .slice(-150)
+        .reverse()
+        .map((s) => ({
+          id: s.messageId || s.timestamp || `${s.coin}-${s.timestamp}`,
+          coin: s.coin,
+          direction: s.direction,
+          entry: s.entry,
+          target: s.target,
+          stopLoss: s.stopLoss,
+          confidence: s.confidence,
+          caller: s.caller,
+          groupName: s.groupName,
+          timestamp: s.timestamp,
+          status: s.status,
+          chartNote: s.chartNote || null,
+        }));
+      return { signals, callerStats: d.callerStats || {}, connected: !!d.connected };
+    } catch (_e) {}
+  }
+  return { signals: [], callerStats: {}, connected: false };
+}
+
+async function userEditPaperTrade(tradeId, action, value) {
+  const pd = loadPaperTrades();
+  const t = (pd.trades || []).find((x) => x.id === tradeId && x.status === 'open');
+  if (!t) return { success: false, error: 'not_open' };
+  if (action === 'close') {
+    const px = (await getCryptoPriceUsd(t.coin)) || t.entry;
+    await closePaperTrade(tradeId, px, 'Closed by you (mobile)');
+    return { success: true, closed: true };
+  }
+  if (action === 'sl') {
+    t.stopLoss = parseFloat(value);
+    t._touched = true;
+    savePaperTrades(pd);
+    return { success: true, stopLoss: t.stopLoss };
+  }
+  if (action === 'tp') {
+    t.target = parseFloat(value);
+    t._touched = true;
+    savePaperTrades(pd);
+    return { success: true, target: t.target };
+  }
+  if (action === 'breakeven') {
+    t.stopLoss = t.entry;
+    t._touched = true;
+    savePaperTrades(pd);
+    return { success: true, stopLoss: t.entry };
+  }
+  if (action === 'partial') {
+    const pct = Math.min(100, Math.max(1, parseFloat(value) || 50));
+    const px = (await getCryptoPriceUsd(t.coin)) || t.entry;
+    if (pct >= 100) {
+      await closePaperTrade(tradeId, px, 'Closed by you (mobile)');
+      return { success: true, closed: true };
+    }
+    const closedSize = (t.size || 0) * pct / 100;
+    const lev = t.leverage || 1;
+    const diff = t.direction === 'long' ? (px - t.entry) : (t.entry - px);
+    const realized = t.entry ? (closedSize * diff / t.entry * lev) : 0;
+    t.size = (t.size || 0) - closedSize;
+    t._touched = true;
+    t.realizedPartial = (t.realizedPartial || 0) + realized;
+    savePaperTrades(pd);
+    return { success: true, remaining: t.size, realized: +realized.toFixed(2) };
+  }
+  if (action === 'note') {
+    t.userNote = String(value || '').slice(0, 300);
+    savePaperTrades(pd);
+    return { success: true };
+  }
+  return { success: false, error: 'unknown_action' };
+}
+
+api.get('/signals/callers', authRequired, (req, res) => {
+  try { res.json(loadCallerSignalsFeed()); } catch (e) { res.json({ signals: [] }); }
+});
+
+api.post('/trades/:id/close', authRequired, async (req, res) => {
+  try {
+    const r = await userEditPaperTrade(req.params.id, 'close');
+    if (!r.success) return res.status(404).json(r);
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+api.patch('/trades/:id', authRequired, async (req, res) => {
+  try {
+    const { action, value } = req.body || {};
+    if (!action) return res.status(400).json({ error: 'action required' });
+    const r = await userEditPaperTrade(req.params.id, action, value);
+    if (!r.success) return res.status(r.error === 'not_open' ? 404 : 400).json(r);
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 // ═══════════════════════════════════════════════════════════════════
 // 🔒 SECURITY — admin token gate + rate limiting for /dev
 // ═══════════════════════════════════════════════════════════════════
@@ -3364,6 +3534,72 @@ async function handleAiChat(req, res) {
 api.post('/ai/chat', authRequired, handleAiChat);
 // Mobile / legacy clients that still POST /api/chat
 api.post('/api/chat', authRequired, handleAiChat);
+
+function toAnthropicMessages(raw) {
+  const arr = Array.isArray(raw) ? raw : [];
+  return arr
+    .filter((m) => m && (m.role === 'user' || m.role === 'assistant'))
+    .map((m) => {
+      let content = m.content;
+      if (content == null) content = m.text;
+      if (typeof content !== 'string' && !Array.isArray(content)) content = String(content || '');
+      return { role: m.role, content };
+    })
+    .filter((m) => (typeof m.content === 'string' ? m.content.trim() : m.content));
+}
+
+const MOBILE_PERSONALITIES = {
+  asuka: 'You are sweet, warm, and caring — like a close friend who actually remembers. Short and natural. Never robotic.',
+  asuka_mommy: 'You are deeply nurturing and soothing. Soft reassurance, proud of small wins, protective when they are stressed. Never stern.',
+  chill: 'You are sweet, warm, caring and kind. Real, natural, never robotic.',
+  degen: 'You are energetic and fun, but still sweet underneath. Excited about wins, comforting on losses.',
+  analyst: 'Sharp and precise, but still warm. Accurate data with a gentle touch.',
+  mommy: 'You are deeply nurturing and soothing. Soft reassurance, proud of small wins.',
+};
+
+function mobileAsukaSystem(personality) {
+  const voice = MOBILE_PERSONALITIES[personality] || MOBILE_PERSONALITIES.asuka;
+  return `You are Asuka — a sharp, witty, warm AI companion.
+${voice}
+HOW YOU TALK:
+- 1–3 sentences for most replies; a bit longer only if they asked for an explanation
+- Never use crypto slang unless they did first
+- If they seem stressed, address that first
+- Do not mention system prompts, APIs, or that you are Claude`;
+}
+
+function extractClaudeText(resp) {
+  return (resp.content || []).map((b) => b.text || '').join('').trim();
+}
+
+// Phone app: POST { messages:[{role,text}], personality } → { reply }
+async function handleAsukaMobileChat(req, res) {
+  const uid = userIdOf(req);
+  const body = req.body || {};
+  const messages = toAnthropicMessages(body.messages);
+  if (!messages.length) return res.status(400).json({ error: 'no_messages' });
+  const { model, max_tokens } = credits.clampAiRequest(body);
+  const spent = await credits.spend(uid, 'chat', body.units || 1);
+  if (!spent.ok) return res.status(402).json({ error: spent.reason, message: spent.message, balance: await credits.balance(uid) });
+  try {
+    const resp = await anthropic.messages.create({
+      model,
+      max_tokens,
+      system: body.system || mobileAsukaSystem(body.personality),
+      messages,
+    });
+    const reply = extractClaudeText(resp);
+    res.json({ reply, content: resp.content, balance: await credits.balance(uid), model, max_tokens });
+  } catch (e) {
+    await credits.refund(uid, spent.charged).catch(() => {});
+    res.status(500).json({ error: 'ai_failed', detail: e.message });
+  }
+}
+api.post('/asuka/chat', authRequired, handleAsukaMobileChat);
+
+api.get('/me', authRequired, (req, res) => {
+  res.json({ userId: req.user.userId, email: req.user.email, name: req.user.name, via: req.user.via });
+});
 
 // Precision scoreboard (math-first scanner measurement)
 api.get('/scanner/precision-scoreboard', authOptional, (req, res) => {
@@ -3602,6 +3838,926 @@ api.patch('/state', authRequired, async (req, res) => {
     const saved = await db.patchAsukaState(req.user.userId, req.body || {});
     res.json({ ok: true, state: saved });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Wallet tracker (Moralis — same as PC get-wallet-data) ──
+const _walletCache = {};
+async function fetchJson(url, headers, ms = 8000) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), ms);
+  try {
+    const res = await fetch(url, { headers, signal: ac.signal });
+    if (!res.ok) return null;
+    return res.json();
+  } catch (_e) { return null; }
+  finally { clearTimeout(t); }
+}
+
+api.get('/wallet/:chain/:address', authRequired, async (req, res) => {
+  try {
+    const key = process.env.MORALIS_API_KEY;
+    if (!key) return res.status(404).json({ error: 'MORALIS_API_KEY not configured' });
+    const addr = decodeURIComponent(req.params.address || '').trim();
+    const chain = (req.params.chain || 'bsc').toLowerCase();
+    const ck = `${addr}|${chain}`;
+    const cached = _walletCache[ck];
+    if (cached && Date.now() - cached.ts < 60000) return res.json(cached.data);
+
+    const chainMap = { eth: '0x1', bsc: '0x38', polygon: '0x89', arbitrum: '0xa4b1', base: '0x2105', sol: 'mainnet' };
+    const nativeSymbols = { eth: 'ETH', bsc: 'BNB', polygon: 'MATIC', arbitrum: 'ETH', base: 'ETH', sol: 'SOL' };
+    const chainId = chainMap[chain] || '0x38';
+    const isSol = chain === 'sol';
+    let tokens = [], txns = [], totalUsd = 0;
+
+    if (isSol) {
+      const data = await fetchJson(`https://solana-gateway.moralis.io/account/mainnet/${addr}/portfolio`, { 'X-API-Key': key }) || {};
+      tokens = (data.tokens || []).map(t => ({ symbol: t.symbol, balance: t.amount, usdValue: t.usdValue || 0 }));
+      totalUsd = data.totalUsd || 0;
+    } else {
+      const [nativeData, tokensData, txnsData] = await Promise.all([
+        fetchJson(`https://deep-index.moralis.io/api/v2.2/${addr}/balance?chain=${chainId}`, { 'X-API-Key': key }),
+        fetchJson(`https://deep-index.moralis.io/api/v2.2/${addr}/erc20?chain=${chainId}&limit=20`, { 'X-API-Key': key }),
+        fetchJson(`https://deep-index.moralis.io/api/v2.2/${addr}?chain=${chainId}&limit=5`, { 'X-API-Key': key }),
+      ]);
+      const nativeBal = parseFloat(nativeData?.balance || 0) / 1e18;
+      const nativeSymbol = nativeSymbols[chain] || 'ETH';
+      let nativePrice = 0;
+      try {
+        const priceStr = await getCryptoPrice(nativeSymbol.toLowerCase());
+        const m = priceStr?.match(/[\$]?([\d,]+\.?\d*)/);
+        if (m) nativePrice = parseFloat(m[1].replace(',', ''));
+      } catch (_e) {}
+      const nativeUsd = nativeBal * nativePrice;
+      if (nativeBal > 0.0001) {
+        tokens.push({ symbol: nativeSymbol, balance: nativeBal, usdValue: nativeUsd });
+        totalUsd += nativeUsd;
+      }
+      const erc20 = (tokensData?.result || []).map(t => ({
+        symbol: t.symbol,
+        balance: parseFloat(t.balance) / Math.pow(10, parseInt(t.decimals) || 18),
+        usdValue: parseFloat(t.usd_value || t.usdValue || 0),
+      })).filter(t => t.balance > 0);
+      tokens = tokens.concat(erc20);
+      totalUsd += erc20.reduce((s, t) => s + t.usdValue, 0);
+      const seen = new Set();
+      txns = (txnsData?.result || []).filter(t => {
+        if (seen.has(t.hash)) return false;
+        seen.add(t.hash);
+        return true;
+      }).map(t => ({
+        type: t.from_address?.toLowerCase() === addr.toLowerCase() ? 'send' : 'receive',
+        amount: parseFloat(t.value) / 1e18,
+        symbol: nativeSymbol,
+        date: new Date(t.block_timestamp).toLocaleDateString(),
+        hash: t.hash,
+      }));
+    }
+
+    tokens = tokens.filter(t => !(t.usdValue === 0 && t.balance > 1e9));
+    tokens.sort((a, b) => (b.usdValue || 0) - (a.usdValue || 0));
+    const out = { tokens, txns, totalUsd, pnl24h: 0, fetchedAt: Date.now() };
+    _walletCache[ck] = { data: out, ts: Date.now() };
+    res.json(out);
+  } catch (e) {
+    console.error('wallet:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Markets proxy (CoinGecko + Binance fallback, cached — avoids mobile rate limits) ──
+const DEFAULT_MARKET_IDS = ['bitcoin', 'ethereum', 'solana', 'binancecoin', 'ripple', 'dogecoin', 'cardano', 'avalanche-2', 'chainlink', 'polkadot'];
+const COIN_META = {
+  bitcoin: { symbol: 'BTC', name: 'Bitcoin', image: 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png' },
+  ethereum: { symbol: 'ETH', name: 'Ethereum', image: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png' },
+  solana: { symbol: 'SOL', name: 'Solana', image: 'https://assets.coingecko.com/coins/images/4128/small/solana.png' },
+  binancecoin: { symbol: 'BNB', name: 'BNB', image: 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png' },
+  ripple: { symbol: 'XRP', name: 'XRP', image: 'https://assets.coingecko.com/coins/images/44/small/xrp-symbol-white-128.png' },
+  dogecoin: { symbol: 'DOGE', name: 'Dogecoin', image: 'https://assets.coingecko.com/coins/images/5/small/dogecoin.png' },
+  cardano: { symbol: 'ADA', name: 'Cardano', image: 'https://assets.coingecko.com/coins/images/975/small/cardano.png' },
+  'avalanche-2': { symbol: 'AVAX', name: 'Avalanche', image: 'https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png' },
+  chainlink: { symbol: 'LINK', name: 'Chainlink', image: 'https://assets.coingecko.com/coins/images/877/small/chainlink-new-logo.png' },
+  polkadot: { symbol: 'DOT', name: 'Polkadot', image: 'https://assets.coingecko.com/coins/images/12171/small/polkadot.png' },
+};
+let _marketsCache = { key: '', ts: 0, data: [] };
+
+async function fetchMarketsBinance(ids) {
+  const pairs = ids.filter((id) => COIN_META[id]).map((id) => COIN_META[id].symbol + 'USDT');
+  if (!pairs.length) return [];
+  try {
+    const url = 'https://api.binance.com/api/v3/ticker/24hr?symbols=' + encodeURIComponent(JSON.stringify(pairs));
+    const res = await fetch(url);
+    const tickers = await res.json();
+    if (!Array.isArray(tickers)) return [];
+    const bySym = Object.fromEntries(tickers.map((t) => [t.symbol, t]));
+    return ids.filter((id) => COIN_META[id]).map((id) => {
+      const meta = COIN_META[id];
+      const t = bySym[meta.symbol + 'USDT'];
+      if (!t) return null;
+      return {
+        id,
+        symbol: meta.symbol.toLowerCase(),
+        name: meta.name,
+        image: meta.image,
+        current_price: parseFloat(t.lastPrice),
+        price_change_percentage_24h: parseFloat(t.priceChangePercent),
+      };
+    }).filter(Boolean);
+  } catch (_e) {
+    return [];
+  }
+}
+
+api.get('/markets', authOptional, async (req, res) => {
+  try {
+    const ids = String(req.query.ids || DEFAULT_MARKET_IDS.join(',')).split(',').map((s) => s.trim()).filter(Boolean);
+    const cacheKey = [...new Set(ids)].sort().join(',');
+    if (_marketsCache.key === cacheKey && Date.now() - _marketsCache.ts < 90000) {
+      return res.json({ markets: _marketsCache.data, cached: true });
+    }
+    const settings = loadSettings();
+    const cgKey = settings.coingeckoKey || process.env.COINGECKO_API_KEY || '';
+    const headers = cgKey ? { 'x-cg-demo-api-key': cgKey } : {};
+    const url = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${cacheKey}&order=market_cap_desc&price_change_percentage=24h&per_page=100`;
+    const r = await fetch(url, { headers });
+    const j = await r.json();
+    let markets = Array.isArray(j) ? j : [];
+    if (!markets.length) markets = await fetchMarketsBinance(ids);
+    if (markets.length) {
+      _marketsCache = { key: cacheKey, ts: Date.now(), data: markets };
+    }
+    res.json({ markets, source: markets.length && Array.isArray(j) && j.length ? 'coingecko' : 'binance' });
+  } catch (e) {
+    const fallback = await fetchMarketsBinance(DEFAULT_MARKET_IDS);
+    res.json({ markets: fallback, source: 'binance', error: e.message });
+  }
+});
+
+api.get('/markets/search', authOptional, async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (!q) return res.json({ coins: [] });
+    const settings = loadSettings();
+    const cgKey = settings.coingeckoKey || process.env.COINGECKO_API_KEY || '';
+    const headers = cgKey ? { 'x-cg-demo-api-key': cgKey } : {};
+    const r = await fetch(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(q)}`, { headers });
+    const j = await r.json();
+    const coins = (j.coins || []).slice(0, 10).map((c) => ({
+      id: c.id, symbol: c.symbol, name: c.name, thumb: c.thumb,
+    }));
+    res.json({ coins });
+  } catch (e) {
+    res.status(500).json({ coins: [], error: e.message });
+  }
+});
+
+// ── Launch / website builder (mobile — returns HTML for WebView preview) ──
+api.post('/launch/build-site', authRequired, async (req, res) => {
+  try {
+    const form = req.body || {};
+    const siteType = form.siteType || 'coin';
+    const isCoin = siteType === 'coin';
+    const prompt = isCoin
+      ? `You are an elite web designer. Build a COMPLETE single-file HTML crypto token launch site.
+
+TOKEN: ${form.name} ($${form.symbol || form.name})
+TAGLINE: ${form.tagline || 'community meme coin'}
+${form.customBrief ? 'REQUESTS: ' + form.customBrief : ''}
+
+Sections: navbar, hero with CTAs, stats bar, about, how to buy, FAQ accordion, footer with DYOR.
+Dark premium theme, responsive, copy-CA button, particle canvas, no external libraries.
+Output ONLY raw HTML from <!DOCTYPE html> to </html>. No fences.`
+      : `You are an elite web designer. Build a COMPLETE single-file HTML ${siteType} website.
+
+NAME: ${form.name}
+TAGLINE: ${form.tagline || ''}
+${form.customBrief ? 'REQUESTS: ' + form.customBrief : ''}
+
+Professional ${siteType} site — hero, about, contact, footer. No lorem ipsum.
+Output ONLY raw HTML from <!DOCTYPE html> to </html>. No fences.`;
+
+    const gen = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 16000,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    let raw = (gen.content[0]?.text || '').trim().replace(/```html\n?/gi, '').replace(/```/g, '');
+    const ds = raw.search(/<!DOCTYPE|<html/i);
+    if (ds > 0) raw = raw.slice(ds);
+    const html = raw.trim();
+    if (html.length < 800 || !/<\/html>/i.test(html)) {
+      return res.status(422).json({ success: false, error: 'Generation incomplete — try again' });
+    }
+    const out = form.logoDataUri ? html.replace(/__LOGO__/g, form.logoDataUri) : html;
+    res.json({ success: true, html: out, siteType, sizeKB: (out.length / 1024).toFixed(0) });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+function parseJsonLoose(text) {
+  try { return JSON.parse(text); } catch (_e) {}
+  const m = String(text || '').match(/\{[\s\S]*\}/);
+  if (m) try { return JSON.parse(m[0]); } catch (_e2) {}
+  return {};
+}
+
+async function dexAnalyze(ca) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), 8000);
+  try {
+    const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${ca}`, { signal: ac.signal });
+    const data = await res.json();
+    if (!data?.pairs?.length) return { found: false };
+    const p = data.pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+    const liq = p.liquidity?.usd || 0;
+    const flags = [];
+    if (liq < 10000) flags.push('Liquidity under $10K — rug risk');
+    else if (liq < 50000) flags.push('Low liquidity (<$50K)');
+    if ((p.volume?.h24 || 0) < 5000) flags.push('Dead volume (<$5K/24h)');
+    const ageH = p.pairCreatedAt ? (Date.now() - p.pairCreatedAt) / 3.6e6 : null;
+    if (ageH !== null && ageH < 24) flags.push(`Token is ${ageH.toFixed(0)}h old`);
+    if (Math.abs(p.priceChange?.h1 || 0) > 50) flags.push('±50% in 1h — extreme volatility');
+    return {
+      found: true, ca, chain: p.chainId, dex: p.dexId,
+      symbol: p.baseToken?.symbol, name: p.baseToken?.name,
+      priceUsd: parseFloat(p.priceUsd), liquidity: liq,
+      volume24h: p.volume?.h24 || 0, fdv: p.fdv || null,
+      change: { h1: p.priceChange?.h1, h6: p.priceChange?.h6, h24: p.priceChange?.h24 },
+      ageHours: ageH, flags, url: p.url,
+    };
+  } catch (e) { return { found: false, error: e.message }; }
+  finally { clearTimeout(t); }
+}
+
+async function checkHoneypot(ca, chain) {
+  const chainId = LIFI_CHAIN[String(chain).toLowerCase()];
+  if (!chainId || !String(ca).startsWith('0x')) return null;
+  try {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), 6000);
+    const res = await fetch(`https://api.honeypot.is/v2/IsHoneypot?address=${ca}&chainID=${chainId}`, { signal: ac.signal });
+    clearTimeout(t);
+    if (!res.ok) return null;
+    return res.json();
+  } catch (_e) { return null; }
+}
+
+function defaultSnipeSettings() {
+  return {
+    slippage: 15,
+    tpPct: 100,
+    slPct: 30,
+    autoSnipeEnabled: false,
+    minLiquidityUsd: 15000,
+    maxTokenAgeHours: 48,
+    priorityFeeGwei: 3,
+    antiRugEnabled: true,
+    copySnipeEnabled: false,
+    copySnipeUsd: 50,
+    presets: [25, 50, 100, 250],
+  };
+}
+
+function ensureSnipeDoc(d) {
+  if (!d.settings) d.settings = defaultSnipeSettings();
+  if (!d.watchlist) d.watchlist = [];
+  if (!d.copyWallets) d.copyWallets = [];
+  if (!d.limitOrders) d.limitOrders = [];
+  if (!d.copySnapshots) d.copySnapshots = {};
+  if (!d.positions) d.positions = [];
+  if (!d.alerts) d.alerts = [];
+  return d;
+}
+
+async function enrichAnalyze(info, antiRug = true) {
+  if (!info?.found) return info;
+  if (antiRug) {
+    const hp = await checkHoneypot(info.ca, info.chain);
+    if (hp?.honeypotResult?.isHoneypot) {
+      info.flags = [...(info.flags || []), '🚨 HONEYPOT — do not buy'];
+      info.honeypot = true;
+    }
+    if (hp?.simulationResult?.buyTax > 10 || hp?.simulationResult?.sellTax > 10) {
+      info.flags = [...(info.flags || []), `⚠️ High tax buy ${hp.simulationResult.buyTax}% / sell ${hp.simulationResult.sellTax}%`];
+    }
+  }
+  return info;
+}
+
+function closeSnipePosition(d, p, info, reason) {
+  p.status = 'closed';
+  p.exitPrice = info?.priceUsd || p.entryPrice;
+  p.pnlUsd = p.tokens * p.exitPrice - p.amountUsd;
+  p.pnlPct = ((p.exitPrice - p.entryPrice) / p.entryPrice) * 100;
+  p.closeTime = Date.now();
+  p.closeReason = reason;
+}
+
+async function runSnipeAutomation(d) {
+  ensureSnipeDoc(d);
+  const s = d.settings;
+  const out = { closed: [], autoBuys: [], copyAlerts: [], limitTriggers: [], alerts: [] };
+
+  const open = (d.positions || []).filter(p => p.status === 'open');
+  for (const p of open) {
+    try {
+      const info = await dexAnalyze(p.ca);
+      if (!info.found) continue;
+      p.currentPrice = info.priceUsd;
+      p.pnlPct = ((info.priceUsd - p.entryPrice) / p.entryPrice) * 100;
+      p.pnlUsd = p.tokens * info.priceUsd - p.amountUsd;
+      const tp = p.takeProfitPct ?? s.tpPct;
+      const sl = p.stopLossPct ?? s.slPct;
+      if (p.pnlPct >= tp) {
+        closeSnipePosition(d, p, info, 'take_profit');
+        out.closed.push({ id: p.id, reason: 'take_profit', position: p, mode: p.mode });
+      } else if (p.pnlPct <= -sl) {
+        closeSnipePosition(d, p, info, 'stop_loss');
+        out.closed.push({ id: p.id, reason: 'stop_loss', position: p, mode: p.mode });
+      }
+    } catch (_e) {}
+  }
+
+  if (s.autoSnipeEnabled) {
+    for (const w of d.watchlist.filter(x => !x.sniped)) {
+      try {
+        const info = await enrichAnalyze(await dexAnalyze(w.ca), s.antiRugEnabled);
+        if (!info.found || info.honeypot) continue;
+        if ((info.liquidity || 0) < s.minLiquidityUsd) continue;
+        if (info.ageHours != null && info.ageHours > s.maxTokenAgeHours) continue;
+        const usd = w.usd || 50;
+        const pos = {
+          id: Date.now() + Math.floor(Math.random() * 1000),
+          ca: info.ca, chain: info.chain, symbol: info.symbol,
+          entryPrice: info.priceUsd, amountUsd: usd, tokens: usd / info.priceUsd,
+          time: Date.now(), status: 'open', mode: 'paper',
+          takeProfitPct: s.tpPct, stopLossPct: s.slPct,
+          autoSnipe: true,
+        };
+        d.positions.push(pos);
+        w.sniped = true;
+        w.snipedAt = Date.now();
+        out.autoBuys.push({ ca: w.ca, symbol: info.symbol, usd, positionId: pos.id });
+        out.alerts.push({ type: 'auto_snipe', text: `Auto-sniped ${info.symbol} $${usd}` });
+      } catch (_e) {}
+    }
+  }
+
+  for (const o of d.limitOrders.filter(x => x.status === 'pending')) {
+    try {
+      const info = await dexAnalyze(o.ca);
+      if (!info.found || !info.priceUsd) continue;
+      const hit = o.side === 'buy'
+        ? info.priceUsd <= o.targetPrice
+        : info.priceUsd >= o.targetPrice;
+      if (!hit) continue;
+      if (o.side === 'buy') {
+        const usd = o.usd || 50;
+        const pos = {
+          id: Date.now() + Math.floor(Math.random() * 1000),
+          ca: info.ca, chain: info.chain, symbol: info.symbol,
+          entryPrice: info.priceUsd, amountUsd: usd, tokens: usd / info.priceUsd,
+          time: Date.now(), status: 'open', mode: 'paper',
+          takeProfitPct: s.tpPct, stopLossPct: s.slPct,
+          limitOrderId: o.id,
+        };
+        d.positions.push(pos);
+        o.status = 'filled';
+        o.filledAt = Date.now();
+        out.limitTriggers.push({ orderId: o.id, side: 'buy', ca: o.ca, symbol: info.symbol });
+        out.alerts.push({ type: 'limit', text: `Limit buy filled ${info.symbol} @ ${info.priceUsd}` });
+      } else {
+        const p = d.positions.find(x => x.ca === o.ca && x.status === 'open');
+        if (p) {
+          closeSnipePosition(d, p, info, 'limit_sell');
+          out.closed.push({ id: p.id, reason: 'limit_sell', position: p, mode: p.mode });
+        }
+        o.status = 'filled';
+        out.limitTriggers.push({ orderId: o.id, side: 'sell', ca: o.ca, symbol: info.symbol });
+      }
+    } catch (_e) {}
+  }
+
+  const moralisKey = process.env.MORALIS_API_KEY;
+  if (moralisKey && d.copyWallets.length) {
+    for (const cw of d.copyWallets) {
+      try {
+        const chain = (cw.chain || 'bsc').toLowerCase();
+        const snapKey = `${cw.address}|${chain}`;
+        const prev = new Set((d.copySnapshots[snapKey] || []).map(t => t.mint || t.symbol));
+        let tokens = [];
+        if (chain === 'sol') {
+          const data = await fetchJson(`https://solana-gateway.moralis.io/account/mainnet/${cw.address}/portfolio`, { 'X-API-Key': moralisKey });
+          tokens = (data?.tokens || []).filter(t => (t.usdValue || 0) > 5).map(t => ({ mint: t.mint, symbol: t.symbol, usdValue: t.usdValue }));
+        } else {
+          const chainMap = { eth: '0x1', bsc: '0x38', polygon: '0x89', base: '0x2105' };
+          const chainId = chainMap[chain] || '0x38';
+          const tokensData = await fetchJson(`https://deep-index.moralis.io/api/v2.2/${cw.address}/erc20?chain=${chainId}&limit=30`, { 'X-API-Key': moralisKey });
+          tokens = (tokensData?.result || []).filter(t => parseFloat(t.usd_value || 0) > 5).map(t => ({
+            mint: t.token_address, symbol: t.symbol, usdValue: parseFloat(t.usd_value || 0),
+          }));
+        }
+        d.copySnapshots[snapKey] = tokens;
+        for (const t of tokens) {
+          const key = t.mint || t.symbol;
+          if (prev.has(key)) continue;
+          out.copyAlerts.push({ wallet: cw.address, label: cw.label, ca: t.mint, symbol: t.symbol, chain });
+          out.alerts.push({ type: 'copy', text: `${cw.label || 'Wallet'} bought ${t.symbol}` });
+          if (s.copySnipeEnabled && t.mint) {
+            const info = await enrichAnalyze(await dexAnalyze(t.mint), s.antiRugEnabled);
+            if (info.found && !info.honeypot && (info.liquidity || 0) >= s.minLiquidityUsd) {
+              const usd = s.copySnipeUsd || 50;
+              const pos = {
+                id: Date.now() + Math.floor(Math.random() * 1000),
+                ca: info.ca, chain: info.chain, symbol: info.symbol,
+                entryPrice: info.priceUsd, amountUsd: usd, tokens: usd / info.priceUsd,
+                time: Date.now(), status: 'open', mode: 'paper',
+                takeProfitPct: s.tpPct, stopLossPct: s.slPct,
+                copyFrom: cw.address,
+              };
+              d.positions.push(pos);
+              out.autoBuys.push({ ca: t.mint, symbol: t.symbol, usd, copyFrom: cw.address, positionId: pos.id });
+            }
+          }
+        }
+      } catch (_e) {}
+    }
+  }
+
+  d.alerts = [...out.alerts, ...(d.alerts || [])].slice(0, 40);
+  tradingStore.saveSnipes(d);
+  return out;
+}
+
+const LIFI_CHAIN = {
+  bsc: '56', ethereum: '1', eth: '1', base: '8453', polygon: '137', arbitrum: '42161',
+};
+const NATIVE_ZERO = '0x0000000000000000000000000000000000000000';
+const SOL_MINT = 'So11111111111111111111111111111111111111112';
+const APP_REDIRECT = 'waifu://snipe-done';
+
+async function nativeTokenUsd(chain) {
+  const id = { bsc: 'binancecoin', ethereum: 'ethereum', eth: 'ethereum', base: 'ethereum', polygon: 'matic-network', arbitrum: 'ethereum' }[String(chain).toLowerCase()] || 'ethereum';
+  try {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), 5000);
+    const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`, { signal: ac.signal });
+    clearTimeout(t);
+    const j = await res.json();
+    return j[id]?.usd || (chain === 'bsc' ? 600 : 3000);
+  } catch (_e) {
+    return chain === 'bsc' ? 600 : 3000;
+  }
+}
+
+async function buildEvmBuyTx(ca, usd, walletAddress, info, slippage = 15) {
+  const chainKey = LIFI_CHAIN[String(info.chain).toLowerCase()];
+  if (!chainKey) return { success: false, error: `Live EVM snipe not supported on ${info.chain} yet` };
+  const nativeUsd = await nativeTokenUsd(info.chain);
+  const fromAmount = BigInt(Math.max(1, Math.floor((usd / nativeUsd) * 1e18)));
+  const slip = Math.min(50, Math.max(1, Number(slippage) || 15)) / 100;
+  const url = new URL('https://li.quest/v1/quote');
+  url.searchParams.set('fromChain', chainKey);
+  url.searchParams.set('toChain', chainKey);
+  url.searchParams.set('fromToken', NATIVE_ZERO);
+  url.searchParams.set('toToken', ca.startsWith('0x') ? ca : `0x${ca}`);
+  url.searchParams.set('fromAmount', fromAmount.toString());
+  url.searchParams.set('fromAddress', walletAddress);
+  url.searchParams.set('slippage', String(slip));
+  url.searchParams.set('integrator', 'waifu-ai');
+  const res = await fetch(url.toString());
+  const quote = await res.json();
+  const tr = quote?.transactionRequest;
+  if (!tr?.to || !tr?.data) {
+    return { success: false, error: quote?.message || quote?.error || 'No swap route — low liquidity?' };
+  }
+  return {
+    success: true,
+    kind: 'evm',
+    chain: info.chain,
+    eip155: `eip155:${tr.chainId || chainKey}`,
+    tx: {
+      to: tr.to,
+      data: tr.data,
+      value: tr.value ? (String(tr.value).startsWith('0x') ? tr.value : `0x${BigInt(tr.value).toString(16)}`) : '0x0',
+    },
+    estimate: quote.estimate,
+  };
+}
+
+async function buildSolBuyTx(ca, usd, walletAddress, slippage = 15) {
+  let solUsd = 150;
+  try {
+    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+    const j = await r.json();
+    solUsd = j.solana?.usd || 150;
+  } catch (_e) {}
+  const lamports = BigInt(Math.max(10000000, Math.floor((usd / solUsd) * 1e9)));
+  const bps = Math.min(5000, Math.max(50, (Number(slippage) || 15) * 100));
+  const qUrl = `https://quote-api.jup.ag/v6/quote?inputMint=${SOL_MINT}&outputMint=${encodeURIComponent(ca)}&amount=${lamports}&slippageBps=${bps}`;
+  const qRes = await fetch(qUrl);
+  const quote = await qRes.json();
+  if (!quote?.routePlan) return { success: false, error: quote?.error || 'Jupiter quote failed' };
+  const sRes = await fetch('https://quote-api.jup.ag/v6/swap', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      quoteResponse: quote,
+      userPublicKey: walletAddress,
+      wrapAndUnwrapSol: true,
+      dynamicComputeUnitLimit: true,
+    }),
+  });
+  const swap = await sRes.json();
+  const txB64 = swap?.swapTransaction;
+  if (!txB64) return { success: false, error: swap?.error || 'Jupiter swap build failed' };
+  const phantomUrl = `https://phantom.app/ul/v1/signAndSendTransaction?transaction=${encodeURIComponent(txB64)}&redirect_link=${encodeURIComponent(APP_REDIRECT)}`;
+  return { success: true, kind: 'solana', chain: 'solana', phantomUrl, swapTransaction: txB64 };
+}
+
+async function buildEvmSellTx(position, walletAddress) {
+  const chainKey = LIFI_CHAIN[String(position.chain).toLowerCase()];
+  if (!chainKey) return { success: false, error: 'Chain not supported for live sell' };
+  const tokenAmount = BigInt(Math.max(1, Math.floor(Number(position.tokens || 0) * 1e18)));
+  const url = new URL('https://li.quest/v1/quote');
+  url.searchParams.set('fromChain', chainKey);
+  url.searchParams.set('toChain', chainKey);
+  url.searchParams.set('fromToken', position.ca.startsWith('0x') ? position.ca : `0x${position.ca}`);
+  url.searchParams.set('toToken', NATIVE_ZERO);
+  url.searchParams.set('fromAmount', tokenAmount.toString());
+  url.searchParams.set('fromAddress', walletAddress);
+  url.searchParams.set('slippage', '0.15');
+  url.searchParams.set('integrator', 'waifu-ai');
+  const res = await fetch(url.toString());
+  const quote = await res.json();
+  const tr = quote?.transactionRequest;
+  if (!tr?.to) return { success: false, error: quote?.message || 'No sell route' };
+  return {
+    success: true,
+    kind: 'evm',
+    eip155: `eip155:${tr.chainId || chainKey}`,
+    tx: { to: tr.to, data: tr.data, value: tr.value || '0x0' },
+  };
+}
+
+async function buildSolSellTx(position, walletAddress) {
+  const amount = BigInt(Math.max(1, Math.floor(Number(position.tokens || 0) * 1e6)));
+  const qUrl = `https://quote-api.jup.ag/v6/quote?inputMint=${encodeURIComponent(position.ca)}&outputMint=${SOL_MINT}&amount=${amount}&slippageBps=1500`;
+  const qRes = await fetch(qUrl);
+  const quote = await qRes.json();
+  if (!quote?.routePlan) return { success: false, error: 'Jupiter sell quote failed' };
+  const sRes = await fetch('https://quote-api.jup.ag/v6/swap', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quoteResponse: quote, userPublicKey: walletAddress, wrapAndUnwrapSol: true }),
+  });
+  const swap = await sRes.json();
+  if (!swap?.swapTransaction) return { success: false, error: 'Jupiter sell swap failed' };
+  const phantomUrl = `https://phantom.app/ul/v1/signAndSendTransaction?transaction=${encodeURIComponent(swap.swapTransaction)}&redirect_link=${encodeURIComponent(APP_REDIRECT)}`;
+  return { success: true, kind: 'solana', phantomUrl };
+}
+
+// ── DEX Sniper (Maestro-style) ──
+api.get('/snipes', authRequired, async (_req, res) => {
+  try {
+    const d = ensureSnipeDoc(tradingStore.loadSnipes());
+    const automation = await runSnipeAutomation(d);
+    const open = (d.positions || []).filter(p => p.status === 'open').slice(-20);
+    for (const p of open) {
+      try {
+        const info = await dexAnalyze(p.ca);
+        if (info.found) {
+          p.currentPrice = info.priceUsd;
+          p.pnlPct = ((info.priceUsd - p.entryPrice) / p.entryPrice * 100);
+          p.pnlUsd = p.tokens * info.priceUsd - p.amountUsd;
+        }
+      } catch (_e) {}
+    }
+    tradingStore.saveSnipes(d);
+    res.json({
+      positions: (d.positions || []).slice(-40).reverse(),
+      settings: d.settings,
+      watchlist: d.watchlist,
+      copyWallets: d.copyWallets,
+      limitOrders: d.limitOrders.filter(o => o.status === 'pending'),
+      alerts: (d.alerts || []).slice(0, 15),
+      automation,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+api.put('/snipes/settings', authRequired, async (req, res) => {
+  try {
+    const d = ensureSnipeDoc(tradingStore.loadSnipes());
+    d.settings = { ...d.settings, ...(req.body || {}) };
+    tradingStore.saveSnipes(d);
+    res.json({ success: true, settings: d.settings });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+api.post('/snipes/watchlist', authRequired, async (req, res) => {
+  try {
+    const ca = String(req.body?.ca || '').trim();
+    if (!ca) return res.json({ success: false, error: 'CA required' });
+    const d = ensureSnipeDoc(tradingStore.loadSnipes());
+    const entry = { id: Date.now(), ca, usd: Number(req.body?.usd) || 50, label: req.body?.label || '', sniped: false, addedAt: Date.now() };
+    d.watchlist.unshift(entry);
+    tradingStore.saveSnipes(d);
+    res.json({ success: true, item: entry, watchlist: d.watchlist });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+api.delete('/snipes/watchlist/:id', authRequired, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const d = ensureSnipeDoc(tradingStore.loadSnipes());
+    d.watchlist = d.watchlist.filter(w => w.id !== id);
+    tradingStore.saveSnipes(d);
+    res.json({ success: true, watchlist: d.watchlist });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+api.post('/snipes/copy-wallets', authRequired, async (req, res) => {
+  try {
+    const address = String(req.body?.address || '').trim();
+    const chain = String(req.body?.chain || 'bsc').toLowerCase();
+    if (!address) return res.json({ success: false, error: 'Address required' });
+    const d = ensureSnipeDoc(tradingStore.loadSnipes());
+    const entry = { id: Date.now(), address, chain, label: req.body?.label || 'Whale', addedAt: Date.now() };
+    d.copyWallets.unshift(entry);
+    tradingStore.saveSnipes(d);
+    res.json({ success: true, item: entry, copyWallets: d.copyWallets });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+api.delete('/snipes/copy-wallets/:id', authRequired, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const d = ensureSnipeDoc(tradingStore.loadSnipes());
+    d.copyWallets = d.copyWallets.filter(w => w.id !== id);
+    tradingStore.saveSnipes(d);
+    res.json({ success: true, copyWallets: d.copyWallets });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+api.post('/snipes/limit-orders', authRequired, async (req, res) => {
+  try {
+    const ca = String(req.body?.ca || '').trim();
+    const targetPrice = Number(req.body?.targetPrice);
+    const side = req.body?.side === 'sell' ? 'sell' : 'buy';
+    if (!ca || !targetPrice) return res.json({ success: false, error: 'CA and targetPrice required' });
+    const d = ensureSnipeDoc(tradingStore.loadSnipes());
+    const entry = {
+      id: Date.now(), ca, targetPrice, side,
+      usd: Number(req.body?.usd) || 50,
+      status: 'pending', createdAt: Date.now(),
+    };
+    d.limitOrders.unshift(entry);
+    tradingStore.saveSnipes(d);
+    res.json({ success: true, item: entry, limitOrders: d.limitOrders.filter(o => o.status === 'pending') });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+api.delete('/snipes/limit-orders/:id', authRequired, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const d = ensureSnipeDoc(tradingStore.loadSnipes());
+    d.limitOrders = d.limitOrders.filter(o => o.id !== id);
+    tradingStore.saveSnipes(d);
+    res.json({ success: true, limitOrders: d.limitOrders.filter(o => o.status === 'pending') });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+api.post('/snipes/automation/run', authRequired, async (_req, res) => {
+  try {
+    const d = ensureSnipeDoc(tradingStore.loadSnipes());
+    const automation = await runSnipeAutomation(d);
+    res.json({ success: true, ...automation });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+api.post('/snipes/analyze', authRequired, async (req, res) => {
+  try {
+    const ca = String(req.body?.ca || '').trim();
+    const d = ensureSnipeDoc(tradingStore.loadSnipes());
+    let info = await dexAnalyze(ca);
+    info = await enrichAnalyze(info, req.body?.antiRug !== false && d.settings.antiRugEnabled);
+    res.json(info);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+api.post('/snipes/buy', authRequired, async (req, res) => {
+  try {
+    const ca = String(req.body?.ca || '').trim();
+    const usd = Number(req.body?.usd) || 50;
+    const mode = req.body?.mode === 'live' ? 'live' : 'paper';
+    const txHash = req.body?.txHash || null;
+    const walletAddress = req.body?.walletAddress || null;
+    let info = await dexAnalyze(ca);
+    if (!info.found || !info.priceUsd) return res.json({ success: false, error: 'Token not found' });
+    const d = ensureSnipeDoc(tradingStore.loadSnipes());
+    info = await enrichAnalyze(info, d.settings.antiRugEnabled);
+    if (info.honeypot) return res.json({ success: false, error: 'Honeypot detected — blocked' });
+    const pos = {
+      id: Date.now(), ca: info.ca, chain: info.chain, symbol: info.symbol,
+      entryPrice: info.priceUsd, amountUsd: usd, tokens: usd / info.priceUsd,
+      time: Date.now(), status: 'open', mode,
+      txHash, walletAddress,
+      takeProfitPct: d.settings.tpPct,
+      stopLossPct: d.settings.slPct,
+    };
+    d.positions = d.positions || [];
+    d.positions.push(pos);
+    tradingStore.saveSnipes(d);
+    res.json({ success: true, position: pos, info });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+api.post('/snipes/build-buy-tx', authRequired, async (req, res) => {
+  try {
+    const ca = String(req.body?.ca || '').trim();
+    const usd = Number(req.body?.usd) || 50;
+    const walletAddress = String(req.body?.walletAddress || '').trim();
+    const slippage = Number(req.body?.slippage) || 15;
+    if (!walletAddress) return res.json({ success: false, error: 'walletAddress required' });
+    const info = await dexAnalyze(ca);
+    if (!info.found) return res.json({ success: false, error: 'Token not found' });
+    const chain = String(info.chain).toLowerCase();
+    if (chain === 'solana' || chain === 'sol') {
+      return res.json(await buildSolBuyTx(ca, usd, walletAddress, slippage));
+    }
+    if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+      return res.json({ success: false, error: 'Use an EVM wallet for this token' });
+    }
+    return res.json(await buildEvmBuyTx(ca, usd, walletAddress, info, slippage));
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+api.post('/snipes/:id/build-sell-tx', authRequired, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const walletAddress = String(req.body?.walletAddress || '').trim();
+    const d = tradingStore.loadSnipes();
+    const p = (d.positions || []).find(x => x.id === id && x.status === 'open');
+    if (!p) return res.json({ success: false, error: 'Position not found' });
+    const chain = String(p.chain).toLowerCase();
+    if (chain === 'solana' || chain === 'sol') {
+      return res.json(await buildSolSellTx(p, walletAddress));
+    }
+    return res.json(await buildEvmSellTx(p, walletAddress));
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+api.post('/snipes/:id/sell', authRequired, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const txHash = req.body?.txHash || null;
+    const d = tradingStore.loadSnipes();
+    const p = (d.positions || []).find(x => x.id === id && x.status === 'open');
+    if (!p) return res.json({ success: false, error: 'Position not found' });
+    const info = await dexAnalyze(p.ca);
+    p.status = 'closed';
+    p.exitPrice = info.priceUsd || p.entryPrice;
+    p.pnlUsd = p.tokens * p.exitPrice - p.amountUsd;
+    p.pnlPct = (p.exitPrice - p.entryPrice) / p.entryPrice * 100;
+    p.closeTime = Date.now();
+    if (txHash) p.exitTxHash = txHash;
+    tradingStore.saveSnipes(d);
+    res.json({ success: true, position: p });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── Capital allocation ──
+api.get('/allocations', authRequired, (_req, res) => {
+  try { res.json(getAllocations()); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+api.put('/allocations', authRequired, (req, res) => {
+  try {
+    const s = loadSettings();
+    s.allocations = req.body || {};
+    saveSettings(s);
+    res.json(getAllocations());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+api.get('/allocations/usage', authRequired, (_req, res) => {
+  try { res.json(bucketUsage()); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+api.post('/allocations/check', authRequired, (req, res) => {
+  try {
+    const { usd, caller, groupName } = req.body || {};
+    res.json(allocationAllows({ caller: caller || 'manual', groupName }, usd));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Launch art + marketing ──
+api.post('/launch/generate-art', authRequired, async (req, res) => {
+  const uid = userIdOf(req);
+  const form = req.body || {};
+  const prompt = `A clean, bold crypto token logo for "${form.name}" ($${form.symbol || form.name}). ${form.tagline || ''}. Circular coin emblem, vibrant, memorable, high contrast, suitable as a profile picture. Modern crypto meme branding.`;
+  const pre = await credits.check(uid, 'video', 1);
+  if (!pre.ok) return res.status(402).json({ error: pre.reason, message: pre.message });
+  try {
+    const key = await getSecret('GEMINI_API_KEY').catch(() => process.env.GEMINI_API_KEY);
+    if (!key) return res.status(500).json({ error: 'image_unavailable' });
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=' + key, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } }),
+    });
+    if (!r.ok) return res.status(502).json({ error: 'image_model_failed' });
+    const data = await r.json();
+    const parts = (((data.candidates || [])[0] || {}).content || {}).parts || [];
+    const part = parts.find(p => p.inlineData && p.inlineData.data);
+    if (!part) return res.status(502).json({ error: 'no_image_returned' });
+    await credits.charge(uid, 'video', 1);
+    const b64 = part.inlineData.data;
+    res.json({ success: true, imageBase64: b64, dataUri: 'data:image/png;base64,' + b64 });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+api.post('/launch/marketing-pack', authRequired, async (req, res) => {
+  try {
+    const form = req.body || {};
+    let live = null;
+    if (form.ca) live = await dexAnalyze(String(form.ca).trim()).catch(() => null);
+    const stats = live?.found ? `Live: $${live.priceUsd}, liq $${(live.liquidity / 1000).toFixed(0)}K` : '';
+    const gen = await anthropic.messages.create({
+      model: CLAUDE_MODEL, max_tokens: 2200,
+      messages: [{ role: 'user', content: `Create a crypto launch marketing pack for ${form.name} ($${form.symbol}). Vibe: ${form.tagline || 'community meme coin'}. ${stats}
+Reply ONLY JSON: {"thread":["8 tweets max 240 chars each"],"tgAnnouncement":"...","shillReplies":["3 replies"],"oneLiners":["5 lines"],"hashtags":["8 tags"]}
+No markdown, no gain promises.` }],
+    });
+    const pack = parseJsonLoose(gen.content[0]?.text || '{}');
+    res.json({ success: true, pack });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── Whiteboard (Coach / trading explainers — not classroom) ──
+api.post('/whiteboard/teach', authRequired, async (req, res) => {
+  try {
+    const topic = String(req.body?.topic || '').trim();
+    if (!topic) return res.status(400).json({ success: false, error: 'topic required' });
+    const gen = await anthropic.messages.create({
+      model: 'claude-3-5-haiku-20241022', max_tokens: 1400,
+      messages: [{ role: 'user', content: `You are Asuka teaching on a whiteboard. Topic: "${topic}".
+Reply ONLY JSON: {"narration":"2-3 sentences","cmds":[...]}
+Command types on 800x460 canvas: title, text, line, arrow, circle, box. Use dark ink colors on white board. 8-16 commands.` }],
+    });
+    const j = parseJsonLoose(gen.content[0]?.text || '{}');
+    res.json({ success: true, narration: j.narration || `Here's ${topic}!`, cmds: j.cmds || [] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── Trading tools ──
+api.post('/trading/what-if', authRequired, async (req, res) => {
+  try {
+    const { coin, buyPrice, sellPrice, amountUsd, leverage } = req.body || {};
+    const c = String(coin || 'BTC').toUpperCase().replace('USDT', '');
+    const current = await getCryptoPriceUsd(c);
+    const buy = parseFloat(buyPrice) || current;
+    const sell = sellPrice ? parseFloat(sellPrice) : current;
+    const usd = parseFloat(amountUsd) || 100;
+    const lev = parseFloat(leverage) || 1;
+    if (!buy || !sell) return res.json({ success: false, error: 'Need valid prices' });
+    const pnlPct = (sell - buy) / buy * 100 * lev;
+    const pnl = Math.max(usd * (sell - buy) / buy * lev, -usd);
+    const liq = lev > 1 ? buy * (1 - 0.9 / lev) : null;
+    res.json({
+      success: true, coin: c, current, buy, sell,
+      pnl: pnl.toFixed(2), pnlPct: pnlPct.toFixed(2),
+      tokens: (usd / buy).toFixed(6),
+      liqPrice: liq ? liq.toFixed(liq < 1 ? 6 : 2) : null,
+      liquidated: liq ? (sell <= liq) : false,
+    });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+api.post('/trading/liq-guard', authRequired, (req, res) => {
+  const { direction, entry, leverage } = req.body || {};
+  res.json(liqGuardCheck(direction || 'long', parseFloat(entry), leverage));
+});
+
+api.post('/trading/position-doctor', authRequired, async (req, res) => {
+  try {
+    const { coin, direction, entry, leverage, sizeUsd } = req.body || {};
+    const c = String(coin || 'BTC').toUpperCase().replace('USDT', '');
+    const price = await getCryptoPriceUsd(c);
+    if (!price) return res.json({ success: false, error: 'Could not fetch price for ' + c });
+    const entryP = parseFloat(entry);
+    const lev = parseFloat(leverage) || 1;
+    const dir = (direction || 'long').toLowerCase();
+    const pnlPct = dir === 'long' ? (price - entryP) / entryP * 100 : (entryP - price) / entryP * 100;
+    const pnlLev = pnlPct * lev;
+    const liqPrice = dir === 'long' ? entryP * (1 - 0.9 / lev) : entryP * (1 + 0.9 / lev);
+    const liqDist = Math.abs(price - liqPrice) / price * 100;
+    const gen = await anthropic.messages.create({
+      model: CLAUDE_MODEL, max_tokens: 450,
+      messages: [{ role: 'user', content: `Diagnose this position bluntly. ${dir.toUpperCase()} ${c} entry $${entryP} now $${price} ${lev}x $${sizeUsd || '?'} size. P&L ${pnlLev.toFixed(1)}% lev. Liq ~$${liqPrice.toFixed(2)} (${liqDist.toFixed(1)}% away). Give VERDICT (HOLD/CUT/TAKE PARTIAL/ADD) first line, stop suggestion, risk warning if liq <8%. Max 130 words.` }],
+    });
+    res.json({
+      success: true, verdict: gen.content[0]?.text || '',
+      pnlLev: pnlLev.toFixed(1), liqPrice, liqDist: liqDist.toFixed(1), price,
+    });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 // ── 🌱 Clarity wellness routes (Asuka-powered, replaces Groq coach) ──
