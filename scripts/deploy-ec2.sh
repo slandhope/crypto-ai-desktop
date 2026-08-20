@@ -21,7 +21,7 @@ echo "→ Installing deps and restarting scanner-server"
 ssh -i "$EC2_KEY" -o StrictHostKeyChecking=accept-new "$EC2_USER@$EC2_HOST" bash -s << EOF
   set -e
   cd $REMOTE_DIR
-  npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+  npm install express aws-jwt-verify google-auth-library @google/genai @aws-sdk/client-secrets-manager pg dotenv @anthropic-ai/sdk groq-sdk axios ws 2>/dev/null || npm install --omit=dev
   if command -v pm2 >/dev/null; then
     pm2 restart scanner-server 2>/dev/null || pm2 start scanner-server.js --name scanner-server
     pm2 save
