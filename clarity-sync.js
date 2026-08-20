@@ -69,6 +69,42 @@ function mergeHistory(local, remote) {
   return out;
 }
 
+function mergeSyncExtras(local, remote) {
+  local = local || {};
+  remote = remote || {};
+  const stepsHistory = { ...(remote.stepsHistory || {}) };
+  for (const [day, n] of Object.entries(local.stepsHistory || {})) {
+    stepsHistory[day] = Math.max(stepsHistory[day] || 0, Number(n) || 0);
+  }
+  const pickDraft = (l, r) => {
+    if (!l) return r || null;
+    if (!r) return l;
+    return (r.updatedAt || 0) >= (l.updatedAt || 0) ? r : l;
+  };
+  return {
+    stepsHistory,
+    createStudio: {
+      resumeProfile: pickDraft(local.createStudio?.resumeProfile, remote.createStudio?.resumeProfile),
+      websiteDraft: pickDraft(local.createStudio?.websiteDraft, remote.createStudio?.websiteDraft),
+      history: [...(remote.createStudio?.history || []), ...(local.createStudio?.history || [])].slice(0, 12),
+      updatedAt: Math.max(local.createStudio?.updatedAt || 0, remote.createStudio?.updatedAt || 0),
+    },
+    userPrefs: {
+      ...(remote.userPrefs || {}),
+      ...(local.userPrefs || {}),
+      updatedAt: Math.max(local.userPrefs?.updatedAt || 0, remote.userPrefs?.updatedAt || 0),
+    },
+    coachChat: [...(remote.coachChat || []), ...(local.coachChat || [])].slice(-200),
+    habitRewards: remote.habitRewards || local.habitRewards || null,
+    tradingAlerts: {
+      settings: { ...(remote.tradingAlerts?.settings || {}), ...(local.tradingAlerts?.settings || {}) },
+      history: [...(remote.tradingAlerts?.history || []), ...(local.tradingAlerts?.history || [])].slice(0, 50),
+    },
+    weeklyInsight: remote.weeklyInsight || local.weeklyInsight || null,
+    updatedAt: Math.max(local.updatedAt || 0, remote.updatedAt || 0, Date.now()),
+  };
+}
+
 function mergeWellness(local, remote) {
   const localTs = local.updatedAt || 0;
   const remoteTs = remote.updatedAt || 0;
@@ -83,6 +119,7 @@ function mergeWellness(local, remote) {
     aiNewHabit: remote.aiNewHabit || local.aiNewHabit || null,
     aiInsight: remote.aiInsight || local.aiInsight || null,
     aiIntent: remote.aiIntent || local.aiIntent || null,
+    syncExtras: mergeSyncExtras(local.syncExtras, remote.syncExtras),
     updatedAt: Math.max(localTs, remoteTs, Date.now()),
   };
 }
@@ -105,6 +142,7 @@ async function pullOnLogin() {
       aiNewHabit: remote.aiNewHabit || null,
       aiInsight: remote.aiInsight || null,
       aiIntent: remote.aiIntent || null,
+      syncExtras: remote.syncExtras || {},
       updatedAt: remote.updatedAt || 0,
     });
     saveLocal(merged);
@@ -127,6 +165,7 @@ async function pushNow() {
       aiNewHabit: local.aiNewHabit || null,
       aiInsight: local.aiInsight || null,
       aiIntent: local.aiIntent || null,
+      syncExtras: local.syncExtras || {},
     });
     if (res.status === 200) console.log('🌱 clarity-sync: pushed wellness to cloud');
   } catch (e) { console.warn('🌱 clarity-sync push skipped:', e.message); }

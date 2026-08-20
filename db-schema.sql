@@ -32,8 +32,12 @@ CREATE TABLE IF NOT EXISTS user_data (
   mood_data         JSONB DEFAULT '[]',
   streak_freezes    INTEGER DEFAULT 1,
   freeze_used_dates JSONB DEFAULT '[]',
+  sync_extras       JSONB DEFAULT '{}',            -- mobile prefs, coach chat, create studio, steps history
   updated_at        TIMESTAMP DEFAULT NOW()
 );
+
+-- migrations for existing databases
+ALTER TABLE user_data ADD COLUMN IF NOT EXISTS sync_extras JSONB DEFAULT '{}';
 
 -- ── ASUKA'S BRAIN: her soul, synced PC ↔ phone ──
 CREATE TABLE IF NOT EXISTS asuka_state (

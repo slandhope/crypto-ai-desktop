@@ -89,6 +89,103 @@ Return JSON exactly:
   } catch (e) { console.error('asukaDailyPlan parse:', e.message); }
 }
 
+function mergeStepsHistory(a, b) {
+  const out = { ...(a || {}) };
+  for (const [day, n] of Object.entries(b || {})) {
+    out[day] = Math.max(out[day] || 0, Number(n) || 0);
+  }
+  const keys = Object.keys(out).sort();
+  if (keys.length > 90) keys.slice(0, keys.length - 90).forEach((k) => delete out[k]);
+  return out;
+}
+
+function mergeById(a, b, cap = 50) {
+  const map = new Map();
+  for (const item of [...(a || []), ...(b || [])]) {
+    if (!item) continue;
+    const id = item.id || `${item.ts || item.createdAt || 0}:${JSON.stringify(item).slice(0, 40)}`;
+    const prev = map.get(id);
+    const ts = item.ts || item.createdAt || item.updatedAt || 0;
+    const prevTs = prev?.ts || prev?.createdAt || prev?.updatedAt || 0;
+    if (!prev || ts >= prevTs) map.set(id, item);
+  }
+  return [...map.values()].sort((x, y) => (y.ts || y.createdAt || 0) - (x.ts || x.createdAt || 0)).slice(0, cap);
+}
+
+function mergeCoachChat(a, b) {
+  const map = new Map();
+  for (const m of [...(a || []), ...(b || [])]) {
+    if (!m) continue;
+    const text = m.content || m.text || '';
+    const key = m.id || `${m.ts || 0}:${m.role}:${String(text).slice(0, 48)}`;
+    const prev = map.get(key);
+    if (!prev || (m.ts || 0) >= (prev.ts || 0)) map.set(key, m);
+  }
+  return [...map.values()].sort((x, y) => (x.ts || 0) - (y.ts || 0)).slice(-200);
+}
+
+function mergeCreateStudio(local, remote) {
+  local = local || {};
+  remote = remote || {};
+  const pickDraft = (l, r) => {
+    if (!l) return r || null;
+    if (!r) return l;
+    return (r.updatedAt || 0) >= (l.updatedAt || 0) ? r : l;
+  };
+  return {
+    resumeProfile: pickDraft(local.resumeProfile, remote.resumeProfile),
+    websiteDraft: pickDraft(local.websiteDraft, remote.websiteDraft),
+    history: mergeById(local.history, remote.history, 12),
+    updatedAt: Math.max(local.updatedAt || 0, remote.updatedAt || 0),
+  };
+}
+
+function mergeUserPrefs(local, remote) {
+  local = local || {};
+  remote = remote || {};
+  const useRemote = (remote.updatedAt || 0) >= (local.updatedAt || 0);
+  const base = useRemote ? { ...local, ...remote } : { ...remote, ...local };
+  return {
+    ...base,
+    updatedAt: Math.max(local.updatedAt || 0, remote.updatedAt || 0),
+  };
+}
+
+function mergeHabitRewards(local, remote) {
+  if (!local) return remote || null;
+  if (!remote) return local;
+  if (local.date !== remote.date) {
+    const today = new Date().toISOString().split('T')[0];
+    if (local.date === today) return local;
+    if (remote.date === today) return remote;
+    return local;
+  }
+  return {
+    date: local.date,
+    habitIds: [...new Set([...(local.habitIds || []), ...(remote.habitIds || [])])],
+    perfectDay: !!(local.perfectDay || remote.perfectDay),
+    milestones: [...new Set([...(local.milestones || []), ...(remote.milestones || [])])],
+  };
+}
+
+function mergeSyncExtras(local, remote) {
+  local = local || {};
+  remote = remote || {};
+  return {
+    stepsHistory: mergeStepsHistory(local.stepsHistory, remote.stepsHistory),
+    createStudio: mergeCreateStudio(local.createStudio, remote.createStudio),
+    userPrefs: mergeUserPrefs(local.userPrefs, remote.userPrefs),
+    coachChat: mergeCoachChat(local.coachChat, remote.coachChat),
+    habitRewards: mergeHabitRewards(local.habitRewards, remote.habitRewards),
+    tradingAlerts: {
+      settings: { ...(remote.tradingAlerts?.settings || {}), ...(local.tradingAlerts?.settings || {}) },
+      history: mergeById(local.tradingAlerts?.history, remote.tradingAlerts?.history, 50),
+    },
+    weeklyInsight: remote.weeklyInsight || local.weeklyInsight || null,
+    updatedAt: Math.max(local.updatedAt || 0, remote.updatedAt || 0, Date.now()),
+  };
+}
+
 // ── register all routes onto the existing api (scanner-server) ──
 function register(api, { authRequired, callAsuka }) {
 
@@ -98,22 +195,28 @@ function register(api, { authRequired, callAsuka }) {
       const userId = req.user.userId;
       const {
         name, history, seenMilestones, steps, sleepHours, pushToken,
-        aiGoals, aiGoalsDate, aiNewHabit, aiInsight, aiIntent,
+        aiGoals, aiGoalsDate, aiNewHabit, aiInsight, aiIntent, syncExtras,
       } = req.body || {};
       await ensureRow(userId, name);
+      const cur = await getData(userId);
+      const mergedExtras = syncExtras
+        ? mergeSyncExtras(cur?.sync_extras || {}, syncExtras)
+        : (cur?.sync_extras || {});
       await db.pool.query(
-        `UPDATE user_data SET history=$1, seen_milestones=$2,
+        `UPDATE user_data SET history=COALESCE($1,history), seen_milestones=COALESCE($2,seen_milestones),
            steps=COALESCE($3,steps), sleep_hours=COALESCE($4,sleep_hours),
            push_token=COALESCE($5,push_token),
            ai_goals=COALESCE($6,ai_goals), ai_goals_date=COALESCE($7,ai_goals_date),
            ai_new_habit=COALESCE($8,ai_new_habit), ai_insight=COALESCE($9,ai_insight),
-           ai_intent=COALESCE($10,ai_intent), updated_at=NOW() WHERE user_id=$11`,
-        [JSON.stringify(history || {}), JSON.stringify(seenMilestones || []),
+           ai_intent=COALESCE($10,ai_intent), sync_extras=$11, updated_at=NOW() WHERE user_id=$12`,
+        [history != null ? JSON.stringify(history) : null,
+         seenMilestones != null ? JSON.stringify(seenMilestones) : null,
          steps ?? null, sleepHours ?? null, pushToken || null,
          aiGoals != null ? JSON.stringify(aiGoals) : null,
          aiGoalsDate ?? null,
          aiNewHabit != null ? JSON.stringify(aiNewHabit) : null,
-         aiInsight ?? null, aiIntent ?? null, userId]
+         aiInsight ?? null, aiIntent ?? null,
+         JSON.stringify(mergedExtras), userId]
       );
       res.json({ success: true });
     } catch (e) { console.error('sync:', e.message); res.status(500).json({ error: 'sync failed' }); }
@@ -137,6 +240,7 @@ function register(api, { authRequired, callAsuka }) {
         aiNewHabit: data.ai_new_habit || null,
         aiInsight: data.ai_insight || null,
         aiIntent: data.ai_intent || null,
+        syncExtras: data.sync_extras || {},
         updatedAt: data.updated_at ? new Date(data.updated_at).getTime() : 0,
       });
     } catch (e) { res.status(500).json({ error: 'load failed' }); }
@@ -210,4 +314,4 @@ function register(api, { authRequired, callAsuka }) {
   console.log('🌱 Clarity wellness routes registered (Asuka-powered)');
 }
 
-module.exports = { register, asukaDailyPlan };
+module.exports = { register, asukaDailyPlan, mergeSyncExtras };
