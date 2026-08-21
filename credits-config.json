@@ -5,7 +5,7 @@
     "super":   { "label": "Super",   "dailyCredits": 1500, "priceMonthly": 40 },
     "ultra":   { "label": "Ultra",   "dailyCredits": 4000, "priceMonthly": 80 }
   },
-  "actionCosts": { "chat": 10, "voice_minute": 50, "video": 200 },
+  "actionCosts": { "chat": 10, "voice_minute": 50, "video": 200, "agent": 25 },
   "topupPacks": [
     { "credits": 1000, "price": 3 },
     { "credits": 5000, "price": 12 },

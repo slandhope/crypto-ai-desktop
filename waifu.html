@@ -997,6 +997,7 @@
 - Trading journal, log trade → MUST use ask_claude tool
 - Portfolio, wallet check → MUST use ask_claude tool
 - News, latest news → MUST use ask_claude tool
+- CT / Twitter / X sentiment, "what is CT saying", web research, look up online → MUST use grok_research tool
 - Morning briefing → MUST use ask_claude tool
 - Contract scan → MUST use ask_claude tool
 - NEVER answer market data from memory — ALWAYS use tools
@@ -1028,6 +1029,17 @@ VOICE RESPONSE RULES — CRITICAL:
               },
               tools: [{
                 functionDeclarations: [
+                  {
+                    name: 'grok_research',
+                    description: 'Live web + X research: CT sentiment, latest news narrative, why everyone is talking about a coin, fact-finding, compare online, study topic research. Costs credits. NOT for simple BTC price — use get_market_data for that.',
+                    parameters: {
+                      type: 'object',
+                      properties: {
+                        query: { type: 'string', description: 'Full research request word for word' }
+                      },
+                      required: ['query']
+                    }
+                  },
                   {
                     name: 'ask_claude',
                     description: 'Use for everything except live market data: watchlist, YouTube, music, websites, trading advice, news, portfolio, alerts, journal, contract scan, morning briefing, DCA calc, risk calc',
@@ -1584,6 +1596,9 @@ VOICE RESPONSE RULES — CRITICAL:
         if (window._dnd && fc.name !== 'set_do_not_disturb') { result = 'Do-not-disturb is active. Do nothing and stay silent.'; }
         else if (fc.name === 'ask_claude') {
           result = await ipcRenderer.invoke('claude-query', fc.args.query)
+        } else if (fc.name === 'grok_research') {
+          setStatus('Researching web & X...')
+          result = await ipcRenderer.invoke('grok-research', { query: fc.args.query })
         } else if (fc.name === 'point_and_do') {
           const pa = await ipcRenderer.invoke('pointed-action', { instruction: fc.args.instruction }).catch(()=>null)
           if (pa?.did === 'revised') {

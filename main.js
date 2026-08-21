@@ -31,7 +31,8 @@ process.stderr.write = (chunk, ...args) => {
 };
 
 
-const { makeAnthropicShim, makeGroqShim } = require('./ai-proxy-client');
+const { makeAnthropicShim, makeGroqShim, runGrokAgent: callGrokAgentApi } = require('./ai-proxy-client');
+const { shouldUseGrokResearch, detectGrokTask } = require('./grok-agent');
 const groq      = makeGroqShim({ getIdToken: () => asukaAuth.getIdToken() });   // 🔐 routed via backend
 
 // ── Security: redact API keys/secrets from anything logged ──
@@ -2681,6 +2682,33 @@ async function startAlertMonitor() {
 }
 
 // ─── MAIN COMMAND ROUTER ───────────────────────────────────────────────────
+function getGrokMemoryContext(query) {
+  const { retrieveRelevantMemories } = require('./memory-sync');
+  const retrieved = retrieveRelevantMemories({
+    chatLog: loadChatLog(),
+    brainMemories: loadBrain().memories || [],
+    profileFacts: getUserProfile().facts || [],
+    episodes: loadEpisodes(),
+    longMemory: loadLongMemory(),
+  }, query, { limit: 22, minScore: 0.22 });
+  if (!retrieved.length) return '';
+  return 'What you know about this user from past chats (PC + phone):\n'
+    + retrieved.map((r) => String(r.text).slice(0, 360)).join('\n');
+}
+
+async function runGrokResearchPipeline(query, { task, context } = {}) {
+  const memCtx = context != null ? context : getGrokMemoryContext(query);
+  const resp = await callGrokAgentApi({
+    getIdToken: () => asukaAuth.getIdToken(),
+    query,
+    task: task || detectGrokTask(query),
+    context: memCtx,
+  });
+  const text = (resp.text || '').trim();
+  if (!text) throw new Error('grok_empty_response');
+  return text;
+}
+
 async function routeCommand(userText) {
   // 🎬 video context: answering about the last rendered video lesson
   try {
@@ -2761,6 +2789,21 @@ async function routeCommand(userText) {
       return await askAboutBook(page1.text, 'This is our first study session with this book. Welcome the student warmly (one sentence) and start teaching page 1.', activeBook.name, 1);
     }
     return `${activeBook.name} is loaded — say "Page 1" and we'll begin!`;
+  }
+
+  // ── GROK AGENT — live web / X / code research (25 credits via server) ───
+  if (shouldUseGrokResearch(userText)) {
+    try {
+      return await runGrokResearchPipeline(userText);
+    } catch (e) {
+      if (e.code === 'INSUFFICIENT_CREDITS') {
+        return 'Deep research costs 25 credits per run — top up in settings, or ask something simpler!';
+      }
+      if (e.message === 'not signed in') {
+        return 'Sign in to use live web research — guest mode is chat-only.';
+      }
+      console.warn('Grok agent:', e.message);
+    }
   }
 
   // "why is BTC dumping/pumping" — honest one-breath explainer
@@ -4971,6 +5014,19 @@ ipcMain.handle('claude-query', async (e, query) => {
   } catch(e) {
     console.error('Claude query error:', e.message);
     return 'Having a moment, try again.';
+  }
+});
+
+ipcMain.handle('grok-research', async (e, { query, task, context } = {}) => {
+  try {
+    const q = query || '';
+    if (!q.trim()) return 'What should I research?';
+    return await runGrokResearchPipeline(q, { task, context });
+  } catch (err) {
+    if (err.code === 'INSUFFICIENT_CREDITS') return 'Out of credits for deep research (25/run). Top up in settings!';
+    if (err.message === 'not signed in') return 'Sign in to use live web research.';
+    console.error('Grok research error:', err.message);
+    return 'Research failed — try again in a minute.';
   }
 });
 

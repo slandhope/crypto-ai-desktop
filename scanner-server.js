@@ -21,6 +21,7 @@ const https = require('https');                       // for voice proxy
 const credits = require('./credits');                // 🎟️ credit engine
 const { authRequired, authOptional, userIdOf } = require('./auth');  // 🔑 real login
 const scannerPrecision = require('./scanner-precision');
+const { runGrokAgent, detectGrokTask } = require('./grok-agent');
 const { runPrecisionScan, runPrecisionIndependentScalp, runPrecisionScalpForCoin } = require('./scanner-precision-run');
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
 // pull the real Claude key from the vault at boot (Secrets Manager → .env fallback)
@@ -3656,6 +3657,44 @@ api.post('/ai/gemini-token', authRequired, async (req, res) => {
   } catch (e) {
     await credits.refund(uid, spent.charged).catch(() => {});
     res.status(500).json({ error: 'gemini_token_failed', detail: e.message });
+  }
+});
+
+// ── 🔍 GROK AGENT — web / X / code research (metered) ──
+api.post('/ai/grok-agent', authRequired, async (req, res) => {
+  const uid = userIdOf(req);
+  const { query, task, context } = req.body || {};
+  if (!query || !String(query).trim()) return res.status(400).json({ error: 'no_query' });
+  const act = 'agent';
+  const spent = await credits.spend(uid, act, req.body?.units || 1);
+  if (!spent.ok) {
+    return res.status(402).json({
+      error: spent.reason,
+      message: spent.message,
+      balance: await credits.balance(uid),
+    });
+  }
+  try {
+    const apiKey = await getSecret('XAI_API_KEY').catch(() => process.env.XAI_API_KEY);
+    if (!apiKey) {
+      await credits.refund(uid, spent.charged).catch(() => {});
+      return res.status(503).json({ error: 'grok_unavailable', detail: 'XAI_API_KEY not configured' });
+    }
+    const result = await runGrokAgent({
+      apiKey,
+      query: String(query).trim(),
+      task: task || detectGrokTask(query),
+      context: context ? String(context).slice(0, 8000) : '',
+    });
+    res.json({
+      text: result.text,
+      citations: result.citations || [],
+      model: result.model,
+      balance: await credits.balance(uid),
+    });
+  } catch (e) {
+    await credits.refund(uid, spent.charged).catch(() => {});
+    res.status(500).json({ error: 'grok_agent_failed', detail: e.message });
   }
 });
 // ── 🎤 TRANSCRIBE PROXY — metered STT (Deepgram primary, OpenAI fallback) ──

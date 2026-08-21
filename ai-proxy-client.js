@@ -20,7 +20,8 @@ const { getApiBase } = require('./api-base');
 function apiBase() { return getApiBase(); }
 
 // low-level POST to the backend with the user's auth token
-function backendPost(path, body, getIdToken) {
+function backendPost(path, body, getIdToken, opts = {}) {
+  const timeoutMs = opts.timeoutMs || 60000;
   return new Promise(async (resolve, reject) => {
     let token = null;
     try { token = await getIdToken(); } catch (e) {}
@@ -32,7 +33,7 @@ function backendPost(path, body, getIdToken) {
       method: 'POST', hostname: url.hostname, port: url.port || (url.protocol === 'https:' ? 443 : 80),
       path: url.pathname,
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'Content-Length': Buffer.byteLength(data) },
-      timeout: 60000,
+      timeout: timeoutMs,
     }, (res) => {
       let out = '';
       res.on('data', c => out += c);
@@ -93,4 +94,9 @@ function makeGroqShim({ getIdToken }) {
   };
 }
 
-module.exports = { makeAnthropicShim, makeGroqShim, backendPost };
+// ── Grok agent: POST /ai/grok-agent → live web/X/code research ──
+function runGrokAgent({ getIdToken, query, task, context }) {
+  return backendPost('/ai/grok-agent', { query, task, context }, getIdToken, { timeoutMs: 130000 });
+}
+
+module.exports = { makeAnthropicShim, makeGroqShim, backendPost, runGrokAgent };
