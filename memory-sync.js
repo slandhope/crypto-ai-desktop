@@ -138,6 +138,41 @@ function retrieveRelevantMemories(sources, query, opts = {}) {
     .slice(0, limit);
 }
 
+/**
+ * Shared recall block — same RAG-lite retrieval for Claude AND Grok research.
+ * Tiered longMemory (fresh/medium/longterm/corefacts) is searched here; only
+ * top matches are injected to keep token cost down vs dumping full chat log.
+ */
+function buildMemoryRecallBlock(sources, query, opts = {}) {
+  const q = query || '';
+  const limit = opts.limit ?? (q ? 45 : 60);
+  const minScore = opts.minScore ?? (q ? 0.2 : 0);
+  const retrieved = retrieveRelevantMemories(sources, q, { limit, minScore });
+  const parts = [];
+  if (retrieved.length) {
+    parts.push('RECALL FROM FULL HISTORY:\n' + retrieved.map((r) => String(r.text).slice(0, 380)).join('\n'));
+  }
+  const lm = sources.longMemory;
+  if (lm?.corefacts?.length > 0) {
+    parts.push('CORE FACTS:\n' + lm.corefacts.slice(-8).map((f) => f.fact || f).join('\n'));
+  }
+  if (sources.patterns?.length > 0) {
+    parts.push('BEHAVIOR PATTERNS:\n' + sources.patterns.slice(-5).map((p) => `- ${p.pattern}`).join('\n'));
+  }
+  return parts.join('\n\n').trim();
+}
+
+function memorySourcesFrom(cfg) {
+  return {
+    chatLog: cfg.loadChatLog?.() || [],
+    brainMemories: cfg.loadBrainMemories?.() || [],
+    profileFacts: cfg.loadUserProfile?.()?.facts || [],
+    episodes: cfg.loadEpisodes?.() || [],
+    longMemory: cfg.loadLongMemory?.() || null,
+    patterns: cfg.loadPatterns?.() || [],
+  };
+}
+
 function buildSyncBundle(cfg) {
   const chat = cfg.loadChatLog?.() || [];
   return {
@@ -222,4 +257,5 @@ function mergeSyncBundles(local, cloud) {
 module.exports = {
   CHAT_CAP, SYNC_CHAT_WIRE_CAP, mergeChatLogs, mergeLongMemory, mergeEpisodes, buildSyncBundle, latestSyncTs,
   applySyncMerge, mergeSyncBundles, retrieveRelevantMemories, tokenize,
+  buildMemoryRecallBlock, memorySourcesFrom,
 };

@@ -2683,17 +2683,17 @@ async function startAlertMonitor() {
 
 // ─── MAIN COMMAND ROUTER ───────────────────────────────────────────────────
 function getGrokMemoryContext(query) {
-  const { retrieveRelevantMemories } = require('./memory-sync');
-  const retrieved = retrieveRelevantMemories({
+  const { buildMemoryRecallBlock } = require('./memory-sync');
+  const block = buildMemoryRecallBlock({
     chatLog: loadChatLog(),
     brainMemories: loadBrain().memories || [],
     profileFacts: getUserProfile().facts || [],
     episodes: loadEpisodes(),
     longMemory: loadLongMemory(),
-  }, query, { limit: 22, minScore: 0.22 });
-  if (!retrieved.length) return '';
-  return 'What you know about this user from past chats (PC + phone):\n'
-    + retrieved.map((r) => String(r.text).slice(0, 360)).join('\n');
+    patterns: loadPatterns(),
+  }, query);
+  if (!block) return '';
+  return 'What you know about this user from past chats (PC + phone):\n' + block;
 }
 
 async function runGrokResearchPipeline(query, { task, context } = {}) {
@@ -4643,35 +4643,21 @@ async function compressMemories() {
 
 // Build memory context for injection into prompts (Hakko-style: full recall + retrieval)
 function buildMemoryContext(query) {
-  const { retrieveRelevantMemories } = require('./memory-sync');
+  const { buildMemoryRecallBlock } = require('./memory-sync');
   const q = query || global._lastUserMessage || '';
-  const lm = loadLongMemory();
-  const patterns = loadPatterns();
   const chat = loadChatLog();
-  const profile = getUserProfile();
-  const brain = loadBrain();
-  const episodes = loadEpisodes();
 
   let ctx = '\n\n═══ YOUR MEMORY — you remember EVERYTHING from past chats (PC + phone). Use naturally, never say "you told me before". ═══';
 
-  const retrieved = retrieveRelevantMemories({
+  const recall = buildMemoryRecallBlock({
     chatLog: chat,
-    brainMemories: brain.memories || [],
-    profileFacts: profile.facts || [],
-    episodes,
-    longMemory: lm,
-  }, q, { limit: q ? 45 : 60, minScore: q ? 0.2 : 0 });
-
-  if (retrieved.length) {
-    ctx += '\n\nRECALL FROM FULL HISTORY:\n' + retrieved.map(r => String(r.text).slice(0, 380)).join('\n');
-  }
-
-  if (lm.corefacts?.length > 0) {
-    ctx += '\n\nCORE FACTS:\n' + lm.corefacts.slice(-8).map(f => f.fact || f).join('\n');
-  }
-  if (patterns?.length > 0) {
-    ctx += '\n\nBEHAVIOR PATTERNS:\n' + patterns.slice(-5).map(p => `- ${p.pattern}`).join('\n');
-  }
+    brainMemories: loadBrain().memories || [],
+    profileFacts: getUserProfile().facts || [],
+    episodes: loadEpisodes(),
+    longMemory: loadLongMemory(),
+    patterns: loadPatterns(),
+  }, q);
+  if (recall) ctx += '\n\n' + recall;
 
   const recent = chat.slice(-30);
   if (recent.length) {
