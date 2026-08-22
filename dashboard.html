@@ -4772,20 +4772,15 @@ function premiumLayerInit() {
     } catch(e){}
   }, 45000)
 
-  // ── Advisor leaderboard on Calls tab ──
-  async function renderLeaderboard() {
-    const el = document.getElementById('adv-leaderboard'); if (!el) return
-    const rows = await (window.ipcRenderer||window.asuka?.ipc).invoke('advisor-leaderboard').catch(()=>[])
-    if (!rows || rows.length < 2) { el.innerHTML = ''; return }
-    el.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.05em;margin-bottom:8px;">🏆 LEADERBOARD</div>' +
-      rows.map((r,i) => '<div style="display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:9px 13px;margin-bottom:5px;font-size:12px;">' +
-        '<span style="width:18px;color:var(--text3);">' + (i+1) + '</span>' +
-        '<span style="flex:1;font-weight:600;">' + r.name + (r.mode==='trial' ? ' <span style="font-size:10px;color:var(--text3);">🕶️ trial</span>' : '') + '</span>' +
-        '<span style="color:' + ((r.winRate??0) >= 50 ? 'var(--green)' : 'var(--red)') + ';">' + (r.winRate === null ? '—' : r.winRate + '%') + '</span>' +
-        '<span style="width:70px;text-align:right;color:' + (r.pnl >= 0 ? 'var(--green)' : 'var(--red)') + ';">' + (r.pnl >= 0 ? '+' : '') + '$' + r.pnl + '</span>' +
-        '<span style="color:var(--text3);font-size:10px;">' + r.trades + ' trades</span></div>').join('')
-  }
-  document.querySelector('.page-tab[data-page="7"]')?.addEventListener('click', () => setTimeout(renderLeaderboard, 400))
+  // Advisor leaderboard: dashboard-app.js owns #adv-leaderboard (renderAdvisorLeaderboard)
+  document.querySelector('.page-tab[data-page="7"]')?.addEventListener('click', () => {
+    setTimeout(() => {
+      try {
+        if (typeof window.renderAdvisorLeaderboard === 'function') window.renderAdvisorLeaderboard()
+        else if (typeof window.loadLeaderboard === 'function') window.loadLeaderboard()
+      } catch (e) {}
+    }, 400)
+  })
 
   // ── Shadow stats card on the Intelligence tab ──
   document.querySelector('[data-others-tab="intel"]')?.addEventListener('click', async () => {
@@ -4846,22 +4841,26 @@ function premiumLayerInit() {
   }
   loadRiskPill(); setInterval(loadRiskPill, 30000)
 
-  // ── Advisor leaderboard ──
+  // Fallback if dashboard-app hasn't loaded yet; prefer renderAdvisorLeaderboard
   window.loadLeaderboard = async function() {
+    if (typeof window.renderAdvisorLeaderboard === 'function') {
+      return window.renderAdvisorLeaderboard()
+    }
     const el = document.getElementById('adv-leaderboard'); if (!el) return
-    const rows = await (window.ipcRenderer||window.asuka?.ipc).invoke('advisor-leaderboard').catch(()=>[])
-    const withTrades = rows.filter(r => r.trades > 0)
-    if (!withTrades.length) { el.innerHTML = ''; return }
-    el.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.05em;margin-bottom:8px;">🏆 LEADERBOARD — REAL RESULTS</div>' +
-      withTrades.map((r,i) => `<div style="display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:10px 14px;margin-bottom:6px;">
+    const raw = await (window.ipcRenderer||window.asuka?.ipc).invoke('advisor-leaderboard').catch(()=>[])
+    const rows = (Array.isArray(raw) ? raw : []).filter(r => (r.trades||0) > 0 || (r.open||0) > 0)
+    if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0;">No executed advisor results yet.</div>'; return }
+    el.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.05em;margin-bottom:8px;">🏆 LEADERBOARD — EXECUTED RESULTS</div>' +
+      rows.map((r,i) => `<div style="display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:10px 14px;margin-bottom:6px;">
         <span style="font-size:14px;width:22px;">${['🥇','🥈','🥉'][i]||(i+1)+'.'}</span>
-        <span style="flex:1;font-weight:600;font-size:13px;">${r.name} ${r.mode==='trial'?'<span style="font-size:10px;color:var(--text3);">🕶️ trial</span>':''}</span>
-        <span style="font-size:11px;color:var(--text3);">${r.trades} trades${r.open?` · ${r.open} open`:''}</span>
-        <span style="font-size:12px;color:${(r.winRate||0)>=50?'var(--green)':'var(--red)'};">${r.winRate??'—'}%</span>
-        <span style="font-family:monospace;font-size:12px;font-weight:700;color:${r.pnl>=0?'var(--green)':'var(--red)'};">${r.pnl>=0?'+':''}$${Math.abs(r.pnl).toFixed(0)}</span>
+        <span style="flex:1;font-weight:600;font-size:13px;">${r.name}</span>
+        <span style="font-size:11px;color:var(--text3);">${r.trades||0} closed · ${r.open||0} open</span>
+        <span style="font-size:12px;color:${(r.winRate||0)>=50?'var(--green)':'var(--red)'};">${r.winRate==null?'—':r.winRate+'%'}</span>
+        <span style="font-family:monospace;font-size:12px;font-weight:700;color:${(r.pnl||0)>=0?'var(--green)':'var(--red)'};">${(r.pnl||0)>=0?'+':''}$${Math.abs(r.pnl||0).toFixed(0)}</span>
       </div>`).join('')
   }
-  loadLeaderboard(); setInterval(loadLeaderboard, 60000)
+  setTimeout(() => { try { window.loadLeaderboard() } catch (e) {} }, 1500)
+  setInterval(() => { try { window.loadLeaderboard() } catch (e) {} }, 60000)
 
   // ── App PIN lock (on launch, if a PIN is set) ──
   ;(async () => {

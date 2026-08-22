@@ -17936,13 +17936,21 @@ ipcMain.handle('advisor-leaderboard', () => {
     const advisors = loadAdvisors().advisors || [];
     const pd = loadPaperTrades(); const sh = loadTrialTrades();
     return advisors.map(a => {
+      const realOpen = (pd.trades||[]).filter(t => t.advisorId === a.id && t.status === 'open');
+      const trialOpen = (sh.trades||[]).filter(t => t.advisorId === a.id && t.status === 'open');
       const real = (pd.trades||[]).filter(t => t.advisorId === a.id && t.status !== 'open');
       const trial = (sh.trades||[]).filter(t => t.advisorId === a.id && t.status !== 'open');
       const all = real.concat(trial);
       const wins = all.filter(t => (t.pnl||0) > 0).length;
+      const losses = all.filter(t => (t.pnl||0) <= 0).length;
       const pnl = real.reduce((s,t) => s + (t.pnl||0), 0);
-      return { id: a.id, name: a.name, mode: a.followMode, trades: all.length, trialCount: trial.length,
-               winRate: all.length ? Math.round(wins/all.length*100) : null, pnl: +pnl.toFixed(2) };
+      return {
+        id: a.id, name: a.name, mode: a.followMode || a.mode || '—',
+        trades: all.length, open: realOpen.length + trialOpen.length, trialCount: trial.length,
+        wins, losses,
+        winRate: all.length ? Math.round(wins/all.length*100) : null,
+        pnl: +pnl.toFixed(2),
+      };
     }).sort((x,y) => (y.winRate??-1) - (x.winRate??-1));
   } catch(e) { return []; }
 });

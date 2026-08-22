@@ -3087,20 +3087,21 @@ document.getElementById('global-rules-btn')?.addEventListener('click', () => ope
 async function renderAdvisorLeaderboard() {
   const el = document.getElementById('adv-leaderboard')
   if (!el) return
-  const r = await ipcRenderer.invoke('advisor-leaderboard').catch(()=>({rows:[]}))
-  const rows = (r.rows||[]).filter(x => x.trades > 0 || x.open > 0)
-  if (!rows.length) { el.innerHTML = ''; return }
+  const raw = await ipcRenderer.invoke('advisor-leaderboard').catch(() => [])
+  const rows = (Array.isArray(raw) ? raw : (raw?.rows || [])).filter(x => (x.trades || 0) > 0 || (x.open || 0) > 0)
+  if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0;">No executed advisor results yet.</div>'; return }
   el.innerHTML = `<div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.05em;margin-bottom:8px;">🏆 LEADERBOARD — EXECUTED RESULTS</div>` +
     rows.map((x,i) => `<div style="display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:10px 14px;margin-bottom:6px;">
       <div style="font-size:14px;width:26px;">${['🥇','🥈','🥉'][i] || (i+1)+'.'}</div>
       <div style="flex:1;"><div style="font-size:13px;font-weight:600;">${x.name}</div>
-        <div style="font-size:10px;color:var(--text3);">${x.trades} closed · ${x.open} open · ${x.mode}</div></div>
+        <div style="font-size:10px;color:var(--text3);">${x.trades||0} closed · ${x.open||0} open · ${x.mode||'—'}</div></div>
       <div style="text-align:right;">
-        <div style="font-family:monospace;font-size:13px;font-weight:700;color:${x.pnl>=0?'var(--green)':'var(--red)'};">${x.pnl>=0?'+':''}$${Math.abs(x.pnl).toFixed(2)}</div>
-        <div style="font-size:10px;color:var(--text3);">${x.winRate===null?'—':x.winRate+'% win'} (${x.wins}W/${x.losses}L)</div>
+        <div style="font-family:monospace;font-size:13px;font-weight:700;color:${(x.pnl||0)>=0?'var(--green)':'var(--red)'};">${(x.pnl||0)>=0?'+':''}$${Math.abs(x.pnl||0).toFixed(2)}</div>
+        <div style="font-size:10px;color:var(--text3);">${x.winRate==null?'—':x.winRate+'% win'} (${x.wins||0}W/${x.losses||0}L)</div>
       </div>
     </div>`).join('')
 }
+window.renderAdvisorLeaderboard = renderAdvisorLeaderboard
 setInterval(renderAdvisorLeaderboard, 30000)
 setTimeout(renderAdvisorLeaderboard, 1500)
 function timeAgo(ts) {
@@ -5739,7 +5740,7 @@ ipcRenderer.on('paper-trade-closed', (e, trade) => {
   })
 })
 ipcRenderer.on('telegram-signal', (event, signal) => {
-  const tgTab = document.querySelector('.page-tab[data-page="2"]')
+  const tgTab = document.querySelector('.page-tab[data-page="7"]')
   if (tgTab?.classList.contains('active')) loadTelegramUI()
   // Add to intel feed
   addToIntelFeed({
@@ -6087,7 +6088,7 @@ async function buildCustomizeCharPicker() {
   if (!host) return
   const list = await ipcRenderer.invoke('list-characters').catch(() => null)
   const chars = (list || getCharCatalog() || []).filter(c => c.free && (c.hasModel || c.model))
-  const activeId = settings.characterId || settings.characterId || selectedCharId || 'asuka'
+  const activeId = settings.characterId || selectedCharId || 'asuka'
   host.innerHTML = chars.map(c => `
     <button type="button" class="customize-char-card${c.id === activeId ? ' active' : ''}" data-char-id="${c.id}"
       style="flex:0 0 auto;min-width:88px;padding:10px 12px;border-radius:14px;border:1px solid ${c.id===activeId?'var(--accent)':'var(--border)'};background:${c.id===activeId?'color-mix(in srgb, var(--accent) 14%, transparent)':'var(--bg2)'};cursor:pointer;text-align:center;">
@@ -6131,8 +6132,8 @@ async function refreshCustomizeForCharacter(ch) {
       const sweet = document.getElementById('her-sweet')
       const chatty = document.getElementById('her-chatty')
       if (tease && s.teasing != null) tease.value = s.teasing
-      if (sweet && (s.sweetness != null || s.sweetness != null)) sweet.value = s.sweetness ?? s.sweetness
-      if (chatty && (s.chattiness != null || s.chattiness != null)) chatty.value = s.chattiness ?? s.chattiness
+      if (sweet && s.sweetness != null) sweet.value = s.sweetness
+      if (chatty && s.chattiness != null) chatty.value = s.chattiness
     }
   } catch (e) {}
 }
@@ -6591,7 +6592,7 @@ async function loadWebsitePage() {
 
 function applyMode(mode) {
   const companion = (mode === 'companion')
-  const tgTab = document.querySelector('.page-tab[data-page="2"]')
+  const tgTab = document.querySelector('.page-tab[data-page="7"]')
   const tradingTab = document.querySelector('.page-tab[data-page="3"]')
   const webTab = document.getElementById('website-tab')
   if (tgTab) tgTab.style.display = companion ? 'none' : ''
