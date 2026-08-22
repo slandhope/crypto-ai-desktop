@@ -22,6 +22,7 @@ const credits = require('./credits');                // 🎟️ credit engine
 const { resolveChatRequest, anthropicChatParams } = require('./ai-chat-utils');
 const { authRequired, authOptional, userIdOf } = require('./auth');  // 🔑 real login
 const scannerPrecision = require('./scanner-precision');
+const tradingAutopilot = require('./trading-autopilot');
 const { runGrokAgent, detectGrokTask } = require('./grok-agent');
 const { runPrecisionScan, runPrecisionIndependentScalp, runPrecisionScalpForCoin } = require('./scanner-precision-run');
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
@@ -131,6 +132,7 @@ function loadSettings() {
   if (s.regimeMode === undefined) s.regimeMode = 'hard';
   if (s.confluenceMinTier === undefined) s.confluenceMinTier = 'STRONG';
   if (s.mirofishMode === undefined) s.mirofishMode = 'off';
+  Object.assign(s, tradingAutopilot.ensureAutopilotSettings(s));
   return s;
 }
 
@@ -2827,6 +2829,27 @@ function loadDailySignals() {
 
 // ── openPaperTrade ──
 async function openPaperTrade(signal) {
+  if (!signal || typeof signal !== 'object') return null;
+  const normDir = tradingAutopilot.normalizeDirection(signal.direction);
+  if (!normDir) {
+    console.log(`🚫 Trade blocked — invalid direction: ${signal.direction}`);
+    return null;
+  }
+  signal.direction = normDir;
+  try {
+    const dead = tradingAutopilot.deadSetupGate(
+      typeof loadExpectancy === 'function' ? loadExpectancy() : {},
+      signal
+    );
+    if (dead.block) {
+      console.log(`☠️ Dead setup blocked: ${signal.setupType} (${signal.coin}) — ${dead.detail}`);
+      return null;
+    }
+    if (dead.mult > 0 && dead.mult < 1) {
+      signal.sizeMultiplier = (signal.sizeMultiplier || 1) * dead.mult;
+    }
+  } catch (e) {}
+
   // ── Security: global daily loss limit (settings.dailyLossLimit, 0/unset = off) ──
   try {
     const s0 = loadSettings();
@@ -2986,8 +3009,14 @@ async function openPaperTrade(signal) {
     independentAxes: signal.independentAxes || null,
     precisionMeta: signal.precisionMeta || null,
     isScalp: !!signal.isScalp,
-    scalpExpiry: signal.scalpExpiry || null
+    scalpExpiry: signal.scalpExpiry || null,
+    autoBreakevenPct: signal.autoBreakevenPct || null,
+    trailingPct: signal.trailingPct || null
   };
+
+  if (settings.tradingAutopilot !== false) {
+    tradingAutopilot.armAutopilotExits(trade, settings);
+  }
 
   // Use Binance testnet if configured AND coin is supported
   if (isBinanceTestnet() && isSupportedOnTestnet(signal.coin)) {
@@ -3059,17 +3088,17 @@ async function checkPaperTrades() {
       if (trade.mfe === undefined || pnlPct > trade.mfe) { trade.mfe = parseFloat(pnlPct.toFixed(2)); trade._dirty = true; }
       if (trade.mae === undefined || pnlPct < trade.mae) { trade.mae = parseFloat(pnlPct.toFixed(2)); trade._dirty = true; }
 
-      // ── AUTO-BREAKEVEN: once the trade is up by the user's % , move SL to entry ──
-      // GMGN-style trailing stop: SL follows the high-water mark
-      if (trade.trailingPct) {
-        if (trade.direction === 'LONG') {
-          trade._high = Math.max(trade._high || trade.entry, price);
-          const trailSL = trade._high * (1 - trade.trailingPct / 100);
-          if (!trade.sl || trailSL > trade.sl) trade.sl = +trailSL.toFixed(8);
-        } else {
-          trade._low = Math.min(trade._low || trade.entry, price);
-          const trailSL = trade._low * (1 + trade.trailingPct / 100);
-          if (!trade.sl || trailSL < trade.sl) trade.sl = +trailSL.toFixed(8);
+      // ── AUTO-BREAKEVEN + trailing (fixed: was LONG/`price`/`sl` — never fired) ──
+      const dir = tradingAutopilot.normalizeDirection(trade.direction) || String(trade.direction || '').toLowerCase();
+      trade.direction = dir;
+      if (tradingAutopilot.applyPctTrailing(trade, currentPrice)) {
+        const pdTrail = loadPaperTrades();
+        const tTrail = pdTrail.trades.find(tr => tr.id === trade.id);
+        if (tTrail) {
+          tTrail.stopLoss = trade.stopLoss;
+          tTrail._high = trade._high;
+          tTrail._low = trade._low;
+          savePaperTrades(pdTrail);
         }
       }
       if (trade.autoBreakevenPct && !trade._breakevenDone && pnlPct >= trade.autoBreakevenPct) {
@@ -3077,6 +3106,8 @@ async function checkPaperTrades() {
         const t3 = pd3.trades.find(tr => tr.id === trade.id);
         if (t3) {
           t3.stopLoss = t3.entry; t3._breakevenDone = true; savePaperTrades(pd3);
+          trade.stopLoss = trade.entry;
+          trade._breakevenDone = true;
           sendTelegramNotification(`🛡️ ${trade.coin}: up ${trade.autoBreakevenPct}% — stop moved to breakeven (entry $${trade.entry}). Risk-free now.`).catch(()=>{});
           console.log(`🛡️ Auto-breakeven: ${trade.coin} SL → entry at +${trade.autoBreakevenPct}%`);
         }

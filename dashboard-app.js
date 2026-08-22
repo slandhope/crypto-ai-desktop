@@ -611,7 +611,7 @@ const pagesWrapper = document.getElementById('pages-wrapper')
 
 // Map page numbers to element IDs
 console.log('%cDASH BUILD 2026-07-22-fix4', 'color:#2dd4ff;font-weight:bold');
-const PAGE_IDS = { 1: 'page-1', 2: 'page-2', 3: 'trading-page', 5: 'page-5', 6: 'page-6', 7: 'page-7' }
+const PAGE_IDS = { 1: 'page-1', 2: 'page-7', 3: 'trading-page', 5: 'page-5', 6: 'page-6', 7: 'page-7', 8: 'page-8' }
 
 function navigateToPage(pageNum) {
   document.querySelectorAll('.overlay').forEach(o => o.classList.remove('open'))
@@ -636,19 +636,38 @@ function loadPageData(pageNum) {
     if (gen !== _navLoadGen) return
     const active = document.querySelector('.page-tab.active')
     if (!active || parseInt(active.dataset.page, 10) !== pageNum) return
-    if (pageNum === 2) loadTelegramUI().catch(() => {})
+    if (pageNum === 2 || pageNum === 7) {
+      const pane = document.querySelector('#callers-subnav .callers-tab.active')?.dataset?.callersTab || 'tg'
+      if (pane !== 'advisors') loadTelegramUI().catch(() => {})
+      if (pane === 'advisors' || pageNum === 7) {
+        try { loadAdvisorTab() } catch (e) {}
+        try { if (typeof renderLeaderboard === 'function') renderLeaderboard() } catch (e) {}
+      }
+    }
     if (pageNum === 3) { try { loadTradingUI() } catch(e) { console.error('loadTradingUI:', e) } }
     if (pageNum === 5) {
+      const moreTab = document.querySelector('#others-subnav .others-tab.active')?.dataset?.othersTab || 'memory'
+      if (typeof openMoreTab === 'function') openMoreTab(moreTab)
       if (typeof loadBooks === 'function') loadBooks().catch(() => {})
       if (typeof loadMemories === 'function') loadMemories().catch(() => {})
       if (typeof loadUsageStats === 'function') loadUsageStats().catch(() => {})
       restoreVoiceSettings().catch(() => {})
     }
+    if (pageNum === 8) {
+      if (typeof loadCustomizePage === 'function') loadCustomizePage().catch(() => {})
+      else {
+        try { window.loadHerTab?.() } catch (e) {}
+        try { window.loadWallpapers?.() } catch (e) {}
+        try { loadRules() } catch (e) {}
+        try { loadRoutinesUI() } catch (e) {}
+      }
+      restoreVoiceSettings().catch(() => {})
+    }
     if (pageNum === 6) loadWebsitePage().catch(() => {})
-    if (pageNum === 7) { try { loadAdvisorTab() } catch(e) {} }
   }, 50)
 }
 window.loadPageData = loadPageData
+window.loadTelegramUI = loadTelegramUI
 
 // Tab clicks handled by dashboard.html early boot — do not bind here
 
@@ -1686,17 +1705,52 @@ setInterval(loadUsageStats, 30000)
 
 // ── Analytics + Regime + Advanced Settings ───────────────────────────────
 
+function formatRegimeDetails(regime) {
+  if (!regime?.regime) return null
+  const colors = { bull: 'var(--green)', bear: 'var(--red)', sideways: '#fbbf24', unknown: 'var(--text2)' }
+  const color = colors[regime.regime] || colors.unknown
+  const title = `${String(regime.regime).toUpperCase()} MARKET (${regime.strength || '—'})`
+  const body = `Bias: ${String(regime.bias || '—').toUpperCase()} · 30d: ${regime.priceChange30d ?? '—'}% · RSI: ${regime.rsi != null ? Number(regime.rsi).toFixed(0) : '—'} · FG: ${regime.fgNum ?? '—'}`
+  return { color, title, body, htmlPanel: `
+      <div style="color:${color};font-weight:700;font-size:14px;">${title}</div>
+      <div style="margin-top:4px;color:var(--text2);font-size:11px;">Bias: ${String(regime.bias || '—').toUpperCase()} | 30d change: ${regime.priceChange30d ?? '—'}% | RSI: ${regime.rsi != null ? Number(regime.rsi).toFixed(0) : '—'} | FG: ${regime.fgNum ?? '—'}</div>` }
+}
+
+function applyRegimeToUi(regime) {
+  const fmt = formatRegimeDetails(regime)
+  const el = document.getElementById('regime-display')
+  const popTitle = document.getElementById('ov-regime-pop-title')
+  const popBody = document.getElementById('ov-regime-pop-body')
+  const regimeEl = document.getElementById('ov-regime')
+  if (!fmt) {
+    if (el) el.textContent = 'Unable to detect'
+    if (popBody) popBody.textContent = 'Unable to detect market regime'
+    return
+  }
+  if (el) el.innerHTML = fmt.htmlPanel
+  if (popTitle) {
+    popTitle.textContent = fmt.title
+    popTitle.style.color = fmt.color
+  }
+  if (popBody) popBody.textContent = fmt.body
+  if (regimeEl && regime?.regime) {
+    const r = String(regime.regime).toLowerCase()
+    regimeEl.textContent = r === 'bull' ? '🐂 Bull' : r === 'bear' ? '🐻 Bear' : '〰️ Side'
+    regimeEl.className = 'ov-chip-val ' + (r === 'bull' ? 'regime-bull' : r === 'bear' ? 'regime-bear' : 'regime-side')
+  }
+}
+
 async function loadMarketRegime() {
   const el = document.getElementById('regime-display')
-  if (!el) return
+  if (!el && !document.getElementById('ov-regime')) return
   try {
     const regime = await ipcTimeout('get-market-regime', undefined, 8000)
-    if (!regime) { el.textContent = 'Unable to detect'; return }
-    const colors = { bull: 'var(--green)', bear: 'var(--red)', sideways: '#fbbf24', unknown: 'var(--text2)' }
-    el.innerHTML = `
-      <div style="color:${colors[regime.regime]};font-weight:700;font-size:14px;">${regime.regime?.toUpperCase()} MARKET (${regime.strength})</div>
-      <div style="margin-top:4px;color:var(--text2);font-size:11px;">Bias: ${regime.bias?.toUpperCase()} | 30d change: ${regime.priceChange30d}% | RSI: ${regime.rsi?.toFixed(0)} | FG: ${regime.fgNum}</div>`
-  } catch(e) { el.textContent = 'Error loading regime' }
+    applyRegimeToUi(regime)
+  } catch(e) {
+    if (el) el.textContent = 'Error loading regime'
+    const popBody = document.getElementById('ov-regime-pop-body')
+    if (popBody) popBody.textContent = 'Error loading regime'
+  }
 }
 
 async function loadTradeAnalytics() {
@@ -2047,6 +2101,7 @@ document.getElementById('scalp-toggle')?.addEventListener('click', function() {
   this.classList.toggle('on')
   const on = this.classList.contains('on')
   ipcRenderer.send('set-setting', 'scalpTrading', on)
+  try { refreshBotStatusCards() } catch(e) {}
   document.getElementById('scalp-settings-panel').style.display = on ? 'block' : 'none'
   if (on) {
     ipcRenderer.send('trigger-scalp-scan') // Run immediately
@@ -2320,6 +2375,7 @@ setupDailyBtnGroup('.daily-max-btn', 'dailyMaxTrades')
 document.getElementById('daily-trade-toggle')?.addEventListener('click', function() {
   this.classList.toggle('on')
   ipcRenderer.send('set-daily-setting', 'dailyTradeEnabled', this.classList.contains('on'))
+  try { refreshBotStatusCards() } catch(e) {}
 })
 
 document.getElementById('daily-power-only-toggle')?.addEventListener('click', function() {
@@ -2410,15 +2466,14 @@ async function restoreDailySettings(settings) {
 }
 
 
-// ── Trading Sub-tabs ──────────────────────────────────────────────────────
-document.querySelectorAll('.trade-tab').forEach(tab => {
+// ── Trading Sub-tabs (scoped to Trade page only) ──────────────────────────
+document.querySelectorAll('#trade-subnav .trade-tab').forEach(tab => {
   tab.addEventListener('click', function() {
-    document.querySelectorAll('.trade-tab').forEach(t => t.classList.remove('active'))
-    document.querySelectorAll('.trade-tab-content').forEach(c => c.classList.remove('active'))
+    document.querySelectorAll('#trade-subnav .trade-tab').forEach(t => t.classList.remove('active'))
+    document.querySelectorAll('#trading-page .trade-tab-content').forEach(c => c.classList.remove('active'))
     this.classList.add('active')
     const tabId = 'tab-' + this.dataset.tab
     document.getElementById(tabId)?.classList.add('active')
-    // Load data for tab
     if (this.dataset.tab === 'overview') loadOverviewTab()
     if (this.dataset.tab === 'daytrade') loadDayTradeTab()
     if (this.dataset.tab === 'maintrade') loadMainTradeTab()
@@ -2427,11 +2482,48 @@ document.querySelectorAll('.trade-tab').forEach(tab => {
   })
 })
 
+function gotoTradeTab(tabName) {
+  const btn = document.querySelector(`#trade-subnav .trade-tab[data-tab="${tabName}"]`)
+  if (btn) btn.click()
+}
+
+function refreshBotStatusCards() {
+  const onOff = (el) => {
+    const on = !!el?.classList.contains('on')
+    return { on, label: on ? 'ON' : 'OFF' }
+  }
+  const main = onOff(document.getElementById('auto-trade-toggle'))
+  const day = onOff(document.getElementById('daily-trade-toggle'))
+  const scalp = onOff(document.getElementById('scalp-toggle'))
+  const set = (id, state) => {
+    const el = document.getElementById(id)
+    if (!el) return
+    el.textContent = state.label
+    el.classList.toggle('on', state.on)
+    el.classList.toggle('off', !state.on)
+  }
+  set('bot-st-main', main)
+  set('bot-st-day', day)
+  set('bot-st-scalp', scalp)
+}
+
+document.getElementById('bot-status-grid')?.addEventListener('click', (e) => {
+  const card = e.target.closest('.bot-status-card')
+  if (!card) return
+  if (card.dataset.goto) {
+    document.querySelector('.page-tab[data-page="3"]')?.click()
+    setTimeout(() => gotoTradeTab(card.dataset.goto), 50)
+  } else if (card.dataset.gotoPage) {
+    document.querySelector(`.page-tab[data-page="${card.dataset.gotoPage}"]`)?.click()
+  }
+})
+
 function loadOverviewTab() {
   loadOpenPositions()
   loadMarketRegime()
   loadTradeAnalytics()
   loadDailySignals()
+  refreshBotStatusCards()
 }
 
 function loadDayTradeTab() {
@@ -2691,29 +2783,34 @@ document.getElementById('dev-change-pwd-settings')?.addEventListener('click', as
   setEl('dev-new-pwd-settings','value','')
 })
 
-// ── Others Page Sub-tabs ─────────────────────────────────────────────────
-document.querySelectorAll('[data-others-tab]').forEach(tab => {
+// ── More page sub-tabs ───────────────────────────────────────────────────
+function openMoreTab(name) {
+  document.querySelectorAll('#others-subnav .others-tab').forEach(t => t.classList.toggle('active', t.dataset.othersTab === name))
+  document.querySelectorAll('#page-5 .others-tab-content').forEach(c => c.classList.toggle('active', c.id === 'others-' + name))
+  if (name === 'study') loadStudyLibrary()
+  if (name === 'life') { try { window.loadQuests?.() } catch (e) {} }
+  if (name === 'memory') loadMemories()
+  if (name === 'intel') loadIntel()
+}
+document.querySelectorAll('#others-subnav .others-tab').forEach(tab => {
   tab.addEventListener('click', function() {
-    document.querySelectorAll('[data-others-tab]').forEach(t => t.classList.remove('active'))
-    document.querySelectorAll('.others-tab-content').forEach(c => c.classList.remove('active'))
-    this.classList.add('active')
-    const tabEl = document.getElementById('others-' + this.dataset.othersTab)
-    if (tabEl) tabEl.classList.add('active')
-    // Load content for tab
-    if (this.dataset.othersTab === 'study') loadStudyLibrary()
-    if (this.dataset.othersTab === 'her') loadHerTab()
-    if (this.dataset.othersTab === 'life') { try { loadWallpapers() } catch(e){} }
-    if (this.dataset.othersTab === 'memory') loadMemories()
-    if (this.dataset.othersTab === 'intel') loadIntel()
+    openMoreTab(this.dataset.othersTab)
   })
 })
 
-// Keep Study as the default Others tab (do not rely on DOM order)
-document.querySelectorAll('.others-tab-content').forEach((el) => {
-  el.classList.toggle('active', el.id === 'others-study')
+// More defaults to Memory — Customize is its own top tab
+openMoreTab('memory')
+
+// Shortcuts into character look / select overlays
+document.getElementById('more-open-look')?.addEventListener('click', () => {
+  document.getElementById('edit-page')?.classList.remove('open')
+  document.getElementById('customize-page')?.classList.add('open')
+  try { initCustWaifu(); loadCustSettings() } catch (e) {}
 })
-document.querySelectorAll('[data-others-tab]').forEach((t) => {
-  t.classList.toggle('active', t.dataset.othersTab === 'study')
+document.getElementById('more-open-character')?.addEventListener('click', () => {
+  document.getElementById('customize-page')?.classList.remove('open')
+  document.getElementById('edit-page')?.classList.add('open')
+  try { buildCharRow(); initEditWaifu() } catch (e) {}
 })
 
 
@@ -2854,6 +2951,19 @@ async function loadPrecisionScoreboard() {
     <div class="sb-metric"><div class="sb-metric-label">Setups tracked</div><div class="sb-metric-val accent">${(s.expectancy || []).length}</div><div class="sb-metric-sub">expectancy rows</div></div>
   </div>`
 
+  const night = s.nightly
+  if (night?.at) {
+    const p = night.paper || {}
+    const when = new Date(night.at).toLocaleString()
+    html += `<div class="sb-section"><div class="sb-section-title"><span>Last nightly report</span><button id="precision-run-nightly" class="as-btn as-btn-data" style="font-size:10px;padding:4px 10px;">Run now</button></div>
+      <div class="sb-row"><span class="sb-row-k">${when}</span><span class="sb-row-v">${p.wins || 0}W/${p.losses || 0}L · ${p.winRate != null ? p.winRate + '%' : '—'} · P&L ${Number(p.totalPnl || 0) >= 0 ? '+' : ''}$${Number(p.totalPnl || 0).toFixed(2)}</span></div>
+      <div class="sb-empty" style="padding:8px 12px;">Telegram every day at 23:55 UTC. Daily RSI paper bot stays enabled.</div>
+    </div>`
+  } else {
+    html += `<div class="sb-section"><div class="sb-section-title"><span>Nightly report</span><button id="precision-run-nightly" class="as-btn as-btn-data" style="font-size:10px;padding:4px 10px;">Run now</button></div>
+      <div class="sb-empty" style="padding:12px;">No report yet — scheduled 23:55 UTC, or tap Run now.</div></div>`
+  }
+
   const ab = s.featureAB || {}
   html += '<div class="sb-section"><div class="sb-section-title"><span>Gate quality</span></div>'
   const abEntries = Object.entries(ab)
@@ -2877,6 +2987,26 @@ async function loadPrecisionScoreboard() {
   }
   html += '</div>'
 
+  const setups = (s.bySetup || []).slice(0, 6)
+  if (setups.length) {
+    html += '<div class="sb-section"><div class="sb-section-title"><span>By setup (shadows)</span></div>'
+    for (const b of setups) {
+      html += `<div class="sb-row"><span class="sb-row-k">${b.key}</span><span class="sb-row-v">${b.winRate ?? '—'}% · n=${b.n}</span></div>`
+    }
+    html += '</div>'
+  }
+
+  const paper = (s.paperBySetup || []).slice(0, 6)
+  if (paper.length) {
+    html += '<div class="sb-section"><div class="sb-section-title"><span>Paper by setup</span></div>'
+    for (const b of paper) {
+      const pnl = Number(b.pnl || 0)
+      const eClass = pnl > 0 ? 'color:var(--green)' : pnl < 0 ? 'color:var(--red)' : ''
+      html += `<div class="sb-row"><span class="sb-row-k">${b.key}</span><span class="sb-row-v" style="${eClass}">${b.winRate ?? '—'}% · $${pnl.toFixed(2)} · n=${b.n}</span></div>`
+    }
+    html += '</div>'
+  }
+
   const tiers = (s.byTier || []).slice(0, 5)
   const regimes = (s.byRegime || []).slice(0, 5)
   if (tiers.length || regimes.length) {
@@ -2896,11 +3026,18 @@ async function loadPrecisionScoreboard() {
   }
 
   el.innerHTML = html
+  document.getElementById('precision-run-nightly')?.addEventListener('click', async () => {
+    const btn = document.getElementById('precision-run-nightly')
+    if (btn) { btn.disabled = true; btn.textContent = 'Running…' }
+    await ipcRenderer.invoke('run-precision-nightly-now').catch(() => null)
+    await loadPrecisionScoreboard()
+  })
 }
 document.getElementById('precision-refresh')?.addEventListener('click', () => loadPrecisionScoreboard())
 document.querySelector('[data-others-tab="intel"]')?.addEventListener('click', () => {
   setTimeout(() => { loadPrecisionScoreboard(); loadBrainStats(); }, 300)
 })
+
 async function loadWhatSheKnows() {
   const k = await ipcRenderer.invoke('get-what-she-knows').catch(()=>null)
   const el = document.getElementById('knows-content')
@@ -3417,7 +3554,10 @@ document.querySelectorAll('.speed-btn').forEach(btn => {
   btn.addEventListener('click', function() {
     document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'))
     this.classList.add('active')
-    ipcRenderer.send('set-setting', 'voiceSpeed', parseFloat(this.dataset.speed))
+    const speed = parseFloat(this.dataset.speed)
+    ipcRenderer.send('set-setting', 'voiceSpeed', speed)
+    if (memory) memory.voiceSpeed = speed
+    ipcRenderer.invoke('patch-character-profile', { voiceSpeed: speed }).catch(() => {})
   })
 })
 
@@ -4392,15 +4532,9 @@ ipcRenderer.invoke('get-sponsored').then(c => {
 // ── Overview Quick-Glance Strip ───────────────────────────────────────────
 async function updateOverviewStrip() {
   try {
-    // Regime
+    // Regime (chip + popover + panel)
     const regime = await ipcRenderer.invoke('get-market-regime').catch(() => null)
-    const regimeEl = document.getElementById('ov-regime')
-    if(!regimeEl) return
-    if (regimeEl && regime?.regime) {
-      const r = regime.regime.toLowerCase()
-      regimeEl.textContent = r === 'bull' ? '🐂 Bull' : r === 'bear' ? '🐻 Bear' : '〰️ Side'
-      regimeEl.className = 'ov-chip-val ' + (r === 'bull' ? 'regime-bull' : r === 'bear' ? 'regime-bear' : 'regime-side')
-    }
+    if (regime?.regime) applyRegimeToUi(regime)
 
     // Trades data
     const trades = await ipcRenderer.invoke('get-paper-trades').catch(() => null)
@@ -4436,6 +4570,40 @@ async function updateOverviewStrip() {
 }
 setInterval(updateOverviewStrip, 15000)
 setTimeout(updateOverviewStrip, 1500)
+
+// Regime chip: hover shows details; click pins / unpins; scroll to full panel on second intent
+;(function wireRegimeChip() {
+  const chip = document.getElementById('ov-regime-chip')
+  if (!chip) return
+  const setOpen = (on) => {
+    chip.classList.toggle('is-open', on)
+    chip.setAttribute('aria-expanded', on ? 'true' : 'false')
+  }
+  chip.addEventListener('click', (e) => {
+    e.stopPropagation()
+    const pinning = !chip.classList.contains('is-open')
+    setOpen(pinning)
+    if (pinning) {
+      loadMarketRegime()
+      const section = document.getElementById('market-regime-section')
+      // Soft highlight the full panel so users notice more detail below
+      if (section) {
+        section.style.outline = '1px solid rgba(59,130,246,0.35)'
+        section.style.outlineOffset = '2px'
+        setTimeout(() => { section.style.outline = ''; section.style.outlineOffset = '' }, 1600)
+      }
+    }
+  })
+  chip.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      chip.click()
+    }
+  })
+  document.addEventListener('click', (e) => {
+    if (!chip.contains(e.target)) setOpen(false)
+  })
+})()
 
 // ── What-If Simulator ─────────────────────────────────────────────────────
 document.getElementById('wi-calc-btn')?.addEventListener('click', async () => {
@@ -4977,6 +5145,7 @@ setInterval(() => {
 document.getElementById('auto-trade-toggle')?.addEventListener('click', function() {
   this.classList.toggle('on')
   ipcRenderer.send('set-setting', 'autoPaperTrade', this.classList.contains('on'))
+  try { refreshBotStatusCards() } catch(e) {}
 })
 
 // Scan interval buttons
@@ -5910,7 +6079,76 @@ ipcRenderer.on('character-changed', (_e, ch) => {
   setEl('waifu-name','textContent', ch.name)
   setEl('edit-char-name','textContent', ch.name)
   reloadDashboardWaifuFrame(ch)
+  try { refreshCustomizeForCharacter(ch) } catch (e) {}
 })
+
+async function buildCustomizeCharPicker() {
+  const host = document.getElementById('customize-char-picker')
+  if (!host) return
+  const list = await ipcRenderer.invoke('list-characters').catch(() => null)
+  const chars = (list || getCharCatalog() || []).filter(c => c.free && (c.hasModel || c.model))
+  const activeId = settings.characterId || settings.characterId || selectedCharId || 'asuka'
+  host.innerHTML = chars.map(c => `
+    <button type="button" class="customize-char-card${c.id === activeId ? ' active' : ''}" data-char-id="${c.id}"
+      style="flex:0 0 auto;min-width:88px;padding:10px 12px;border-radius:14px;border:1px solid ${c.id===activeId?'var(--accent)':'var(--border)'};background:${c.id===activeId?'color-mix(in srgb, var(--accent) 14%, transparent)':'var(--bg2)'};cursor:pointer;text-align:center;">
+      <div style="font-size:22px;line-height:1;">${c.emoji || '✨'}</div>
+      <div style="font-size:11px;font-weight:700;margin-top:6px;">${c.name}</div>
+      <div style="font-size:9px;color:var(--text3);margin-top:2px;">${c.id===activeId?'Active':'Tap to switch'}</div>
+    </button>`).join('')
+  host.querySelectorAll('[data-char-id]').forEach(btn => {
+    btn.onclick = async () => {
+      const id = btn.dataset.charId
+      if (!id || id === activeId) return
+      btn.style.opacity = '0.6'
+      const ch = chars.find(x => x.id === id) || { id, name: id }
+      await applySelectedCharacter(ch)
+      await refreshCustomizeForCharacter(ch)
+      buildCustomizeCharPicker()
+    }
+  })
+  setEl('customize-active-label', 'textContent', (settings.characterName || chars.find(c=>c.id===activeId)?.name || '—'))
+}
+
+async function refreshCustomizeForCharacter(ch) {
+  const name = ch?.name || settings.characterName || 'Asuka'
+  setEl('customize-active-label', 'textContent', name)
+  setEl('customize-personality-title', 'textContent', `💬 ${name}'s personality`)
+  setEl('customize-wallpaper-title', 'textContent', `🖼️ Wallpapers (behind ${name})`)
+  // Reload memory after profile swap so toggles match this girl
+  try {
+    const mem = await ipcRenderer.invoke('get-memory').catch(() => null)
+    if (mem) {
+      memory = { ...memory, ...mem }
+      document.querySelectorAll('[data-personality]').forEach(c =>
+        c.classList.toggle('active', c.dataset.personality === (memory.personality || 'chill')))
+      document.querySelectorAll('.speed-btn').forEach(b =>
+        b.classList.toggle('active', parseFloat(b.dataset.speed) === (memory.voiceSpeed || 1)))
+    }
+    const prof = await ipcRenderer.invoke('get-character-profile').catch(() => null)
+    if (prof?.profile?.sliders) {
+      const s = prof.profile.sliders
+      const tease = document.getElementById('her-teasing')
+      const sweet = document.getElementById('her-sweet')
+      const chatty = document.getElementById('her-chatty')
+      if (tease && s.teasing != null) tease.value = s.teasing
+      if (sweet && (s.sweetness != null || s.sweetness != null)) sweet.value = s.sweetness ?? s.sweetness
+      if (chatty && (s.chattiness != null || s.chattiness != null)) chatty.value = s.chattiness ?? s.chattiness
+    }
+  } catch (e) {}
+}
+
+async function loadCustomizePage() {
+  await buildCustomizeCharPicker()
+  await refreshCustomizeForCharacter({
+    id: settings.characterId || 'asuka',
+    name: settings.characterName || 'Asuka',
+  })
+  try { window.loadHerTab?.() } catch (e) {}
+  try { window.loadWallpapers?.() } catch (e) {}
+  try { loadRules() } catch (e) {}
+  try { loadRoutinesUI() } catch (e) {}
+}
+window.loadCustomizePage = loadCustomizePage
 
 async function initEditWaifu() {
   try {
@@ -5960,7 +6198,17 @@ async function loadCustSettings() {
   document.querySelectorAll('[data-ai]').forEach(c=>c.classList.toggle('active',c.dataset.ai===(settings.aiMode||'balanced')))
 }
 
-document.querySelectorAll('[data-personality]').forEach(c=>c.addEventListener('click',()=>{ document.querySelectorAll('[data-personality]').forEach(x=>x.classList.remove('active')); c.classList.add('active') }))
+document.querySelectorAll('[data-personality]').forEach(c=>c.addEventListener('click', async ()=>{
+  document.querySelectorAll('[data-personality]').forEach(x=>x.classList.remove('active'))
+  c.classList.add('active')
+  // Persist for the active character only
+  try {
+    memory.personality = c.dataset.personality || 'chill'
+    await ipcRenderer.invoke('save-memory', memory)
+    ipcRenderer.send('set-setting', 'personality', memory.personality)
+    await ipcRenderer.invoke('patch-character-profile', { personality: memory.personality }).catch(() => {})
+  } catch (e) {}
+}))
 document.querySelectorAll('[data-level]').forEach(c=>c.addEventListener('click',()=>{ document.querySelectorAll('[data-level]').forEach(x=>x.classList.remove('active')); c.classList.add('active') }))
 document.querySelectorAll('[data-ai]').forEach(c=>c.addEventListener('click',()=>{ document.querySelectorAll('[data-ai]').forEach(x=>x.classList.remove('active')); c.classList.add('active') }))
 document.querySelectorAll('.swatch').forEach(s=>s.addEventListener('click',()=>{ document.querySelectorAll('.swatch').forEach(x=>x.classList.remove('active')); s.classList.add('active') }))
@@ -5983,9 +6231,17 @@ document.getElementById('cust-save')?.addEventListener('click',async()=>{
   memory.wakeName=wake; memory.voiceSpeed=speed; memory.personality=personality; memory.learningLevel=level
   await ipcRenderer.invoke('save-settings',settings)
   await ipcRenderer.invoke('save-memory',memory)
+  await ipcRenderer.invoke('patch-character-profile', {
+    displayName: name,
+    wakeName: wake,
+    voiceSpeed: speed,
+    personality,
+    learningLevel: level,
+  }).catch(()=>{})
   document.getElementById('customize-page').classList.remove('open')
   setEl('waifu-name','textContent',name)
   setEl('cust-name','textContent',name)
+  try { buildCustomizeCharPicker() } catch (e) {}
   const msg=`Got it! You can call me ${name} now.`
   setEl('waifu-speech','textContent',msg)
   await playAudio(await ipcRenderer.invoke('get-voice',msg))

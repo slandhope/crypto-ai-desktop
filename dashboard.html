@@ -398,11 +398,11 @@
     padding: 16px;
   }
 
-  /* Trading sub-tabs */
+    /* Trading + More sub-tabs */
   .trade-tab {
-    flex: 1;
-    padding: 10px 4px;
-    font-size: 11px;
+    flex: 0 0 auto;
+    padding: 10px 12px;
+    font-size: 12px;
     font-weight: 600;
     background: none;
     border: none;
@@ -410,24 +410,69 @@
     color: var(--text2);
     cursor: pointer;
     transition: all 0.15s;
+    white-space: nowrap;
   }
   .trade-tab.active {
     color: var(--accent);
     border-bottom-color: var(--accent);
+  }
+  .trade-tab-adv { opacity: 0.72; font-weight: 500; }
+  .trade-nav-sep {
+    width: 1px;
+    align-self: stretch;
+    margin: 8px 6px;
+    background: var(--border);
+    flex: 0 0 auto;
   }
   .trade-tab-content {
     display: none;
     overflow-y: auto;
     flex: 1;
   }
-  .trade-tab-content.active {
-    display: block;
+  .trade-tab-content.active { display: block; }
+  .others-tab {
+    flex: 0 0 auto;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text2);
+    cursor: pointer;
+    white-space: nowrap;
   }
-  .others-tab-content {
-    display: none;
+  .others-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
   }
-  .others-tab-content.active {
-    display: block;
+  .others-tab-content { display: none; }
+  .others-tab-content.active { display: block; }
+  .bot-status-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .bot-status-card {
+    text-align: left;
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--bg2, rgba(255,255,255,0.6));
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+  }
+  .bot-status-card:hover { border-color: var(--accent); }
+  .bot-status-name { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+  .bot-status-state { font-size: 11px; font-weight: 600; margin-bottom: 2px; }
+  .bot-status-state.on { color: #10b981; }
+  .bot-status-state.off { color: var(--text2); }
+  .bot-status-hint { font-size: 10px; color: var(--text2); }
+  .ux-guide {
+    border: 1px solid rgba(124,58,237,0.2);
+    background: linear-gradient(135deg, rgba(124,58,237,0.06), rgba(0,212,255,0.04));
+    border-radius: 14px;
   }
   #trading-page {
     overflow: hidden;
@@ -696,6 +741,7 @@
   .sb-section { margin-top: 14px; }
   .sb-section-title {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
     font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
     color: var(--text2); margin-bottom: 8px;
   }
@@ -853,6 +899,33 @@
   .ov-chip:hover { border-color: rgba(59,130,246,0.3); transform: translateY(-1px); }
   .ov-chip-label { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 3px; }
   .ov-chip-val { font-size: 14px; font-weight: 800; }
+  .ov-chip-popwrap { position: relative; }
+  .ov-chip-popwrap { cursor: pointer; }
+  .ov-chip-popwrap:hover,
+  .ov-chip-popwrap.is-open { border-color: rgba(59,130,246,0.45); }
+  .ov-regime-pop {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: auto;
+    top: calc(100% + 8px);
+    z-index: 40;
+    min-width: 220px;
+    width: max(220px, 100%);
+    padding: 12px 14px;
+    text-align: left;
+    background: rgba(255,255,255,0.98);
+    border: 1px solid rgba(148,163,184,0.28);
+    border-radius: 14px;
+    box-shadow: 0 12px 28px rgba(80,100,140,0.16);
+    backdrop-filter: blur(14px);
+  }
+  .ov-chip-popwrap:hover .ov-regime-pop,
+  .ov-chip-popwrap:focus-within .ov-regime-pop,
+  .ov-chip-popwrap.is-open .ov-regime-pop { display: block; }
+  .ov-regime-pop-title { font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+  .ov-regime-pop-row { font-size: 11px; color: var(--text2); line-height: 1.55; }
+  .ov-regime-pop-hint { font-size: 10px; color: var(--text3); margin-top: 8px; }
   .regime-bull { color: var(--green); text-shadow: none; }
   .regime-bear { color: var(--red); text-shadow: none; }
   .regime-side { color: var(--gold); text-shadow: none; }
@@ -1784,7 +1857,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
 (function() {
   function setEl(id, prop, val) { var e = document.getElementById(id); if (e) e[prop] = val; return e; }
   window.setEl = setEl;
-  var PAGE_IDS = { 1:'page-1', 2:'page-2', 3:'trading-page', 5:'page-5', 6:'page-6', 7:'page-7' };
+  var PAGE_IDS = { 1:'page-1', 2:'page-7', 3:'trading-page', 5:'page-5', 6:'page-6', 7:'page-7', 8:'page-8' };
   function nav(n) {
     document.getElementById('settings-page')?.classList.remove('open');
     document.getElementById('edit-page')?.classList.remove('open');
@@ -2041,12 +2114,12 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
   </div>
   <div id="page-tabs">
     <div id="tab-glider" aria-hidden="true"></div>
-    <div class="page-tab active" data-page="1">Dashboard</div>
-    <div class="page-tab" data-page="2">Telegram</div>
-    <div class="page-tab" data-page="3">Trading</div>
+    <div class="page-tab active" data-page="1">Home</div>
+    <div class="page-tab" data-page="3">Trade</div>
     <div class="page-tab" data-page="6" id="website-tab" style="display:none;">Website</div>
-    <div class="page-tab" data-page="7">Calls</div>
-    <div class="page-tab" data-page="5">Others</div>
+    <div class="page-tab" data-page="7">Callers</div>
+    <div class="page-tab" data-page="8">Customize</div>
+    <div class="page-tab" data-page="5">More</div>
     <!-- Dev tab removed — access via Settings -->
   </div>
   <div id="topbar-right">
@@ -2158,619 +2231,68 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
 </div>
 
 <!-- PAGE 2 — TELEGRAM INTELLIGENCE -->
-<div class="page" id="page-2">
-<div id="page-telegram">
-
-  <!-- Connect Section -->
-  <div class="tg-section" id="tg-connect-section">
-    <div class="tg-section-title">📱 Telegram Connection</div>
-    <div id="tg-disconnected">
-      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Connect your Telegram to monitor groups and track signal callers automatically.</p>
-      <input class="tg-input" id="tg-phone" placeholder="+971 50 123 4567" type="tel">
-      <button class="tg-connect-btn" id="tg-connect-btn">Connect Telegram</button>
-    </div>
-    <div id="tg-code-section" style="display:none">
-      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Enter the code sent to your Telegram:</p>
-      <input class="tg-input" id="tg-code" placeholder="12345" type="number">
-      <button class="tg-connect-btn" id="tg-verify-btn">Verify Code</button>
-    </div>
-    <div id="tg-connected-section" style="display:none">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-        <div style="width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)"></div>
-        <span style="font-size:14px;font-weight:600;color:var(--green)">Connected</span>
-      </div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">
-        Notification contact: <span id="tg-notify-contact" style="color:var(--accent)">You (Saved Messages)</span>
-        <span id="tg-change-contact" style="color:var(--text2);cursor:pointer;text-decoration:underline;margin-left:8px;">Change</span>
-        <div id="tg-contact-form" style="display:none;margin-top:8px;display:flex;gap:8px;align-items:center;">
-          <input class="tg-input" id="tg-contact-input" placeholder="@username or phone" style="margin:0;flex:1;">
-          <button class="tg-add-btn" id="tg-save-contact-btn">Save</button>
-        </div>
-      </div>
-      <button class="tg-connect-btn" style="background:rgba(255,69,58,0.2);color:var(--red)" id="tg-disconnect-btn">Disconnect</button>
-    </div>
-  </div>
-
-  <!-- Telegram Bot Connection -->
-  <div class="tg-section">
-    <div class="tg-section-title">🤖 Telegram Bot</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">Control Asuka from Telegram — check trades, prices, close positions from your phone</div>
-    
-    <div id="bot-not-connected">
-      <div style="font-size:12px;margin-bottom:10px;line-height:1.6;">
-        1. Message <b style="color:var(--accent);">@AsukaTrading_bot</b> and send /start<br>
-        2. Enter the 8-character code you receive below
-      </div>
-      <div style="display:flex;gap:8px;">
-        <input class="tg-input" id="bot-auth-code" placeholder="ASK-1234" style="margin:0;flex:1;letter-spacing:2px;font-weight:700;text-transform:uppercase;" maxlength="8">
-        <button class="tg-add-btn" id="bot-connect-btn">Connect</button>
-      </div>
-      <div id="bot-auth-error" style="font-size:11px;color:var(--red);margin-top:6px;display:none;"></div>
-    </div>
-
-    <div id="bot-connected" style="display:none;">
-      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:8px;">
-        <div style="color:var(--green);font-size:16px;">✅</div>
-        <div>
-          <div style="font-size:13px;font-weight:600;color:var(--green);">Bot Connected</div>
-          <div style="font-size:11px;color:var(--text2);">Message your bot to control Asuka from anywhere</div>
-        </div>
-        <button class="tg-remove-btn" id="bot-disconnect-btn" style="margin-left:auto;">Disconnect</button>
-      </div>
-      <div style="font-size:11px;color:var(--text2);margin-top:8px;">Commands: /positions /balance /pause /resume /help — or ask anything</div>
-    </div>
-  </div>
-
-  <!-- Group admin (Bot API) -->
-  <div class="tg-section">
-    <div class="tg-section-title">🛠 Manage groups (Asuka admin)</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.5;">
-      Add your bot as <b>admin</b> (Ban users, Delete messages, Pin, Invite users). Then register the group chat id, or send any message in the group so she discovers it.
-      Owner slash cmds in-group: <code>/kick /ban /mute /unmute /del /pin /title /desc</code> (reply to a user/msg).
-    </div>
-    <div id="tg-admin-bot-st" style="font-size:11px;color:var(--text3);margin-bottom:8px;">Checking bot…</div>
-    <div style="display:flex;gap:8px;margin-bottom:10px;">
-      <input class="tg-input" id="tg-admin-chat-id" placeholder="Group chat id (−100…) or @publicname" style="margin:0;flex:1;">
-      <button class="tg-add-btn" id="tg-admin-register">Register</button>
-    </div>
-    <div id="tg-admin-groups" style="font-size:12px;margin-bottom:12px;"></div>
-    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;">Pending join requests</div>
-    <div id="tg-admin-joins" style="font-size:12px;margin-bottom:12px;"><div style="color:var(--text3);">None</div></div>
-    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;">Quick action</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-      <select id="tg-admin-action-group" class="tg-input" style="margin:0;"><option value="">Select group</option></select>
-      <select id="tg-admin-action" class="tg-input" style="margin:0;">
-        <option value="post">Post message</option>
-        <option value="kick">Kick user</option>
-        <option value="ban">Ban user</option>
-        <option value="mute">Mute 24h</option>
-        <option value="title">Set title</option>
-        <option value="desc">Set description</option>
-      </select>
-      <input class="tg-input" id="tg-admin-action-arg" placeholder="@user / user id / text" style="margin:0;grid-column:1/-1;">
-      <button class="tg-add-btn" id="tg-admin-run" style="grid-column:1/-1;">Run (asks confirm)</button>
-    </div>
-    <div id="tg-admin-msg" style="font-size:11px;margin-top:8px;color:var(--text2);"></div>
-  </div>
-
-  <!-- Human-like host / mod presence -->
-  <div class="tg-section">
-    <div class="tg-section-title">👤 Group host presence</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.5;">
-      She watches the group like a careful human mod: anti-spam, welcomes, answers @mentions, optional vibe/hype.
-      <b>Kick/ban never auto</b> — only spam delete/mute + your confirms.
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-      <div class="toggle-label">Enabled</div>
-      <div class="toggle" id="tg-mod-enabled"><div class="toggle-knob"></div></div>
-    </div>
-    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;">Mode</div>
-    <div style="display:flex;gap:8px;margin-bottom:10px;">
-      <button class="tg-add-btn tg-mod-mode" data-m="silent" style="flex:1;font-size:11px;">Silent</button>
-      <button class="tg-add-btn tg-mod-mode" data-m="light" style="flex:1;font-size:11px;border-color:var(--accent);">Light</button>
-      <button class="tg-add-btn tg-mod-mode" data-m="full" style="flex:1;font-size:11px;">Full</button>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-      <label style="font-size:10px;color:var(--text2);">Max replies/hr (light)<input class="tg-input" id="tg-mod-max" type="number" min="1" max="30" style="margin-top:4px;"></label>
-      <label style="font-size:10px;color:var(--text2);">Cooldownoldown sec<input class="tg-input" id="tg-mod-cd" type="number" min="15" max="600" style="margin-top:4px;"></label>
-      <label style="font-size:10px;color:var(--text2);">Hype every (hours)<input class="tg-input" id="tg-mod-hype-hrs" type="number" min="2" max="48" style="margin-top:4px;"></label>
-      <label style="font-size:10px;color:var(--text2);">Spam mute (hours)<input class="tg-input" id="tg-mod-mute-hrs" type="number" min="1" max="168" style="margin-top:4px;"></label>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin:8px 0;">
-      <div class="toggle-label">Auto anti-spam</div>
-      <div class="toggle" id="tg-mod-spam"><div class="toggle-knob"></div></div>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin:8px 0;">
-      <div class="toggle-label">Welcomes</div>
-      <div class="toggle" id="tg-mod-welcome"><div class="toggle-knob"></div></div>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin:8px 0;">
-      <div class="toggle-label">Scheduled hype</div>
-      <div class="toggle" id="tg-mod-hype"><div class="toggle-knob"></div></div>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:10px;">
-      <button class="tg-add-btn" id="tg-mod-save" style="flex:1;">Save host settings</button>
-      <button class="tg-add-btn" id="tg-mod-hype-now" style="flex:1;">Hype now</button>
-    </div>
-    <div id="tg-mod-msg" style="font-size:11px;margin-top:8px;color:var(--text2);"></div>
-    <div id="tg-mod-stats" style="font-size:10px;color:var(--text3);margin-top:6px;"></div>
-  </div>
-
-  <!-- Monitored Groups -->
-  <div class="tg-section">
-    <div class="tg-section-title">
-      📡 Monitored Groups
-      <button class="tg-add-btn" id="tg-add-group-btn">+ Add Group</button>
-    </div>
-    <div id="tg-groups-list">
-      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No groups added yet</div>
-    </div>
-    <!-- Group picker -->
-    <div id="tg-group-picker" style="display:none;margin-top:12px;">
-      <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Select a group to monitor:</div>
-      <div id="tg-available-groups"></div>
-    </div>
-  </div>
-
-  <!-- Tracked Callers -->
-  <div class="tg-section">
-    <div class="tg-section-title">
-      👥 Tracked Callers
-      <button class="tg-add-btn" id="tg-add-caller-btn">+ Follow Caller</button>
-    </div>
-    <div id="tg-tracked-callers-list">
-      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No callers tracked yet</div>
-    </div>
-    <div id="tg-add-caller-form" style="display:none;margin-top:12px;">
-      <input class="tg-input" id="tg-caller-input" placeholder="@username">
-      <div style="display:flex;gap:8px;">
-        <button class="tg-add-btn" id="tg-save-caller-btn">Follow</button>
-        <button class="tg-add-btn" style="background:transparent;color:var(--text2)" id="tg-cancel-caller-btn">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Signal Weights -->
-  <div class="tg-section">
-    <div class="tg-section-title">⚖️ Signal Weights</div>
-    <div id="weight-settings">
-      <div class="weight-row">
-        <div><div class="toggle-label">Caller Trust</div><div class="caller-stats">How much to trust tracked callers</div></div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div class="trust-dots" data-key="callerTrust" data-val="8"></div>
-          <div class="weight-val" id="w-callerTrust">80%</div>
-        </div>
-      </div>
-      <div class="weight-row">
-        <div><div class="toggle-label">Her Analysis</div><div class="caller-stats">Her own technical analysis weight</div></div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div class="trust-dots" data-key="herAnalysis" data-val="6"></div>
-          <div class="weight-val" id="w-herAnalysis">60%</div>
-        </div>
-      </div>
-      <div class="weight-row">
-        <div><div class="toggle-label">Fear & Greed</div><div class="caller-stats">Market sentiment index</div></div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div class="trust-dots" data-key="fearGreed" data-val="4"></div>
-          <div class="weight-val" id="w-fearGreed">40%</div>
-        </div>
-      </div>
-      <div class="weight-row">
-        <div><div class="toggle-label">Funding Rate</div><div class="caller-stats">Market leverage indicator</div></div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div class="trust-dots" data-key="funding" data-val="5"></div>
-          <div class="weight-val" id="w-funding">50%</div>
-        </div>
-      </div>
-      <div class="weight-row">
-        <div><div class="toggle-label">News Sentiment</div><div class="caller-stats">Latest news impact</div></div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div class="trust-dots" data-key="news" data-val="3"></div>
-          <div class="weight-val" id="w-news">30%</div>
-        </div>
-      </div>
-    </div>
-    <div style="margin-top:12px;">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Alert threshold — notify me when confidence exceeds:</div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <div class="trust-dots" data-key="alertThreshold" data-val="9" style="gap:6px;"></div>
-        <div class="weight-val" id="w-alertThreshold">90%</div>
-      </div>
-    </div>
-
-    <!-- Max Drawdown Protection -->
-    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border2);">
-      <div style="font-size:12px;font-weight:600;margin-bottom:6px;">🛑 Max Drawdown Protection</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Auto-close trade if loss exceeds this % (0 = disabled)</div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <input class="tg-input" id="tg-max-drawdown-input" placeholder="e.g. 5" type="number" min="0" max="100" style="margin:0;width:80px;">
-        <span style="font-size:12px;color:var(--text2);">%</span>
-        <button class="tg-add-btn" id="tg-save-drawdown-btn">Save</button>
-        <button class="tg-add-btn" style="background:transparent;color:var(--text2)" id="disable-drawdown-btn">Disable</button>
-      </div>
-      <div style="font-size:11px;color:var(--text2);margin-top:6px;" id="drawdown-hint">Disabled — trades close only at SL or target</div>
-    </div>
-  </div>
-
-  <!-- Intelligence Feed -->
-  <div class="tg-section">
-    <div class="tg-section-title">📡 Intelligence Feed</div>
-    
-    <!-- Two notification toggles -->
-    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg3);border-radius:8px;">
-        <div>
-          <div style="font-size:12px;font-weight:600;">🔔 Trade Alerts</div>
-          <div style="font-size:11px;color:var(--text2);">Paper trades, signals, wins & losses</div>
-        </div>
-        <div class="toggle-switch" id="trade-notify-toggle"></div>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg3);border-radius:8px;">
-        <div>
-          <div style="font-size:12px;font-weight:600;">📰 Intel Updates</div>
-          <div style="font-size:11px;color:var(--text2);">Market scans, news, group messages</div>
-        </div>
-        <div class="toggle-switch" id="intel-notify-toggle"></div>
-      </div>
-    </div>
-
-    <div id="intel-feed" style="display:flex;flex-direction:column;gap:8px;max-height:500px;overflow-y:auto;">
-      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">Feed will populate as she reads groups and scans market</div>
-    </div>
-  </div>
-
-  <!-- Chart Image Analysis Toggle -->
-  <div class="tg-section">
-    <div class="tg-section-title">🖼️ Chart Image Analysis</div>
-    <div class="auto-trade-toggle">
-      <div>
-        <div class="toggle-label">Auto-analyze chart images</div>
-        <div class="caller-stats">Claude Vision analyzes every chart image posted by tracked callers</div>
-      </div>
-      <div class="toggle-switch" id="tg-chart-analysis-toggle"></div>
-    </div>
-  </div>
-
-</div>
-</div>
+<div class="page" id="page-2" style="display:none;"></div>
 
 <!-- PAGE 3 — TRADING -->
 <div class="page" id="trading-page" data-page-id="3">
 
-  <!-- Trading Sub-Nav -->
-  <div id="trade-subnav" style="display:flex;gap:0;border-bottom:1px solid var(--border);flex-shrink:0;">
-    <button class="trade-tab active" data-tab="overview">📊 Overview</button>
-    <button class="trade-tab" data-tab="daytrade">📅 Day</button>
-    <button class="trade-tab" data-tab="maintrade">📈 Main</button>
-    <button class="trade-tab" data-tab="scalp">⚡ Scalp</button>
-    <button class="trade-tab" data-tab="spot">🟢 Spot</button>
-    <button class="trade-tab" data-tab="sniper">🎯 Sniper</button>
-    <button class="trade-tab" data-tab="launch">🚀 Launch</button>
-    <button class="trade-tab" data-tab="autodesk">🤖 Auto-Desk</button>
+  <!-- Trading Sub-Nav: Status → bots → extras -->
+  <div id="trade-subnav" style="display:flex;gap:0;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;">
+    <button class="trade-tab active" data-tab="overview">Status</button>
+    <button class="trade-tab" data-tab="maintrade">Main</button>
+    <button class="trade-tab" data-tab="daytrade">Day</button>
+    <button class="trade-tab" data-tab="scalp">Scalp</button>
+    <button class="trade-tab" data-tab="spot">Spot</button>
+    <span class="trade-nav-sep" aria-hidden="true"></span>
+    <button class="trade-tab trade-tab-adv" data-tab="sniper">Sniper</button>
+    <button class="trade-tab trade-tab-adv" data-tab="launch">Launch</button>
+    <button class="trade-tab trade-tab-adv" data-tab="autodesk">Auto-Desk</button>
   </div>
 
-  <!-- ══════ OVERVIEW TAB ══════ -->
-  <div class="trade-tab-content" id="tab-launch">
-
-    <!-- ═══ PROJECT WIZARD ═══ -->
-    <div id="website-wizard-section" class="tg-section" style="margin:12px 0 10px;padding:14px;border:1px solid rgba(124,58,237,0.35);background:linear-gradient(135deg,rgba(124,58,237,0.06),rgba(0,212,255,0.04));">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <div style="font-size:13px;font-weight:700;">🧩 Website Wizard</div>
-        <button class="tg-add-btn" id="wz-fill-all" style="font-size:10px;padding:4px 10px;background:linear-gradient(135deg,rgba(124,58,237,0.25),rgba(0,212,255,0.2));">✨ AI Fill All</button>
-      </div>
-      <div style="font-size:10px;color:var(--text2);margin-bottom:10px;">Fill what you want — tap ✨ on any field for Asuka to write it. Leave blank to skip.</div>
-      <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px;">What kind of website?</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:12px;">
-        <button class="wz-type" data-type="crypto" style="padding:8px;border-radius:8px;border:2px solid #7c3aed;background:rgba(124,58,237,0.15);color:var(--text);cursor:pointer;font-size:11px;">🪙 Crypto Coin</button>
-        <button class="wz-type" data-type="business" style="padding:8px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:11px;">🏢 Business</button>
-        <button class="wz-type" data-type="portfolio" style="padding:8px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:11px;">🎨 Portfolio</button>
-        <button class="wz-type" data-type="event" style="padding:8px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:11px;">🎉 Event</button>
-        <button class="wz-type" data-type="personal" style="padding:8px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:11px;">👤 Personal</button>
-        <button class="wz-type" data-type="resume" style="padding:8px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:11px;">📄 Resume</button>
-      </div>
-
-      <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:5px;">Design vibe ✨</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:10px;">
-        <button class="wz-vibe" data-vibe="animated" style="padding:7px;border-radius:8px;border:2px solid #7c3aed;background:rgba(124,58,237,0.15);color:var(--text);cursor:pointer;font-size:10px;">✨ Animated</button>
-        <button class="wz-vibe" data-vibe="minimal" style="padding:7px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:10px;">◽ Minimal</button>
-        <button class="wz-vibe" data-vibe="bold" style="padding:7px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:10px;">⚡ Bold</button>
-        <button class="wz-vibe" data-vibe="luxury" style="padding:7px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:10px;">👑 Luxury</button>
-        <button class="wz-vibe" data-vibe="playful" style="padding:7px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:10px;">🎈 Playful</button>
-        <button class="wz-vibe" data-vibe="web3" style="padding:7px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:10px;">🔮 Web3</button>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
-        <div style="display:flex;gap:4px;"><input class="tg-input" id="wz-name" placeholder="Token name" style="margin:0;flex:1;"><button class="wz-ai" data-f="name" style="background:rgba(124,58,237,0.2);border:none;border-radius:6px;color:#a78bfa;cursor:pointer;padding:0 8px;">✨</button></div>
-        <div class="crypto-only" style="display:flex;gap:4px;"><input class="tg-input" id="wz-symbol" placeholder="Symbol" style="margin:0;flex:1;"><button class="wz-ai" data-f="symbol" style="background:rgba(124,58,237,0.2);border:none;border-radius:6px;color:#a78bfa;cursor:pointer;padding:0 8px;">✨</button></div>
-      </div>
-      <div style="display:flex;gap:4px;margin-bottom:6px;"><input class="tg-input" id="wz-tagline" placeholder="Tagline / vibe" style="margin:0;flex:1;"><button class="wz-ai" data-f="tagline" style="background:rgba(124,58,237,0.2);border:none;border-radius:6px;color:#a78bfa;cursor:pointer;padding:0 8px;">✨</button></div>
-      <div style="display:flex;gap:4px;margin-bottom:6px;"><textarea class="tg-input" id="wz-description" placeholder="What is this coin about?" style="margin:0;flex:1;height:48px;resize:vertical;"></textarea><button class="wz-ai" data-f="description" style="background:rgba(124,58,237,0.2);border:none;border-radius:6px;color:#a78bfa;cursor:pointer;padding:0 8px;">✨</button></div>
-
-      <div style="font-size:10px;font-weight:700;color:var(--text2);margin:4px 0;">🎨 Describe your website (optional)</div>
-      <textarea class="tg-input" id="wz-brief" placeholder="Tell Asuka what you want: 'roadmap section, dark red theme, anime mascot, meme gallery, animated launch countdown...'" style="margin:0 0 6px;width:100%;height:60px;resize:vertical;font-size:11px;"></textarea>
-
-      <div class="crypto-only" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
-        <select class="tg-input" id="wz-chain" style="margin:0;"><option value="solana">Solana</option><option value="ethereum">Ethereum</option><option value="base">Base</option><option value="bsc">BSC</option></select>
-        <input class="tg-input" id="wz-supply" placeholder="Supply (1000000000)" style="margin:0;">
-      </div>
-
-      <div style="font-size:10px;font-weight:700;color:var(--text2);margin:6px 0 4px;">🎨 Logo / Image</div>
-      <div style="display:flex;gap:6px;margin-bottom:6px;">
-        <input type="file" id="wz-img-file" accept="image/*" style="display:none;">
-        <button class="tg-add-btn" id="wz-img-upload" style="flex:1;font-size:11px;">📁 Upload Image</button>
-        <button class="tg-add-btn" id="wz-img-ai" style="flex:1;font-size:11px;background:rgba(124,58,237,0.15);">🎨 AI Generate Logo</button>
-      </div>
-      <div id="wz-img-preview" style="display:none;font-size:10px;color:#34d399;margin-bottom:6px;"></div>
-
-      <div style="font-size:10px;font-weight:700;color:var(--text2);margin:6px 0 4px;">🌐 Domain (.com)</div>
-      <div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;flex-wrap:wrap;">
-        <span style="font-size:11px;color:var(--text2);">Have your own domain?</span>
-        <button class="tg-add-btn wz-dom-choice" id="wz-dom-yes" data-c="yes" style="font-size:11px;padding:4px 14px;">Yes</button>
-        <button class="tg-add-btn wz-dom-choice" id="wz-dom-no" data-c="no" style="font-size:11px;padding:4px 14px;">No — make me one</button>
-      </div>
-      <input class="tg-input" id="wz-domain-own" placeholder="Paste your domain (e.g. mycoin.com)" style="display:none;margin:0 0 4px;font-size:11px;">
-      <div id="wz-domain-out" style="display:none;font-size:10px;margin-bottom:6px;padding:8px;border-radius:8px;background:rgba(255,255,255,0.94);line-height:1.5;"></div>
-
-      <div style="font-size:10px;font-weight:700;color:var(--text2);margin:6px 0 4px;">📣 Socials & Telegram</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
-        <input class="tg-input" id="wz-twitter" placeholder="Twitter URL" style="margin:0;">
-        <input class="tg-input" id="wz-telegram" placeholder="Telegram URL" style="margin:0;">
-      </div>
-
-      <button class="tg-add-btn" id="wz-create" style="width:100%;background:linear-gradient(135deg,rgba(52,211,153,0.2),rgba(0,212,255,0.15));border-color:rgba(52,211,153,0.4);padding:12px;font-size:13px;">🌐 Create Website</button>
-      <div id="wz-status" style="display:none;font-size:11px;margin-top:8px;padding:10px;border-radius:8px;background:rgba(255,255,255,0.94);border:1px solid var(--border);white-space:pre-wrap;line-height:1.6;"></div>
-    </div>
-
-  </div>
-
-  <div class="trade-tab-content" id="tab-autodesk">
-    <!-- 🐦 X AUTONOMOUS PROJECT MANAGER -->
-    <div class="tg-section" style="margin:12px 0 10px;padding:14px;border:1px solid rgba(29,161,242,.35);background:linear-gradient(135deg,rgba(29,161,242,.08),rgba(124,58,237,.05));">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div style="font-size:13px;font-weight:700;">🐦 X Account Manager <span style="font-size:10px;color:var(--text2);font-weight:500;">— she runs your project's X, fully autonomous</span></div>
-        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;">
-          <input type="checkbox" id="xm-enabled" style="accent-color:#1da1f2;"> <b id="xm-enabled-lbl">Off</b>
-        </label>
-      </div>
-
-      <div style="font-size:10px;color:#ffcf6b;background:rgba(255,207,107,.08);border:1px solid rgba(255,207,107,.25);border-radius:8px;padding:7px 9px;margin:9px 0;line-height:1.5;">
-        ⚠️ A built-in safety filter blocks price predictions, buy/sell calls, promises of returns, and slurs on <b>every</b> post and reply. It cannot be turned off. You are responsible for the account's activity.
-      </div>
-
-      <div style="font-size:11px;font-weight:600;margin:8px 0 4px;color:var(--text2);">Project</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-        <input class="tg-input" id="xm-name" placeholder="Project name" style="margin:0;">
-        <input class="tg-input" id="xm-ticker" placeholder="Ticker (BULL)" style="margin:0;">
-        <input class="tg-input" id="xm-handle" placeholder="@handle" style="margin:0;">
-        <input class="tg-input" id="xm-vibe" placeholder="Voice (playful, confident…)" style="margin:0;">
-      </div>
-
-      <div style="font-size:11px;font-weight:600;margin:10px 0 4px;color:var(--text2);">X API credentials (from developer.x.com)</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-        <input class="tg-input" id="xm-apikey" placeholder="API key" style="margin:0;">
-        <input class="tg-input" id="xm-apisecret" type="password" placeholder="API secret" style="margin:0;">
-        <input class="tg-input" id="xm-token" placeholder="Access token" style="margin:0;">
-        <input class="tg-input" id="xm-tokensecret" type="password" placeholder="Access token secret" style="margin:0;">
-      </div>
-
-      <div style="font-size:11px;font-weight:600;margin:10px 0 4px;color:var(--text2);">What she does</div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;">
-        <label><input type="checkbox" id="xm-post" checked style="accent-color:#1da1f2;"> Post updates</label>
-        <label><input type="checkbox" id="xm-retweet" checked style="accent-color:#1da1f2;"> Retweet positive</label>
-        <label><input type="checkbox" id="xm-reply" checked style="accent-color:#1da1f2;"> Reply to mentions</label>
-        <label style="display:flex;align-items:center;gap:4px;">Posts/day <input class="tg-input" id="xm-perday" value="6" style="margin:0;width:44px;padding:3px;text-align:center;"></label>
-      </div>
-
-      <div style="display:flex;gap:6px;margin-top:10px;">
-        <button class="tg-add-btn" id="xm-save" style="flex:1;">💾 Save</button>
-        <button class="tg-add-btn" id="xm-preview" style="flex:1;">👁️ Preview a post</button>
-      </div>
-      <div id="xm-preview-out" style="display:none;font-size:11px;margin-top:6px;padding:9px;border-radius:8px;background:rgba(255,255,255,0.94);border:1px solid var(--border);line-height:1.5;"></div>
-
-      <details style="margin-top:10px;">
-        <summary style="font-size:11px;color:var(--text2);cursor:pointer;">📜 Activity log (what she posted / blocked)</summary>
-        <div id="xm-log" style="font-size:10px;line-height:1.6;padding:8px 4px;max-height:220px;overflow-y:auto;color:var(--text);">Loading…</div>
-      </details>
-    </div>
-
-    <div class="tg-section" style="margin:12px 0 10px;padding:14px;">
-      <div style="font-size:13px;font-weight:700;">🛠️ Marketing & Launch Tools</div>
-      <div style="font-size:11px;color:var(--text2);margin:4px 0 10px;">After you create a project in the Wizard above, use these to check your ticker, generate marketing, and post it.</div>
-
-      <!-- Ticker collision check -->
-      <div style="display:flex;gap:6px;margin-top:8px;">
-        <input class="tg-input" id="ls-ticker-check" placeholder="Check if a ticker is taken: BULL" style="margin:0;flex:1;">
-        <button class="tg-add-btn" id="ls-ticker-btn" style="white-space:nowrap;">🔎 Check Ticker</button>
-      </div>
-      <div id="ls-ticker-out" style="display:none;font-size:11px;margin-top:6px;padding:8px;border-radius:8px;background:rgba(255,255,255,0.94);border:1px solid var(--border);line-height:1.5;"></div>
-
-      <!-- Marketing pack -->
-      <button class="tg-add-btn" id="ls-marketing-btn" style="width:100%;margin-top:8px;background:linear-gradient(135deg,rgba(236,72,153,0.15),rgba(124,58,237,0.15));border-color:rgba(236,72,153,0.35);">📣 Generate Marketing Pack (8-tweet thread + TG post + shill kit)</button>
-      <div id="ls-marketing-out" style="display:none;margin-top:8px;padding:10px;border-radius:10px;background:rgba(255,255,255,0.94);border:1px solid var(--border);font-size:11px;max-height:340px;overflow-y:auto;white-space:pre-wrap;line-height:1.55;"></div>
-      <div id="ls-post-row" style="display:none;gap:6px;margin-top:6px;flex-wrap:wrap;">
-        <button class="tg-add-btn ls-post" data-what="announcement" style="flex:1;font-size:10px;min-width:90px;">📌 Post + Pin Announcement</button>
-        <button class="tg-add-btn ls-post" data-what="thread" style="flex:1;font-size:10px;min-width:80px;">🧵 Post Thread</button>
-        <button class="tg-add-btn ls-post" data-what="all" style="flex:1;font-size:10px;min-width:80px;">📣 Post Everything</button>
-      </div>
-      <div id="ls-post-status" style="display:none;font-size:10px;margin-top:4px;color:var(--text2);"></div>
-
-      <!-- Launch checklist -->
-      <details style="margin-top:8px;">
-        <summary style="font-size:11px;color:var(--text2);cursor:pointer;">📋 Launch Day Checklist (tap to open)</summary>
-        <div style="font-size:11px;line-height:2;padding:8px 4px;color:var(--text);">
-          <label style="display:block;"><input type="checkbox"> LP locked / burned (post proof link)</label>
-          <label style="display:block;"><input type="checkbox"> Contract renounced (if meme) or roles documented</label>
-          <label style="display:block;"><input type="checkbox"> Socials live: X, Telegram, site (use the generator ↑)</label>
-          <label style="display:block;"><input type="checkbox"> DexScreener profile updated (logo + links, ~$300)</label>
-          <label style="display:block;"><input type="checkbox"> Pinned TG post + thread ready (use 📣 above)</label>
-          <label style="display:block;"><input type="checkbox"> Caller list booked (use Caller Guide below)</label>
-          <label style="display:block;"><input type="checkbox"> CoinGecko + CMC applications submitted (free)</label>
-          <label style="display:block;"><input type="checkbox"> Buyback/支援 wallet funded for dips</label>
-        </div>
-      </details>
-    </div>
-
-
-    <div class="tg-section" style="margin-bottom:10px;padding:14px;">
-      <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px;">📊 CALLER INTELLIGENCE — real tracked win rates</div>
-      <button class="tg-add-btn" id="ls-callers-btn" style="width:100%;">Generate Caller Launch Guide</button>
-      <div id="ls-callers-out" style="margin-top:8px;"></div>
-    </div>
-
-    <div class="tg-section" style="padding:14px;">
-      <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px;">🧭 LAUNCH ADVISOR — ask her anything about the launch</div>
-      <div style="display:flex;gap:6px;">
-        <input class="tg-input" id="ls-question" placeholder="'Should we buy back now or wait?' 'How to grow volume legally?'" style="margin:0;flex:1;">
-        <button class="tg-add-btn" id="ls-ask-btn" style="white-space:nowrap;">Ask</button>
-      </div>
-      <div id="ls-advice" style="display:none;margin-top:8px;padding:10px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.2);border-radius:10px;font-size:11px;line-height:1.5;white-space:pre-wrap;"></div>
-    </div>
-    <!-- ═══ AUTO-LAUNCH DESK — she runs the whole coin (PREMIUM) ═══ -->
-    <div class="tg-section" style="margin-bottom:10px;padding:14px;border:1px solid rgba(124,58,237,0.35);background:linear-gradient(135deg,rgba(124,58,237,0.06),rgba(0,212,255,0.04));">
-      <div style="font-size:12px;font-weight:700;margin-bottom:2px;">🤖 Auto-Launch Desk <span style="font-size:9px;color:#a78bfa;border:1px solid #a78bfa;border-radius:6px;padding:1px 6px;margin-left:4px;">PREMIUM</span></div>
-      <div style="font-size:10px;color:var(--text2);margin-bottom:10px;">She builds the site, art, marketing, runs buybacks + growth, and you can edit everything while it's live. On-chain actions run in simulation until real wallet keys (Phase 4).</div>
-
-      <div style="display:flex;gap:6px;margin-bottom:8px;">
-        <button class="tg-add-btn" id="ald-mode-auto" style="flex:1;background:linear-gradient(135deg,rgba(124,58,237,0.25),rgba(0,212,255,0.2));border-color:rgba(124,58,237,0.5);">⚡ One-Button Full Auto</button>
-        <button class="tg-add-btn" id="ald-mode-adv" style="flex:1;">⚙️ Advanced</button>
-        <button class="tg-add-btn" id="ald-mode-manual" style="flex:1;background:rgba(148,163,184,0.1);">✋ Manual</button>
-      </div>
-
-      <!-- Advanced: each step its own button -->
-      <div id="ald-advanced" style="display:none;background:rgba(255,255,255,0.94);border-radius:10px;padding:10px;margin-bottom:8px;">
-        <div style="font-size:10px;color:var(--text2);margin-bottom:6px;">Run any step on its own:</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-          <button class="tg-add-btn ald-step" data-step="site" style="font-size:11px;">🌐 Build Site</button>
-          <button class="tg-add-btn ald-step" data-step="art" style="font-size:11px;">🎨 Generate Logo</button>
-          <button class="tg-add-btn ald-step" data-step="marketing" style="font-size:11px;">📣 Marketing Pack</button>
-          <button class="tg-add-btn ald-step" data-step="buyback" style="font-size:11px;">💰 Arm Buyback</button>
-          <button class="tg-add-btn ald-step" data-step="growth" style="font-size:11px;">📈 Start Growth</button>
-          <button class="tg-add-btn ald-step" data-step="health" style="font-size:11px;">🩺 Health Check</button>
-        </div>
-      </div>
-
-      <div id="ald-status" style="display:none;font-size:11px;margin-bottom:8px;padding:10px;border-radius:8px;background:rgba(255,255,255,0.94);border:1px solid var(--border);white-space:pre-wrap;line-height:1.6;max-height:200px;overflow-y:auto;"></div>
-
-      <!-- COIN OVERVIEW GRID — all launched coins at a glance -->
-      <div id="ald-overview" style="display:none;margin-bottom:12px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div style="font-family:var(--display);font-size:15px;font-weight:600;">Your Coins</div>
-          <div id="ald-count" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);"></div>
-        </div>
-        <div id="ald-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
-      </div>
-
-      <!-- LIVE CONSOLE — appears once a project exists, fully editable -->
-      <div id="ald-console" style="display:none;background:linear-gradient(180deg,var(--bg2),var(--bg1));border:1px solid var(--border);border-radius:14px;padding:12px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <button id="ald-back" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-size:11px;padding:4px 10px;">← All coins</button>
-          <div style="font-family:var(--display);font-size:13px;font-weight:600;" id="ald-proj-name">Project</div>
-        </div>
-        <select id="ald-proj-picker" style="display:none;"></select>
-        <div id="ald-health" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);margin-bottom:8px;"></div>
-
-        <details style="margin-bottom:8px;">
-          <summary style="font-size:10px;font-weight:700;cursor:pointer;color:var(--accent);">✏️ Edit project details (name, CA, socials, image)</summary>
-          <div style="padding:8px 0;display:grid;grid-template-columns:1fr 1fr;gap:5px;">
-            <input class="tg-input" id="aed-name" placeholder="Name" style="margin:0;font-size:10px;padding:4px;">
-            <input class="tg-input" id="aed-symbol" placeholder="Symbol" style="margin:0;font-size:10px;padding:4px;">
-            <input class="tg-input" id="aed-ca" placeholder="Contract address (CA)" style="margin:0;grid-column:1/3;font-size:10px;padding:4px;font-family:monospace;">
-            <input class="tg-input" id="aed-tagline" placeholder="Tagline" style="margin:0;grid-column:1/3;font-size:10px;padding:4px;">
-            <textarea class="tg-input" id="aed-description" placeholder="Description" style="margin:0;grid-column:1/3;font-size:10px;padding:4px;height:40px;resize:vertical;"></textarea>
-            <input class="tg-input" id="aed-twitter" placeholder="Twitter URL" style="margin:0;font-size:10px;padding:4px;">
-            <input class="tg-input" id="aed-telegram" placeholder="Telegram URL" style="margin:0;font-size:10px;padding:4px;">
-            <input class="tg-input" id="aed-tgchat" placeholder="TG chat ID (auto-post)" style="margin:0;font-size:10px;padding:4px;">
-            <input class="tg-input" id="aed-siteurl" placeholder="Live site URL" style="margin:0;font-size:10px;padding:4px;">
-          </div>
-          <div style="display:flex;gap:6px;">
-            <button class="tg-add-btn" id="aed-save" style="flex:1;font-size:10px;background:rgba(52,211,153,0.15);">💾 Save details</button>
-            <button class="tg-add-btn" id="aed-deploy-site" style="flex:1;font-size:10px;background:rgba(0,212,255,0.12);">🌐 Deploy site live</button>
-          </div>
-          <div id="aed-status" style="display:none;font-size:10px;margin-top:5px;color:var(--text2);white-space:pre-wrap;"></div>
-        </details>
-
-        <div style="font-size:11px;font-weight:700;margin-bottom:6px;font-family:inherit;">💰 Buyback <span style="font-size:9px;color:var(--text2);font-weight:400;">(edit live)</span></div>
-        <label style="font-size:10px;display:block;margin-bottom:5px;">Enabled <input type="checkbox" id="ald-bb-enabled"></label>
-
-        <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:4px;">Execution mode</div>
-        <div style="display:flex;gap:6px;margin-bottom:8px;">
-          <label style="flex:1;font-size:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px;cursor:pointer;"><input type="radio" name="ald-bb-mode" value="approve" id="ald-bb-mode-approve" checked> 🔔 Signal me<br><span style="color:var(--text2);font-size:9px;">She alerts, you execute (safe)</span></label>
-          <label style="flex:1;font-size:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px;cursor:pointer;"><input type="radio" name="ald-bb-mode" value="auto" id="ald-bb-mode-auto"> ⚡ Automatic<br><span style="color:var(--text2);font-size:9px;">She buys via burner wallet</span></label>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px;">
-          <select class="tg-input" id="ald-bb-trigger" style="margin:0;font-size:10px;padding:4px;"><option value="volume">On volume spike</option><option value="price_drop">On price drop</option><option value="schedule">On schedule</option></select>
-          <input class="tg-input" id="ald-bb-amount" type="number" placeholder="Buy $ per trigger" style="margin:0;font-size:10px;padding:4px;">
-          <input class="tg-input" id="ald-bb-max" type="number" placeholder="Max $/day" style="margin:0;font-size:10px;padding:4px;">
-          <input class="tg-input" id="ald-bb-cooldown" type="number" placeholder="Cooldown (min)" style="margin:0;font-size:10px;padding:4px;">
-          <input class="tg-input" id="ald-bb-volthresh" type="number" placeholder="Vol threshold $" style="margin:0;font-size:10px;padding:4px;">
-          <input class="tg-input" id="ald-bb-drop" type="number" placeholder="Price drop %" style="margin:0;font-size:10px;padding:4px;">
-          <input class="tg-input" id="ald-bb-schedhrs" type="number" placeholder="Every N hours" style="margin:0;font-size:10px;padding:4px;">
-        </div>
-        <div id="ald-bb-auto-note" style="display:none;font-size:9px;color:var(--gold);margin-bottom:6px;">⚡ Automatic needs a burner wallet armed + PIN unlocked. Otherwise she falls back to signalling you.</div>
-
-        <div style="font-size:10px;font-weight:700;margin-bottom:4px;">📈 Growth (edit live)</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px;">
-          <label style="font-size:10px;">Enabled <input type="checkbox" id="ald-g-enabled"></label>
-          <input class="tg-input" id="ald-g-cadence" type="number" placeholder="Raid every N hrs" style="margin:0;font-size:10px;padding:4px;">
-          <label style="font-size:10px;">Caller outreach <input type="checkbox" id="ald-g-callers"></label>
-          <label style="font-size:10px;">Holder rewards <input type="checkbox" id="ald-g-rewards"></label>
-        </div>
-
-        <div style="font-size:10px;font-weight:700;margin:8px 0 4px;">🔐 Buyback Wallet</div>
-        <div style="display:flex;gap:5px;margin-bottom:6px;">
-          <select class="tg-input" id="ald-wallet-mode" style="margin:0;flex:1;font-size:10px;padding:4px;">
-            <option value="sim">Simulation (no wallet)</option>
-            <option value="connect">Connect wallet (approve each buy — safest)</option>
-            <option value="burner">Burner key (full auto, encrypted)</option>
-          </select>
-        </div>
-        <div id="ald-wallet-connect" style="display:none;margin-bottom:6px;">
-          <input class="tg-input" id="ald-connect-addr" placeholder="Your wallet address" style="margin:0;font-size:10px;padding:4px;">
-          <button class="tg-add-btn" id="ald-connect-btn" style="width:100%;margin-top:4px;font-size:10px;">🔗 Use this wallet (approve-per-buy)</button>
-        </div>
-        <div id="ald-wallet-burner" style="display:none;margin-bottom:6px;">
-          <input class="tg-input" id="ald-burner-key" type="password" placeholder="Burner private key (fund w/ buyback $ only!)" style="margin:0;font-size:10px;padding:4px;">
-          <input class="tg-input" id="ald-burner-pin" type="password" placeholder="Set a PIN (encrypts the key)" style="margin:0;margin-top:4px;font-size:10px;padding:4px;">
-          <button class="tg-add-btn" id="ald-burner-btn" style="width:100%;margin-top:4px;font-size:10px;">🔑 Arm encrypted burner</button>
-          <div style="font-size:9px;color:#f59e0b;margin-top:3px;">⚠️ Use a SEPARATE wallet funded with only buyback money — never your main bag.</div>
-        </div>
-
-        <label style="font-size:10px;display:block;margin-bottom:6px;"><input type="checkbox" id="ald-bb-autoapprove"> 🤖 Full auto — she buys back automatically every time a trigger hits (burner only)</label>
-        <div style="display:flex;gap:6px;margin-bottom:8px;">
-          <button class="tg-add-btn" id="ald-save" style="flex:1;font-size:11px;background:rgba(52,211,153,0.15);border-color:rgba(52,211,153,0.4);">💾 Save Changes</button>
-          <select class="tg-input" id="ald-status-set" style="margin:0;width:110px;font-size:10px;padding:3px;"><option value="live">▶️ Live</option><option value="paused">⏸️ Paused</option><option value="ended">⏹️ Ended</option></select>
-        </div>
-        <div style="font-size:10px;font-weight:700;margin-bottom:4px;">📜 Activity Log</div>
-        <div id="ald-log" style="font-size:10px;color:var(--text2);max-height:120px;overflow-y:auto;line-height:1.5;"></div>
-      </div>
-    </div>
-
-  </div>
-
-  <div class="trade-tab-content" id="tab-sniper">
-    <div class="tg-section" style="margin:12px 0 10px;padding:14px;">
-      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">🎯 DEX Sniper <span style="font-size:9px;background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);border-radius:6px;padding:2px 6px;margin-left:6px;">PAPER MODE</span></div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Paste a contract address — instant analysis, snipe in one tap. Real wallet execution comes in Phase 4.</div>
-      <div style="display:flex;gap:6px;">
-        <input class="tg-input" id="snipe-ca" placeholder="Paste contract address (Solana / ETH / BSC / Base)" style="margin:0;flex:1;font-family:monospace;font-size:11px;">
-        <button class="tg-add-btn" id="snipe-analyze-btn" style="white-space:nowrap;">🔍 Analyze</button>
-      </div>
-      <div id="snipe-result" style="display:none;margin-top:10px;"></div>
-    </div>
-    <div class="tg-section" style="padding:14px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📋 Snipe Positions</div>
-      <div id="snipe-positions"><div style="font-size:11px;color:var(--text2);text-align:center;padding:10px;">No snipes yet</div></div>
-    </div>
-  </div>
-
+  <!-- ══════ STATUS / OVERVIEW TAB ══════ -->
   <div class="trade-tab-content active" id="tab-overview">
 
+    <!-- Plain-English map for normal users -->
+    <div class="tg-section ux-guide" style="margin:12px 12px 10px;padding:12px 14px;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">How trading works here</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.45;margin-bottom:10px;">
+        Turn bots on below. <b>Main</b> = swing trades · <b>Day</b> = same-day · <b>Scalp</b> = short bursts.
+        Everything is paper/testnet until you connect a live exchange in Settings.
+      </div>
+      <div class="bot-status-grid" id="bot-status-grid">
+        <button type="button" class="bot-status-card" data-goto="maintrade">
+          <div class="bot-status-name">Main bot</div>
+          <div class="bot-status-state" id="bot-st-main">—</div>
+          <div class="bot-status-hint">Open Main settings →</div>
+        </button>
+        <button type="button" class="bot-status-card" data-goto="daytrade">
+          <div class="bot-status-name">Day bot</div>
+          <div class="bot-status-state" id="bot-st-day">—</div>
+          <div class="bot-status-hint">Open Day settings →</div>
+        </button>
+        <button type="button" class="bot-status-card" data-goto="scalp">
+          <div class="bot-status-name">Scalp bot</div>
+          <div class="bot-status-state" id="bot-st-scalp">—</div>
+          <div class="bot-status-hint">Open Scalp settings →</div>
+        </button>
+        <button type="button" class="bot-status-card" data-goto-page="7">
+          <div class="bot-status-name">Telegram signals</div>
+          <div class="bot-status-state" id="bot-st-tg">Callers tab</div>
+          <div class="bot-status-hint">Trusted callers auto-copy →</div>
+        </button>
+      </div>
+    </div>
+
     <!-- Quick-glance strip -->
-    <div class="ov-strip" style="margin-top:12px;">
-      <div class="ov-chip">
+    <div class="ov-strip" style="margin-top:4px;">
+      <div class="ov-chip ov-chip-popwrap" id="ov-regime-chip" tabindex="0" role="button" aria-expanded="false" aria-controls="ov-regime-pop" title="Hover or click for market regime details">
         <div class="ov-chip-label">Regime</div>
         <div class="ov-chip-val regime-side" id="ov-regime">—</div>
+        <div class="ov-regime-pop" id="ov-regime-pop" role="tooltip">
+          <div class="ov-regime-pop-title" id="ov-regime-pop-title">Market regime</div>
+          <div class="ov-regime-pop-row" id="ov-regime-pop-body">Loading…</div>
+          <div class="ov-regime-pop-hint">Click chip to pin · again to close · or scroll to full panel below</div>
+        </div>
       </div>
       <div class="ov-chip">
         <div class="ov-chip-label">Today P&L</div>
@@ -2790,21 +2312,29 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       </div>
     </div>
 
-    <!-- Asuka Level -->
-    <div class="tg-section" style="margin-bottom:10px;padding:10px 12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-        <span style="font-size:11px;font-weight:700;">🧠 Asuka <span id="asuka-level" style="color:var(--accent);">Lv.1</span></span>
-        <span id="asuka-xp" style="font-size:9px;color:var(--text2);">0 XP</span>
+
+    <!-- Stats hero -->
+    <div class="trading-hero" style="margin:4px 0 8px;">
+      <div class="trading-stat">
+        <div class="trading-stat-label">Win Rate</div>
+        <div class="trading-stat-val" id="pt-winrate">0%</div>
       </div>
-      <div style="height:6px;background:rgba(255,255,255,0.94);border-radius:3px;overflow:hidden;">
-        <div id="asuka-xp-bar" style="height:100%;width:0%;background:var(--asuka-grad);border-radius:3px;transition:width 1s ease;"></div>
+      <div class="trading-stat">
+        <div class="trading-stat-label">Total P&L</div>
+        <div class="trading-stat-val" id="pt-pnl">$0</div>
       </div>
-      <div id="asuka-xp-detail" style="font-size:9px;color:var(--text2);margin-top:4px;"></div>
+      <div class="trading-stat">
+        <div class="trading-stat-label">Trades</div>
+        <div class="trading-stat-val" id="pt-total">0</div>
+      </div>
+    </div>
+    <div style="text-align:center;font-size:12px;color:var(--text2);margin-bottom:6px;">
+      Balance: <span id="pt-balance" style="color:var(--accent);font-weight:600;">$100,000</span>
     </div>
 
     <!-- Risk Protections -->
-    <div class="tg-section" style="margin-bottom:10px;padding:12px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🛡️ Risk Protections</div>
+    <details class="tg-section" style="margin-bottom:10px;padding:12px;">
+      <summary style="font-size:12px;font-weight:700;margin-bottom:8px;cursor:pointer;">🛡️ Risk Protections</summary>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.25);border-radius:8px;padding:8px;">
           <input type="checkbox" id="rp-autopilot" style="accent-color:#7c3aed;"> 🤖 Auto Pilot (all on)
@@ -2835,69 +2365,31 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
         </label>
       </div>
       <div style="font-size:10px;color:var(--text2);margin-top:6px;">Auto Pilot = Asuka manages the top protections herself</div>
+    </details>
+
+
+    <!-- Trading Control -->
+    <div class="tg-section" style="margin-bottom:8px;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">⚙️ Controls</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <button class="tg-add-btn" style="background:rgba(239,68,68,0.2);color:var(--red);flex:1;" id="pause-trading-btn">⏸️ Pause 1hr</button>
+        <button class="tg-add-btn" style="background:rgba(52,211,153,0.2);color:var(--green);flex:1;" id="resume-trading-btn">▶️ Resume</button>
+      </div>
+      <div id="trading-status" style="font-size:11px;color:var(--green);text-align:center;">✅ Trading Active</div>
     </div>
 
-    <!-- Position Doctor -->
-    <div class="tg-section" style="margin-bottom:10px;padding:12px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:4px;">🩺 Position Doctor</div>
-      <div style="font-size:10px;color:var(--text2);margin-bottom:8px;">Diagnose ANY position — even ones opened elsewhere</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px;">
-        <input class="tg-input" id="pd-coin" placeholder="Coin" style="margin:0;">
-        <select class="tg-input" id="pd-dir" style="margin:0;"><option value="long">Long</option><option value="short">Short</option></select>
-        <input class="tg-input" id="pd-lev" placeholder="Lev (10x)" type="number" style="margin:0;">
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
-        <input class="tg-input" id="pd-entry" placeholder="Entry price" type="number" style="margin:0;">
-        <input class="tg-input" id="pd-size" placeholder="Size $ (optional)" type="number" style="margin:0;">
-      </div>
-      <button class="tg-add-btn" id="pd-btn" style="width:100%;">🩺 Diagnose My Position</button>
-      <div id="pd-out" style="display:none;margin-top:8px;padding:10px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.2);border-radius:10px;font-size:11px;line-height:1.5;white-space:pre-wrap;"></div>
-    </div>
-
-    <!-- What-If Simulator -->
-    <div class="tg-section" style="margin-bottom:10px;padding:12px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:4px;">🎮 What-If Simulator</div>
-      <div style="font-size:10px;color:var(--text2);margin-bottom:8px;">"What if I bought X at Y?" — test any trade idea risk-free</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px;">
-        <input class="tg-input" id="wi-coin" placeholder="Coin" style="margin:0;">
-        <input class="tg-input" id="wi-buy" placeholder="Buy @ (blank=now)" type="number" style="margin:0;">
-        <input class="tg-input" id="wi-sell" placeholder="Sell @ (blank=now)" type="number" style="margin:0;">
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
-        <input class="tg-input" id="wi-amount" placeholder="Amount $ (100)" type="number" style="margin:0;">
-        <input class="tg-input" id="wi-lev" placeholder="Leverage (1x)" type="number" style="margin:0;">
-      </div>
-      <div style="display:flex;gap:6px;">
-        <button class="tg-add-btn" id="wi-calc-btn" style="flex:1;">🧮 Calculate</button>
-        <button class="tg-add-btn" id="wi-demo-btn" style="flex:1;background:rgba(52,211,153,0.12);border-color:rgba(52,211,153,0.35);">▶️ Open as Demo Trade</button>
-      </div>
-      <div id="wi-out" style="display:none;margin-top:8px;padding:10px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.2);border-radius:10px;font-size:11px;line-height:1.6;"></div>
-    </div>
 
     <!-- Panic close-all -->
     <button id="ov-close-all-btn" style="width:100%;margin-bottom:10px;padding:9px;border-radius:12px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:#ef4444;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;display:none;">
       🛑 Close ALL Open Positions
     </button>
 
-    <!-- Stats hero -->
-    <div class="trading-hero" style="margin:4px 0 8px;">
-      <div class="trading-stat">
-        <div class="trading-stat-label">Win Rate</div>
-        <div class="trading-stat-val" id="pt-winrate">0%</div>
-      </div>
-      <div class="trading-stat">
-        <div class="trading-stat-label">Total P&L</div>
-        <div class="trading-stat-val" id="pt-pnl">$0</div>
-      </div>
-      <div class="trading-stat">
-        <div class="trading-stat-label">Trades</div>
-        <div class="trading-stat-val" id="pt-total">0</div>
-      </div>
+
+    <!-- All Open Positions -->
+    <div class="tg-section">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">🟡 All Open Positions</div>
+      <div id="pt-open-list"><div style="font-size:12px;color:var(--text2);text-align:center;padding:16px;">No open positions</div></div>
     </div>
-    <div style="text-align:center;font-size:12px;color:var(--text2);margin-bottom:6px;">
-      Balance: <span id="pt-balance" style="color:var(--accent);font-weight:600;">$100,000</span>
-    </div>
-    <canvas id="equity-spark" width="600" height="56" style="width:100%;height:56px;margin-bottom:10px;border-radius:10px;background:rgba(255,255,255,0.94);border:1px solid rgba(148,163,184,0.07);"></canvas>
 
     <!-- 💰 Capital Allocation -->
     <div class="tg-section" style="margin-bottom:8px;">
@@ -2917,46 +2409,8 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       </div>
     </div>
 
-    <!-- Usage Stats -->
-    <div class="tg-section" style="margin-bottom:8px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div style="font-size:12px;font-weight:700;">📊 Daily Usage</div>
-          <span id="user-tier-badge" style="font-size:10px;padding:3px 8px;border-radius:12px;background:color-mix(in srgb, var(--accent) 14%, transparent);color:var(--accent);font-weight:650;">PRO</span>
-      </div>
-
-      <!-- Voice Messages -->
-      <div style="margin-bottom:10px;">
-        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;">
-          <span style="color:var(--text2);">🎙️ Voice Messages</span>
-          <span id="voice-usage-text" style="font-weight:600;">0/200</span>
-        </div>
-        <div style="background:var(--bg3);border-radius:4px;height:6px;">
-          <div id="voice-usage-bar" style="height:6px;border-radius:4px;background:var(--green);width:0%;transition:width 0.3s;"></div>
-        </div>
-      </div>
-
-<!-- Limit Alert -->
-      <div id="limit-alert" style="display:none;padding:8px;border-radius:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);margin-bottom:8px;">
-        <div style="font-size:11px;color:var(--red);font-weight:600;margin-bottom:6px;" id="limit-alert-msg">Daily limit reached!</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button class="tg-add-btn" id="buy-day-pass-btn" style="font-size:10px;padding:4px 10px;background:rgba(0,212,255,0.2);color:#00d4ff;">🎫 Day Pass $2</button>
-          <button class="tg-add-btn" id="buy-msg-pack-btn" style="font-size:10px;padding:4px 10px;background:rgba(52,211,153,0.2);color:var(--green);">📦 +500 msgs $5</button>
-          <button class="tg-add-btn" id="upgrade-plan-btn" style="font-size:10px;padding:4px 10px;">⬆️ Upgrade</button>
-        </div>
-      </div>
-
-      <!-- Auto extend -->
-      <div class="auto-trade-toggle">
-        <div>
-          <div style="font-size:11px;font-weight:600;">Auto-Extend</div>
-          <div style="font-size:10px;color:var(--text2);">Auto-charge when limit hit</div>
-        </div>
-        <div class="toggle-switch" id="auto-extend-toggle"></div>
-      </div>
-    </div>
-
     <!-- Market Regime -->
-    <div class="tg-section" style="margin-bottom:8px;">
+    <div class="tg-section" id="market-regime-section" style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
         <div style="font-size:12px;font-weight:600;">🌍 Market Regime</div>
         <button class="tg-add-btn" id="refresh-regime-btn" style="font-size:11px;padding:3px 8px;">Refresh</button>
@@ -2973,170 +2427,15 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       <div id="daily-signals-list" style="font-size:12px;color:var(--text2);">Loading...</div>
     </div>
 
-    <!-- Trading Control -->
-    <div class="tg-section" style="margin-bottom:8px;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">⚙️ Controls</div>
-      <div style="display:flex;gap:6px;margin-bottom:8px;">
-        <button class="tg-add-btn" style="background:rgba(239,68,68,0.2);color:var(--red);flex:1;" id="pause-trading-btn">⏸️ Pause 1hr</button>
-        <button class="tg-add-btn" style="background:rgba(52,211,153,0.2);color:var(--green);flex:1;" id="resume-trading-btn">▶️ Resume</button>
-      </div>
-      <div id="trading-status" style="font-size:11px;color:var(--green);text-align:center;">✅ Trading Active</div>
-    </div>
-
     <!-- Analytics -->
     <div class="tg-section" style="margin-bottom:8px;">
       <div style="font-size:12px;font-weight:600;margin-bottom:8px;">📊 Performance Analytics</div>
       <div id="analytics-display" style="font-size:12px;color:var(--text2);">Loading...</div>
     </div>
 
-    <!-- All Open Positions -->
-    <div class="tg-section">
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">🟡 All Open Positions</div>
-      <div id="pt-open-list"><div style="font-size:12px;color:var(--text2);text-align:center;padding:16px;">No open positions</div></div>
-    </div>
-  </div>
+</div>
 
-  <!-- ══════ DAY TRADE TAB ══════ -->
-  <div class="trade-tab-content" id="tab-daytrade">
-    <div style="padding:12px;">
-
-      <!-- Day Trade Stats -->
-      <div class="trading-hero" style="margin-bottom:12px;">
-        <div class="trading-stat"><div class="trading-stat-label">Day Trades</div><div class="trading-stat-val" id="day-total">0</div></div>
-        <div class="trading-stat"><div class="trading-stat-label">P&L</div><div class="trading-stat-val" id="day-pnl">$0</div></div>
-        <div class="trading-stat"><div class="trading-stat-label">Win Rate</div><div class="trading-stat-val" id="day-wr">0%</div></div>
-      </div>
-
-      <!-- Day Trade Settings -->
-      <div class="tg-section">
-        <div style="font-size:12px;font-weight:700;margin-bottom:10px;">⚙️ Settings</div>
-
-        <div class="auto-trade-toggle" style="margin-bottom:10px;">
-          <div><div class="toggle-label">Enable Day Trade Bot</div><div class="caller-stats">Fires at 00:05 UTC using Daily RSI</div></div>
-          <div class="toggle-switch" id="daily-trade-toggle"></div>
-        </div>
-
-        <div class="auto-trade-toggle" style="margin-bottom:10px;">
-          <div><div class="toggle-label">Power Signals Only</div><div class="caller-stats">RSI < 20 or > 80 only (more accurate)</div></div>
-          <div class="toggle-switch on" id="daily-power-only-toggle"></div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <div>
-            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Leverage</div>
-            <div style="display:flex;gap:4px;flex-wrap:wrap;">
-              <button class="leverage-btn daily-lev-btn" data-val="1">1x</button>
-              <button class="leverage-btn daily-lev-btn" data-val="2">2x</button>
-              <button class="leverage-btn daily-lev-btn active" data-val="3">3x</button>
-              <button class="leverage-btn daily-lev-btn" data-val="5">5x</button>
-            </div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Max Open</div>
-            <div style="display:flex;gap:4px;">
-              <button class="leverage-btn daily-max-btn active" data-val="1">1</button>
-              <button class="leverage-btn daily-max-btn" data-val="2">2</button>
-              <button class="leverage-btn daily-max-btn" data-val="3">3</button>
-            </div>
-          </div>
-        </div>
-
-
-        <!-- Day Trade Coins -->
-        <div style="margin-bottom:10px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-            <div style="font-size:11px;color:var(--text2);">🪙 Day Trade Coins</div>
-            <span id="day-coin-counter" style="font-size:10px;color:var(--text2);">3/999 coins</span>
-          </div>
-          <div id="day-coin-selector" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">
-            <button class="coin-btn day-coin-btn" data-coin="BTC">₿ BTC</button>
-            <button class="coin-btn day-coin-btn" data-coin="ETH">Ξ ETH</button>
-            <button class="coin-btn day-coin-btn" data-coin="SOL">◎ SOL</button>
-            <button class="coin-btn day-coin-btn" data-coin="BNB">⬡ BNB</button>
-            <button class="coin-btn day-coin-btn" data-coin="XRP">✕ XRP</button>
-            <button class="coin-btn day-coin-btn" data-coin="DOGE">Ð DOGE</button>
-            <button class="coin-btn day-coin-btn" data-coin="AVAX">▲ AVAX</button>
-            <button class="coin-btn day-coin-btn" data-coin="LINK">⬡ LINK</button>
-          </div>
-          <div style="display:flex;gap:6px;margin-bottom:4px;">
-            <input class="tg-input" id="day-custom-coin-input" placeholder="Add coin e.g. BONK" style="margin:0;flex:1;text-transform:uppercase;">
-            <button class="tg-add-btn" id="day-add-coin-btn">Add</button>
-          </div>
-          <div id="day-custom-coins-list" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
-        </div>
-
-        <div style="margin-bottom:10px;">
-          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Position Size ($)</div>
-          <div style="display:flex;gap:6px;">
-            <input class="tg-input" id="daily-size-input" placeholder="e.g. 1000" type="number" style="margin:0;flex:1;">
-            <button class="tg-add-btn" id="save-daily-size-btn">Save</button>
-          </div>
-        </div>
-
-        <!-- Advanced Settings (collapsed) -->
-        <details style="margin-top:8px;">
-          <summary style="font-size:11px;color:var(--text2);cursor:pointer;padding:6px 0;">⚙️ Advanced RSI Settings</summary>
-          <div style="padding-top:10px;">
-            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">RSI Period</div>
-            <div style="display:flex;gap:4px;margin-bottom:10px;">
-              <button class="leverage-btn daily-period-btn" data-val="7">7</button>
-              <button class="leverage-btn daily-period-btn active" data-val="14">14</button>
-              <button class="leverage-btn daily-period-btn" data-val="21">21</button>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-              <div>
-                <div style="font-size:10px;color:var(--green);margin-bottom:3px;">Power Buy ≤</div>
-                <div style="display:flex;gap:3px;">
-                  <button class="leverage-btn daily-pbuy-btn" data-val="15">15</button>
-                  <button class="leverage-btn daily-pbuy-btn active" data-val="20">20</button>
-                  <button class="leverage-btn daily-pbuy-btn" data-val="25">25</button>
-                </div>
-              </div>
-              <div>
-                <div style="font-size:10px;color:var(--green);margin-bottom:3px;">Buy ≤</div>
-                <div style="display:flex;gap:3px;">
-                  <button class="leverage-btn daily-buy-btn" data-val="25">25</button>
-                  <button class="leverage-btn daily-buy-btn active" data-val="30">30</button>
-                  <button class="leverage-btn daily-buy-btn" data-val="35">35</button>
-                </div>
-              </div>
-              <div>
-                <div style="font-size:10px;color:var(--red);margin-bottom:3px;">Sell ≥</div>
-                <div style="display:flex;gap:3px;">
-                  <button class="leverage-btn daily-sell-btn" data-val="65">65</button>
-                  <button class="leverage-btn daily-sell-btn active" data-val="70">70</button>
-                  <button class="leverage-btn daily-sell-btn" data-val="75">75</button>
-                </div>
-              </div>
-              <div>
-                <div style="font-size:10px;color:var(--red);margin-bottom:3px;">Power Sell ≥</div>
-                <div style="display:flex;gap:3px;">
-                  <button class="leverage-btn daily-psell-btn" data-val="75">75</button>
-                  <button class="leverage-btn daily-psell-btn active" data-val="80">80</button>
-                  <button class="leverage-btn daily-psell-btn" data-val="85">85</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </details>
-      </div>
-
-      <!-- Day Trade Positions -->
-      <div class="tg-section">
-        <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🟡 Open Day Trades</div>
-        <div id="day-open-list"><div style="font-size:12px;color:var(--text2);text-align:center;padding:12px;">No open day trades</div></div>
-      </div>
-
-      <!-- Day Trade History -->
-      <div class="tg-section">
-        <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📋 History</div>
-        <div id="day-history-list"><div style="font-size:12px;color:var(--text2);text-align:center;padding:12px;">No history yet</div></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════ MAIN TRADE TAB ══════ -->
-  <div class="trade-tab-content" id="tab-maintrade">
+<div class="trade-tab-content" id="tab-maintrade">
     <div style="padding:12px;">
 
       <!-- Main Trade Stats -->
@@ -3380,8 +2679,145 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     </div>
   </div>
 
-  <!-- ══════ SCALP TAB ══════ -->
-  <div class="trade-tab-content" id="tab-scalp">
+<div class="trade-tab-content" id="tab-daytrade">
+    <div style="padding:12px;">
+
+      <!-- Day Trade Stats -->
+      <div class="trading-hero" style="margin-bottom:12px;">
+        <div class="trading-stat"><div class="trading-stat-label">Day Trades</div><div class="trading-stat-val" id="day-total">0</div></div>
+        <div class="trading-stat"><div class="trading-stat-label">P&L</div><div class="trading-stat-val" id="day-pnl">$0</div></div>
+        <div class="trading-stat"><div class="trading-stat-label">Win Rate</div><div class="trading-stat-val" id="day-wr">0%</div></div>
+      </div>
+
+      <!-- Day Trade Settings -->
+      <div class="tg-section">
+        <div style="font-size:12px;font-weight:700;margin-bottom:10px;">⚙️ Settings</div>
+
+        <div class="auto-trade-toggle" style="margin-bottom:10px;">
+          <div><div class="toggle-label">Enable Day Trade Bot</div><div class="caller-stats">Fires at 00:05 UTC using Daily RSI</div></div>
+          <div class="toggle-switch" id="daily-trade-toggle"></div>
+        </div>
+
+        <div class="auto-trade-toggle" style="margin-bottom:10px;">
+          <div><div class="toggle-label">Power Signals Only</div><div class="caller-stats">RSI < 20 or > 80 only (more accurate)</div></div>
+          <div class="toggle-switch on" id="daily-power-only-toggle"></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Leverage</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+              <button class="leverage-btn daily-lev-btn" data-val="1">1x</button>
+              <button class="leverage-btn daily-lev-btn" data-val="2">2x</button>
+              <button class="leverage-btn daily-lev-btn active" data-val="3">3x</button>
+              <button class="leverage-btn daily-lev-btn" data-val="5">5x</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Max Open</div>
+            <div style="display:flex;gap:4px;">
+              <button class="leverage-btn daily-max-btn active" data-val="1">1</button>
+              <button class="leverage-btn daily-max-btn" data-val="2">2</button>
+              <button class="leverage-btn daily-max-btn" data-val="3">3</button>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- Day Trade Coins -->
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <div style="font-size:11px;color:var(--text2);">🪙 Day Trade Coins</div>
+            <span id="day-coin-counter" style="font-size:10px;color:var(--text2);">3/999 coins</span>
+          </div>
+          <div id="day-coin-selector" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">
+            <button class="coin-btn day-coin-btn" data-coin="BTC">₿ BTC</button>
+            <button class="coin-btn day-coin-btn" data-coin="ETH">Ξ ETH</button>
+            <button class="coin-btn day-coin-btn" data-coin="SOL">◎ SOL</button>
+            <button class="coin-btn day-coin-btn" data-coin="BNB">⬡ BNB</button>
+            <button class="coin-btn day-coin-btn" data-coin="XRP">✕ XRP</button>
+            <button class="coin-btn day-coin-btn" data-coin="DOGE">Ð DOGE</button>
+            <button class="coin-btn day-coin-btn" data-coin="AVAX">▲ AVAX</button>
+            <button class="coin-btn day-coin-btn" data-coin="LINK">⬡ LINK</button>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:4px;">
+            <input class="tg-input" id="day-custom-coin-input" placeholder="Add coin e.g. BONK" style="margin:0;flex:1;text-transform:uppercase;">
+            <button class="tg-add-btn" id="day-add-coin-btn">Add</button>
+          </div>
+          <div id="day-custom-coins-list" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Position Size ($)</div>
+          <div style="display:flex;gap:6px;">
+            <input class="tg-input" id="daily-size-input" placeholder="e.g. 1000" type="number" style="margin:0;flex:1;">
+            <button class="tg-add-btn" id="save-daily-size-btn">Save</button>
+          </div>
+        </div>
+
+        <!-- Advanced Settings (collapsed) -->
+        <details style="margin-top:8px;">
+          <summary style="font-size:11px;color:var(--text2);cursor:pointer;padding:6px 0;">⚙️ Advanced RSI Settings</summary>
+          <div style="padding-top:10px;">
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">RSI Period</div>
+            <div style="display:flex;gap:4px;margin-bottom:10px;">
+              <button class="leverage-btn daily-period-btn" data-val="7">7</button>
+              <button class="leverage-btn daily-period-btn active" data-val="14">14</button>
+              <button class="leverage-btn daily-period-btn" data-val="21">21</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div>
+                <div style="font-size:10px;color:var(--green);margin-bottom:3px;">Power Buy ≤</div>
+                <div style="display:flex;gap:3px;">
+                  <button class="leverage-btn daily-pbuy-btn" data-val="15">15</button>
+                  <button class="leverage-btn daily-pbuy-btn active" data-val="20">20</button>
+                  <button class="leverage-btn daily-pbuy-btn" data-val="25">25</button>
+                </div>
+              </div>
+              <div>
+                <div style="font-size:10px;color:var(--green);margin-bottom:3px;">Buy ≤</div>
+                <div style="display:flex;gap:3px;">
+                  <button class="leverage-btn daily-buy-btn" data-val="25">25</button>
+                  <button class="leverage-btn daily-buy-btn active" data-val="30">30</button>
+                  <button class="leverage-btn daily-buy-btn" data-val="35">35</button>
+                </div>
+              </div>
+              <div>
+                <div style="font-size:10px;color:var(--red);margin-bottom:3px;">Sell ≥</div>
+                <div style="display:flex;gap:3px;">
+                  <button class="leverage-btn daily-sell-btn" data-val="65">65</button>
+                  <button class="leverage-btn daily-sell-btn active" data-val="70">70</button>
+                  <button class="leverage-btn daily-sell-btn" data-val="75">75</button>
+                </div>
+              </div>
+              <div>
+                <div style="font-size:10px;color:var(--red);margin-bottom:3px;">Power Sell ≥</div>
+                <div style="display:flex;gap:3px;">
+                  <button class="leverage-btn daily-psell-btn" data-val="75">75</button>
+                  <button class="leverage-btn daily-psell-btn active" data-val="80">80</button>
+                  <button class="leverage-btn daily-psell-btn" data-val="85">85</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <!-- Day Trade Positions -->
+      <div class="tg-section">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;">🟡 Open Day Trades</div>
+        <div id="day-open-list"><div style="font-size:12px;color:var(--text2);text-align:center;padding:12px;">No open day trades</div></div>
+      </div>
+
+      <!-- Day Trade History -->
+      <div class="tg-section">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📋 History</div>
+        <div id="day-history-list"><div style="font-size:12px;color:var(--text2);text-align:center;padding:12px;">No history yet</div></div>
+      </div>
+    </div>
+  </div>
+
+<div class="trade-tab-content" id="tab-scalp">
     <div style="padding:12px;">
 
       <!-- Scalp Stats -->
@@ -3492,8 +2928,7 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     </div>
   </div>
 
-  <!-- ══════ SPOT TAB ══════ -->
-  <div class="trade-tab-content" id="tab-spot">
+<div class="trade-tab-content" id="tab-spot">
     <div style="padding:12px;">
 
       <!-- Spot Stats -->
@@ -3593,6 +3028,320 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     </div>
   </div>
 
+<div class="trade-tab-content" id="tab-sniper">
+    <div class="tg-section" style="margin:12px 0 10px;padding:14px;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">🎯 DEX Sniper <span style="font-size:9px;background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);border-radius:6px;padding:2px 6px;margin-left:6px;">PAPER MODE</span></div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Paste a contract address — instant analysis, snipe in one tap. Real wallet execution comes in Phase 4.</div>
+      <div style="display:flex;gap:6px;">
+        <input class="tg-input" id="snipe-ca" placeholder="Paste contract address (Solana / ETH / BSC / Base)" style="margin:0;flex:1;font-family:monospace;font-size:11px;">
+        <button class="tg-add-btn" id="snipe-analyze-btn" style="white-space:nowrap;">🔍 Analyze</button>
+      </div>
+      <div id="snipe-result" style="display:none;margin-top:10px;"></div>
+    </div>
+    <div class="tg-section" style="padding:14px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📋 Snipe Positions</div>
+      <div id="snipe-positions"><div style="font-size:11px;color:var(--text2);text-align:center;padding:10px;">No snipes yet</div></div>
+    </div>
+  </div>
+
+<div class="trade-tab-content" id="tab-launch">
+
+    <!-- ═══ PROJECT WIZARD ═══ -->
+    <div id="website-wizard-section" class="tg-section" style="margin:12px 0 10px;padding:14px;border:1px solid rgba(124,58,237,0.35);background:linear-gradient(135deg,rgba(124,58,237,0.06),rgba(0,212,255,0.04));">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:700;">🧩 Website Wizard</div>
+        <button class="tg-add-btn" id="wz-fill-all" style="font-size:10px;padding:4px 10px;background:linear-gradient(135deg,rgba(124,58,237,0.25),rgba(0,212,255,0.2));">✨ AI Fill All</button>
+      </div>
+      <div style="font-size:10px;color:var(--text2);margin-bottom:10px;">Fill what you want — tap ✨ on any field for Asuka to write it. Leave blank to skip.</div>
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px;">What kind of website?</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:12px;">
+        <button class="wz-type" data-type="crypto" style="padding:8px;border-radius:8px;border:2px solid #7c3aed;background:rgba(124,58,237,0.15);color:var(--text);cursor:pointer;font-size:11px;">🪙 Crypto Coin</button>
+        <button class="wz-type" data-type="business" style="padding:8px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:11px;">🏢 Business</button>
+        <button class="wz-type" data-type="portfolio" style="padding:8px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:11px;">🎨 Portfolio</button>
+        <button class="wz-type" data-type="event" style="padding:8px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:11px;">🎉 Event</button>
+        <button class="wz-type" data-type="personal" style="padding:8px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:11px;">👤 Personal</button>
+        <button class="wz-type" data-type="resume" style="padding:8px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:11px;">📄 Resume</button>
+      </div>
+
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:5px;">Design vibe ✨</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:10px;">
+        <button class="wz-vibe" data-vibe="animated" style="padding:7px;border-radius:8px;border:2px solid #7c3aed;background:rgba(124,58,237,0.15);color:var(--text);cursor:pointer;font-size:10px;">✨ Animated</button>
+        <button class="wz-vibe" data-vibe="minimal" style="padding:7px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:10px;">◽ Minimal</button>
+        <button class="wz-vibe" data-vibe="bold" style="padding:7px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:10px;">⚡ Bold</button>
+        <button class="wz-vibe" data-vibe="luxury" style="padding:7px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:10px;">👑 Luxury</button>
+        <button class="wz-vibe" data-vibe="playful" style="padding:7px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:10px;">🎈 Playful</button>
+        <button class="wz-vibe" data-vibe="web3" style="padding:7px;border-radius:8px;border:1px solid rgba(28,36,56,0.12);background:rgba(255,255,255,0.94);color:var(--text);cursor:pointer;font-size:10px;">🔮 Web3</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+        <div style="display:flex;gap:4px;"><input class="tg-input" id="wz-name" placeholder="Token name" style="margin:0;flex:1;"><button class="wz-ai" data-f="name" style="background:rgba(124,58,237,0.2);border:none;border-radius:6px;color:#a78bfa;cursor:pointer;padding:0 8px;">✨</button></div>
+        <div class="crypto-only" style="display:flex;gap:4px;"><input class="tg-input" id="wz-symbol" placeholder="Symbol" style="margin:0;flex:1;"><button class="wz-ai" data-f="symbol" style="background:rgba(124,58,237,0.2);border:none;border-radius:6px;color:#a78bfa;cursor:pointer;padding:0 8px;">✨</button></div>
+      </div>
+      <div style="display:flex;gap:4px;margin-bottom:6px;"><input class="tg-input" id="wz-tagline" placeholder="Tagline / vibe" style="margin:0;flex:1;"><button class="wz-ai" data-f="tagline" style="background:rgba(124,58,237,0.2);border:none;border-radius:6px;color:#a78bfa;cursor:pointer;padding:0 8px;">✨</button></div>
+      <div style="display:flex;gap:4px;margin-bottom:6px;"><textarea class="tg-input" id="wz-description" placeholder="What is this coin about?" style="margin:0;flex:1;height:48px;resize:vertical;"></textarea><button class="wz-ai" data-f="description" style="background:rgba(124,58,237,0.2);border:none;border-radius:6px;color:#a78bfa;cursor:pointer;padding:0 8px;">✨</button></div>
+
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin:4px 0;">🎨 Describe your website (optional)</div>
+      <textarea class="tg-input" id="wz-brief" placeholder="Tell Asuka what you want: 'roadmap section, dark red theme, anime mascot, meme gallery, animated launch countdown...'" style="margin:0 0 6px;width:100%;height:60px;resize:vertical;font-size:11px;"></textarea>
+
+      <div class="crypto-only" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+        <select class="tg-input" id="wz-chain" style="margin:0;"><option value="solana">Solana</option><option value="ethereum">Ethereum</option><option value="base">Base</option><option value="bsc">BSC</option></select>
+        <input class="tg-input" id="wz-supply" placeholder="Supply (1000000000)" style="margin:0;">
+      </div>
+
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin:6px 0 4px;">🎨 Logo / Image</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <input type="file" id="wz-img-file" accept="image/*" style="display:none;">
+        <button class="tg-add-btn" id="wz-img-upload" style="flex:1;font-size:11px;">📁 Upload Image</button>
+        <button class="tg-add-btn" id="wz-img-ai" style="flex:1;font-size:11px;background:rgba(124,58,237,0.15);">🎨 AI Generate Logo</button>
+      </div>
+      <div id="wz-img-preview" style="display:none;font-size:10px;color:#34d399;margin-bottom:6px;"></div>
+
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin:6px 0 4px;">🌐 Domain (.com)</div>
+      <div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;flex-wrap:wrap;">
+        <span style="font-size:11px;color:var(--text2);">Have your own domain?</span>
+        <button class="tg-add-btn wz-dom-choice" id="wz-dom-yes" data-c="yes" style="font-size:11px;padding:4px 14px;">Yes</button>
+        <button class="tg-add-btn wz-dom-choice" id="wz-dom-no" data-c="no" style="font-size:11px;padding:4px 14px;">No — make me one</button>
+      </div>
+      <input class="tg-input" id="wz-domain-own" placeholder="Paste your domain (e.g. mycoin.com)" style="display:none;margin:0 0 4px;font-size:11px;">
+      <div id="wz-domain-out" style="display:none;font-size:10px;margin-bottom:6px;padding:8px;border-radius:8px;background:rgba(255,255,255,0.94);line-height:1.5;"></div>
+
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin:6px 0 4px;">📣 Socials & Telegram</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+        <input class="tg-input" id="wz-twitter" placeholder="Twitter URL" style="margin:0;">
+        <input class="tg-input" id="wz-telegram" placeholder="Telegram URL" style="margin:0;">
+      </div>
+
+      <button class="tg-add-btn" id="wz-create" style="width:100%;background:linear-gradient(135deg,rgba(52,211,153,0.2),rgba(0,212,255,0.15));border-color:rgba(52,211,153,0.4);padding:12px;font-size:13px;">🌐 Create Website</button>
+      <div id="wz-status" style="display:none;font-size:11px;margin-top:8px;padding:10px;border-radius:8px;background:rgba(255,255,255,0.94);border:1px solid var(--border);white-space:pre-wrap;line-height:1.6;"></div>
+    </div>
+
+  </div>
+
+<div class="trade-tab-content" id="tab-autodesk">
+    <!-- 🐦 X AUTONOMOUS PROJECT MANAGER -->
+    <div class="tg-section" style="margin:12px 0 10px;padding:14px;border:1px solid rgba(29,161,242,.35);background:linear-gradient(135deg,rgba(29,161,242,.08),rgba(124,58,237,.05));">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:13px;font-weight:700;">🐦 X Account Manager <span style="font-size:10px;color:var(--text2);font-weight:500;">— she runs your project's X, fully autonomous</span></div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;">
+          <input type="checkbox" id="xm-enabled" style="accent-color:#1da1f2;"> <b id="xm-enabled-lbl">Off</b>
+        </label>
+      </div>
+
+      <div style="font-size:10px;color:#ffcf6b;background:rgba(255,207,107,.08);border:1px solid rgba(255,207,107,.25);border-radius:8px;padding:7px 9px;margin:9px 0;line-height:1.5;">
+        ⚠️ A built-in safety filter blocks price predictions, buy/sell calls, promises of returns, and slurs on <b>every</b> post and reply. It cannot be turned off. You are responsible for the account's activity.
+      </div>
+
+      <div style="font-size:11px;font-weight:600;margin:8px 0 4px;color:var(--text2);">Project</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+        <input class="tg-input" id="xm-name" placeholder="Project name" style="margin:0;">
+        <input class="tg-input" id="xm-ticker" placeholder="Ticker (BULL)" style="margin:0;">
+        <input class="tg-input" id="xm-handle" placeholder="@handle" style="margin:0;">
+        <input class="tg-input" id="xm-vibe" placeholder="Voice (playful, confident…)" style="margin:0;">
+      </div>
+
+      <div style="font-size:11px;font-weight:600;margin:10px 0 4px;color:var(--text2);">X API credentials (from developer.x.com)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+        <input class="tg-input" id="xm-apikey" placeholder="API key" style="margin:0;">
+        <input class="tg-input" id="xm-apisecret" type="password" placeholder="API secret" style="margin:0;">
+        <input class="tg-input" id="xm-token" placeholder="Access token" style="margin:0;">
+        <input class="tg-input" id="xm-tokensecret" type="password" placeholder="Access token secret" style="margin:0;">
+      </div>
+
+      <div style="font-size:11px;font-weight:600;margin:10px 0 4px;color:var(--text2);">What she does</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;">
+        <label><input type="checkbox" id="xm-post" checked style="accent-color:#1da1f2;"> Post updates</label>
+        <label><input type="checkbox" id="xm-retweet" checked style="accent-color:#1da1f2;"> Retweet positive</label>
+        <label><input type="checkbox" id="xm-reply" checked style="accent-color:#1da1f2;"> Reply to mentions</label>
+        <label style="display:flex;align-items:center;gap:4px;">Posts/day <input class="tg-input" id="xm-perday" value="6" style="margin:0;width:44px;padding:3px;text-align:center;"></label>
+      </div>
+
+      <div style="display:flex;gap:6px;margin-top:10px;">
+        <button class="tg-add-btn" id="xm-save" style="flex:1;">💾 Save</button>
+        <button class="tg-add-btn" id="xm-preview" style="flex:1;">👁️ Preview a post</button>
+      </div>
+      <div id="xm-preview-out" style="display:none;font-size:11px;margin-top:6px;padding:9px;border-radius:8px;background:rgba(255,255,255,0.94);border:1px solid var(--border);line-height:1.5;"></div>
+
+      <details style="margin-top:10px;">
+        <summary style="font-size:11px;color:var(--text2);cursor:pointer;">📜 Activity log (what she posted / blocked)</summary>
+        <div id="xm-log" style="font-size:10px;line-height:1.6;padding:8px 4px;max-height:220px;overflow-y:auto;color:var(--text);">Loading…</div>
+      </details>
+    </div>
+
+    <div class="tg-section" style="margin:12px 0 10px;padding:14px;">
+      <div style="font-size:13px;font-weight:700;">🛠️ Marketing & Launch Tools</div>
+      <div style="font-size:11px;color:var(--text2);margin:4px 0 10px;">After you create a project in the Wizard above, use these to check your ticker, generate marketing, and post it.</div>
+
+      <!-- Ticker collision check -->
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <input class="tg-input" id="ls-ticker-check" placeholder="Check if a ticker is taken: BULL" style="margin:0;flex:1;">
+        <button class="tg-add-btn" id="ls-ticker-btn" style="white-space:nowrap;">🔎 Check Ticker</button>
+      </div>
+      <div id="ls-ticker-out" style="display:none;font-size:11px;margin-top:6px;padding:8px;border-radius:8px;background:rgba(255,255,255,0.94);border:1px solid var(--border);line-height:1.5;"></div>
+
+      <!-- Marketing pack -->
+      <button class="tg-add-btn" id="ls-marketing-btn" style="width:100%;margin-top:8px;background:linear-gradient(135deg,rgba(236,72,153,0.15),rgba(124,58,237,0.15));border-color:rgba(236,72,153,0.35);">📣 Generate Marketing Pack (8-tweet thread + TG post + shill kit)</button>
+      <div id="ls-marketing-out" style="display:none;margin-top:8px;padding:10px;border-radius:10px;background:rgba(255,255,255,0.94);border:1px solid var(--border);font-size:11px;max-height:340px;overflow-y:auto;white-space:pre-wrap;line-height:1.55;"></div>
+      <div id="ls-post-row" style="display:none;gap:6px;margin-top:6px;flex-wrap:wrap;">
+        <button class="tg-add-btn ls-post" data-what="announcement" style="flex:1;font-size:10px;min-width:90px;">📌 Post + Pin Announcement</button>
+        <button class="tg-add-btn ls-post" data-what="thread" style="flex:1;font-size:10px;min-width:80px;">🧵 Post Thread</button>
+        <button class="tg-add-btn ls-post" data-what="all" style="flex:1;font-size:10px;min-width:80px;">📣 Post Everything</button>
+      </div>
+      <div id="ls-post-status" style="display:none;font-size:10px;margin-top:4px;color:var(--text2);"></div>
+
+      <!-- Launch checklist -->
+      <details style="margin-top:8px;">
+        <summary style="font-size:11px;color:var(--text2);cursor:pointer;">📋 Launch Day Checklist (tap to open)</summary>
+        <div style="font-size:11px;line-height:2;padding:8px 4px;color:var(--text);">
+          <label style="display:block;"><input type="checkbox"> LP locked / burned (post proof link)</label>
+          <label style="display:block;"><input type="checkbox"> Contract renounced (if meme) or roles documented</label>
+          <label style="display:block;"><input type="checkbox"> Socials live: X, Telegram, site (use the generator ↑)</label>
+          <label style="display:block;"><input type="checkbox"> DexScreener profile updated (logo + links, ~$300)</label>
+          <label style="display:block;"><input type="checkbox"> Pinned TG post + thread ready (use 📣 above)</label>
+          <label style="display:block;"><input type="checkbox"> Caller list booked (use Caller Guide below)</label>
+          <label style="display:block;"><input type="checkbox"> CoinGecko + CMC applications submitted (free)</label>
+          <label style="display:block;"><input type="checkbox"> Buyback/支援 wallet funded for dips</label>
+        </div>
+      </details>
+    </div>
+
+
+    <div class="tg-section" style="margin-bottom:10px;padding:14px;">
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px;">📊 CALLER INTELLIGENCE — real tracked win rates</div>
+      <button class="tg-add-btn" id="ls-callers-btn" style="width:100%;">Generate Caller Launch Guide</button>
+      <div id="ls-callers-out" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="tg-section" style="padding:14px;">
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px;">🧭 LAUNCH ADVISOR — ask her anything about the launch</div>
+      <div style="display:flex;gap:6px;">
+        <input class="tg-input" id="ls-question" placeholder="'Should we buy back now or wait?' 'How to grow volume legally?'" style="margin:0;flex:1;">
+        <button class="tg-add-btn" id="ls-ask-btn" style="white-space:nowrap;">Ask</button>
+      </div>
+      <div id="ls-advice" style="display:none;margin-top:8px;padding:10px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.2);border-radius:10px;font-size:11px;line-height:1.5;white-space:pre-wrap;"></div>
+    </div>
+    <!-- ═══ AUTO-LAUNCH DESK — she runs the whole coin (PREMIUM) ═══ -->
+    <div class="tg-section" style="margin-bottom:10px;padding:14px;border:1px solid rgba(124,58,237,0.35);background:linear-gradient(135deg,rgba(124,58,237,0.06),rgba(0,212,255,0.04));">
+      <div style="font-size:12px;font-weight:700;margin-bottom:2px;">🤖 Auto-Launch Desk <span style="font-size:9px;color:#a78bfa;border:1px solid #a78bfa;border-radius:6px;padding:1px 6px;margin-left:4px;">PREMIUM</span></div>
+      <div style="font-size:10px;color:var(--text2);margin-bottom:10px;">She builds the site, art, marketing, runs buybacks + growth, and you can edit everything while it's live. On-chain actions run in simulation until real wallet keys (Phase 4).</div>
+
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <button class="tg-add-btn" id="ald-mode-auto" style="flex:1;background:linear-gradient(135deg,rgba(124,58,237,0.25),rgba(0,212,255,0.2));border-color:rgba(124,58,237,0.5);">⚡ One-Button Full Auto</button>
+        <button class="tg-add-btn" id="ald-mode-adv" style="flex:1;">⚙️ Advanced</button>
+        <button class="tg-add-btn" id="ald-mode-manual" style="flex:1;background:rgba(148,163,184,0.1);">✋ Manual</button>
+      </div>
+
+      <!-- Advanced: each step its own button -->
+      <div id="ald-advanced" style="display:none;background:rgba(255,255,255,0.94);border-radius:10px;padding:10px;margin-bottom:8px;">
+        <div style="font-size:10px;color:var(--text2);margin-bottom:6px;">Run any step on its own:</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          <button class="tg-add-btn ald-step" data-step="site" style="font-size:11px;">🌐 Build Site</button>
+          <button class="tg-add-btn ald-step" data-step="art" style="font-size:11px;">🎨 Generate Logo</button>
+          <button class="tg-add-btn ald-step" data-step="marketing" style="font-size:11px;">📣 Marketing Pack</button>
+          <button class="tg-add-btn ald-step" data-step="buyback" style="font-size:11px;">💰 Arm Buyback</button>
+          <button class="tg-add-btn ald-step" data-step="growth" style="font-size:11px;">📈 Start Growth</button>
+          <button class="tg-add-btn ald-step" data-step="health" style="font-size:11px;">🩺 Health Check</button>
+        </div>
+      </div>
+
+      <div id="ald-status" style="display:none;font-size:11px;margin-bottom:8px;padding:10px;border-radius:8px;background:rgba(255,255,255,0.94);border:1px solid var(--border);white-space:pre-wrap;line-height:1.6;max-height:200px;overflow-y:auto;"></div>
+
+      <!-- COIN OVERVIEW GRID — all launched coins at a glance -->
+      <div id="ald-overview" style="display:none;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-family:var(--display);font-size:15px;font-weight:600;">Your Coins</div>
+          <div id="ald-count" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);"></div>
+        </div>
+        <div id="ald-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
+      </div>
+
+      <!-- LIVE CONSOLE — appears once a project exists, fully editable -->
+      <div id="ald-console" style="display:none;background:linear-gradient(180deg,var(--bg2),var(--bg1));border:1px solid var(--border);border-radius:14px;padding:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <button id="ald-back" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-size:11px;padding:4px 10px;">← All coins</button>
+          <div style="font-family:var(--display);font-size:13px;font-weight:600;" id="ald-proj-name">Project</div>
+        </div>
+        <select id="ald-proj-picker" style="display:none;"></select>
+        <div id="ald-health" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);margin-bottom:8px;"></div>
+
+        <details style="margin-bottom:8px;">
+          <summary style="font-size:10px;font-weight:700;cursor:pointer;color:var(--accent);">✏️ Edit project details (name, CA, socials, image)</summary>
+          <div style="padding:8px 0;display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+            <input class="tg-input" id="aed-name" placeholder="Name" style="margin:0;font-size:10px;padding:4px;">
+            <input class="tg-input" id="aed-symbol" placeholder="Symbol" style="margin:0;font-size:10px;padding:4px;">
+            <input class="tg-input" id="aed-ca" placeholder="Contract address (CA)" style="margin:0;grid-column:1/3;font-size:10px;padding:4px;font-family:monospace;">
+            <input class="tg-input" id="aed-tagline" placeholder="Tagline" style="margin:0;grid-column:1/3;font-size:10px;padding:4px;">
+            <textarea class="tg-input" id="aed-description" placeholder="Description" style="margin:0;grid-column:1/3;font-size:10px;padding:4px;height:40px;resize:vertical;"></textarea>
+            <input class="tg-input" id="aed-twitter" placeholder="Twitter URL" style="margin:0;font-size:10px;padding:4px;">
+            <input class="tg-input" id="aed-telegram" placeholder="Telegram URL" style="margin:0;font-size:10px;padding:4px;">
+            <input class="tg-input" id="aed-tgchat" placeholder="TG chat ID (auto-post)" style="margin:0;font-size:10px;padding:4px;">
+            <input class="tg-input" id="aed-siteurl" placeholder="Live site URL" style="margin:0;font-size:10px;padding:4px;">
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="tg-add-btn" id="aed-save" style="flex:1;font-size:10px;background:rgba(52,211,153,0.15);">💾 Save details</button>
+            <button class="tg-add-btn" id="aed-deploy-site" style="flex:1;font-size:10px;background:rgba(0,212,255,0.12);">🌐 Deploy site live</button>
+          </div>
+          <div id="aed-status" style="display:none;font-size:10px;margin-top:5px;color:var(--text2);white-space:pre-wrap;"></div>
+        </details>
+
+        <div style="font-size:11px;font-weight:700;margin-bottom:6px;font-family:inherit;">💰 Buyback <span style="font-size:9px;color:var(--text2);font-weight:400;">(edit live)</span></div>
+        <label style="font-size:10px;display:block;margin-bottom:5px;">Enabled <input type="checkbox" id="ald-bb-enabled"></label>
+
+        <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:4px;">Execution mode</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;">
+          <label style="flex:1;font-size:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px;cursor:pointer;"><input type="radio" name="ald-bb-mode" value="approve" id="ald-bb-mode-approve" checked> 🔔 Signal me<br><span style="color:var(--text2);font-size:9px;">She alerts, you execute (safe)</span></label>
+          <label style="flex:1;font-size:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px;cursor:pointer;"><input type="radio" name="ald-bb-mode" value="auto" id="ald-bb-mode-auto"> ⚡ Automatic<br><span style="color:var(--text2);font-size:9px;">She buys via burner wallet</span></label>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px;">
+          <select class="tg-input" id="ald-bb-trigger" style="margin:0;font-size:10px;padding:4px;"><option value="volume">On volume spike</option><option value="price_drop">On price drop</option><option value="schedule">On schedule</option></select>
+          <input class="tg-input" id="ald-bb-amount" type="number" placeholder="Buy $ per trigger" style="margin:0;font-size:10px;padding:4px;">
+          <input class="tg-input" id="ald-bb-max" type="number" placeholder="Max $/day" style="margin:0;font-size:10px;padding:4px;">
+          <input class="tg-input" id="ald-bb-cooldown" type="number" placeholder="Cooldown (min)" style="margin:0;font-size:10px;padding:4px;">
+          <input class="tg-input" id="ald-bb-volthresh" type="number" placeholder="Vol threshold $" style="margin:0;font-size:10px;padding:4px;">
+          <input class="tg-input" id="ald-bb-drop" type="number" placeholder="Price drop %" style="margin:0;font-size:10px;padding:4px;">
+          <input class="tg-input" id="ald-bb-schedhrs" type="number" placeholder="Every N hours" style="margin:0;font-size:10px;padding:4px;">
+        </div>
+        <div id="ald-bb-auto-note" style="display:none;font-size:9px;color:var(--gold);margin-bottom:6px;">⚡ Automatic needs a burner wallet armed + PIN unlocked. Otherwise she falls back to signalling you.</div>
+
+        <div style="font-size:10px;font-weight:700;margin-bottom:4px;">📈 Growth (edit live)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px;">
+          <label style="font-size:10px;">Enabled <input type="checkbox" id="ald-g-enabled"></label>
+          <input class="tg-input" id="ald-g-cadence" type="number" placeholder="Raid every N hrs" style="margin:0;font-size:10px;padding:4px;">
+          <label style="font-size:10px;">Caller outreach <input type="checkbox" id="ald-g-callers"></label>
+          <label style="font-size:10px;">Holder rewards <input type="checkbox" id="ald-g-rewards"></label>
+        </div>
+
+        <div style="font-size:10px;font-weight:700;margin:8px 0 4px;">🔐 Buyback Wallet</div>
+        <div style="display:flex;gap:5px;margin-bottom:6px;">
+          <select class="tg-input" id="ald-wallet-mode" style="margin:0;flex:1;font-size:10px;padding:4px;">
+            <option value="sim">Simulation (no wallet)</option>
+            <option value="connect">Connect wallet (approve each buy — safest)</option>
+            <option value="burner">Burner key (full auto, encrypted)</option>
+          </select>
+        </div>
+        <div id="ald-wallet-connect" style="display:none;margin-bottom:6px;">
+          <input class="tg-input" id="ald-connect-addr" placeholder="Your wallet address" style="margin:0;font-size:10px;padding:4px;">
+          <button class="tg-add-btn" id="ald-connect-btn" style="width:100%;margin-top:4px;font-size:10px;">🔗 Use this wallet (approve-per-buy)</button>
+        </div>
+        <div id="ald-wallet-burner" style="display:none;margin-bottom:6px;">
+          <input class="tg-input" id="ald-burner-key" type="password" placeholder="Burner private key (fund w/ buyback $ only!)" style="margin:0;font-size:10px;padding:4px;">
+          <input class="tg-input" id="ald-burner-pin" type="password" placeholder="Set a PIN (encrypts the key)" style="margin:0;margin-top:4px;font-size:10px;padding:4px;">
+          <button class="tg-add-btn" id="ald-burner-btn" style="width:100%;margin-top:4px;font-size:10px;">🔑 Arm encrypted burner</button>
+          <div style="font-size:9px;color:#f59e0b;margin-top:3px;">⚠️ Use a SEPARATE wallet funded with only buyback money — never your main bag.</div>
+        </div>
+
+        <label style="font-size:10px;display:block;margin-bottom:6px;"><input type="checkbox" id="ald-bb-autoapprove"> 🤖 Full auto — she buys back automatically every time a trigger hits (burner only)</label>
+        <div style="display:flex;gap:6px;margin-bottom:8px;">
+          <button class="tg-add-btn" id="ald-save" style="flex:1;font-size:11px;background:rgba(52,211,153,0.15);border-color:rgba(52,211,153,0.4);">💾 Save Changes</button>
+          <select class="tg-input" id="ald-status-set" style="margin:0;width:110px;font-size:10px;padding:3px;"><option value="live">▶️ Live</option><option value="paused">⏸️ Paused</option><option value="ended">⏹️ Ended</option></select>
+        </div>
+        <div style="font-size:10px;font-weight:700;margin-bottom:4px;">📜 Activity Log</div>
+        <div id="ald-log" style="font-size:10px;color:var(--text2);max-height:120px;overflow-y:auto;line-height:1.5;"></div>
+      </div>
+    </div>
+
+  </div>
+
   <!-- Advanced settings panel (shared) -->
   <div id="advanced-settings-panel" style="display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);padding:16px;z-index:500;max-height:60vh;overflow-y:auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -3610,9 +3359,220 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
   <div id="website-page-host" style="padding-top:10px;"></div>
 </div>
 <div class="page" id="page-7" style="display:none;flex-direction:column;padding:14px;overflow-y:auto;">
-  <div style="max-width:680px;margin:0 auto;width:100%;">
-    <div style="font-family:var(--display);font-size:24px;font-weight:500;margin-bottom:4px;">Advisor Calls</div>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">Follow a human advisor. Get notified, or let Asuka trade their calls for you.</div>
+  <div style="max-width:720px;margin:0 auto;width:100%;">
+    <div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;margin-bottom:4px;">Callers</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.45;">
+      Follow people who call trades — Telegram groups you trust, or Asuka advisors. Turn on auto-copy when you want paper trades from them.
+    </div>
+
+    <div id="callers-subnav" style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:14px;overflow-x:auto;">
+      <button type="button" class="callers-tab active" data-callers-tab="tg">Telegram groups</button>
+      <button type="button" class="callers-tab" data-callers-tab="advisors">Our advisors</button>
+    </div>
+
+    <div class="callers-pane active" id="callers-tg">
+      <div id="page-telegram">
+
+
+  <!-- Connect Section -->
+  <div class="tg-section" id="tg-connect-section">
+    <div class="tg-section-title">📱 Telegram Connection</div>
+    <div id="tg-disconnected">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Connect your Telegram to monitor groups and track signal callers automatically.</p>
+      <input class="tg-input" id="tg-phone" placeholder="+971 50 123 4567" type="tel">
+      <button class="tg-connect-btn" id="tg-connect-btn">Connect Telegram</button>
+    </div>
+    <div id="tg-code-section" style="display:none">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Enter the code sent to your Telegram:</p>
+      <input class="tg-input" id="tg-code" placeholder="12345" type="number">
+      <button class="tg-connect-btn" id="tg-verify-btn">Verify Code</button>
+    </div>
+    <div id="tg-connected-section" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <div style="width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)"></div>
+        <span style="font-size:14px;font-weight:600;color:var(--green)">Connected</span>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">
+        Notification contact: <span id="tg-notify-contact" style="color:var(--accent)">You (Saved Messages)</span>
+        <span id="tg-change-contact" style="color:var(--text2);cursor:pointer;text-decoration:underline;margin-left:8px;">Change</span>
+        <div id="tg-contact-form" style="display:none;margin-top:8px;display:flex;gap:8px;align-items:center;">
+          <input class="tg-input" id="tg-contact-input" placeholder="@username or phone" style="margin:0;flex:1;">
+          <button class="tg-add-btn" id="tg-save-contact-btn">Save</button>
+        </div>
+      </div>
+      <button class="tg-connect-btn" style="background:rgba(255,69,58,0.2);color:var(--red)" id="tg-disconnect-btn">Disconnect</button>
+    </div>
+  </div>
+
+  <!-- Telegram Bot Connection -->
+  <div class="tg-section">
+    <div class="tg-section-title">🤖 Telegram Bot</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">Control Asuka from Telegram — check trades, prices, close positions from your phone</div>
+    
+    <div id="bot-not-connected">
+      <div style="font-size:12px;margin-bottom:10px;line-height:1.6;">
+        1. Message <b style="color:var(--accent);">@AsukaTrading_bot</b> and send /start<br>
+        2. Enter the 8-character code you receive below
+      </div>
+      <div style="display:flex;gap:8px;">
+        <input class="tg-input" id="bot-auth-code" placeholder="ASK-1234" style="margin:0;flex:1;letter-spacing:2px;font-weight:700;text-transform:uppercase;" maxlength="8">
+        <button class="tg-add-btn" id="bot-connect-btn">Connect</button>
+      </div>
+      <div id="bot-auth-error" style="font-size:11px;color:var(--red);margin-top:6px;display:none;"></div>
+    </div>
+
+    <div id="bot-connected" style="display:none;">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:8px;">
+        <div style="color:var(--green);font-size:16px;">✅</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--green);">Bot Connected</div>
+          <div style="font-size:11px;color:var(--text2);">Message your bot to control Asuka from anywhere</div>
+        </div>
+        <button class="tg-remove-btn" id="bot-disconnect-btn" style="margin-left:auto;">Disconnect</button>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-top:8px;">Commands: /positions /balance /pause /resume /help — or ask anything</div>
+    </div>
+  </div>
+
+  <!-- Monitored Groups -->
+  <div class="tg-section">
+    <div class="tg-section-title">
+      📡 Monitored Groups
+      <button class="tg-add-btn" id="tg-add-group-btn">+ Add Group</button>
+    </div>
+    <div id="tg-groups-list">
+      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No groups added yet</div>
+    </div>
+    <!-- Group picker -->
+    <div id="tg-group-picker" style="display:none;margin-top:12px;">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Select a group to monitor:</div>
+      <div id="tg-available-groups"></div>
+    </div>
+  </div>
+
+  <!-- Tracked Callers -->
+  <div class="tg-section">
+    <div class="tg-section-title">
+      👥 Tracked Callers
+      <button class="tg-add-btn" id="tg-add-caller-btn">+ Follow Caller</button>
+    </div>
+    <div id="tg-tracked-callers-list">
+      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">No callers tracked yet</div>
+    </div>
+    <div id="tg-add-caller-form" style="display:none;margin-top:12px;">
+      <input class="tg-input" id="tg-caller-input" placeholder="@username">
+      <div style="display:flex;gap:8px;">
+        <button class="tg-add-btn" id="tg-save-caller-btn">Follow</button>
+        <button class="tg-add-btn" style="background:transparent;color:var(--text2)" id="tg-cancel-caller-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Signal Weights -->
+  <div class="tg-section">
+    <div class="tg-section-title">⚖️ Signal Weights</div>
+    <div id="weight-settings">
+      <div class="weight-row">
+        <div><div class="toggle-label">Caller Trust</div><div class="caller-stats">How much to trust tracked callers</div></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="trust-dots" data-key="callerTrust" data-val="8"></div>
+          <div class="weight-val" id="w-callerTrust">80%</div>
+        </div>
+      </div>
+      <div class="weight-row">
+        <div><div class="toggle-label">Her Analysis</div><div class="caller-stats">Her own technical analysis weight</div></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="trust-dots" data-key="herAnalysis" data-val="6"></div>
+          <div class="weight-val" id="w-herAnalysis">60%</div>
+        </div>
+      </div>
+      <div class="weight-row">
+        <div><div class="toggle-label">Fear & Greed</div><div class="caller-stats">Market sentiment index</div></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="trust-dots" data-key="fearGreed" data-val="4"></div>
+          <div class="weight-val" id="w-fearGreed">40%</div>
+        </div>
+      </div>
+      <div class="weight-row">
+        <div><div class="toggle-label">Funding Rate</div><div class="caller-stats">Market leverage indicator</div></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="trust-dots" data-key="funding" data-val="5"></div>
+          <div class="weight-val" id="w-funding">50%</div>
+        </div>
+      </div>
+      <div class="weight-row">
+        <div><div class="toggle-label">News Sentiment</div><div class="caller-stats">Latest news impact</div></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="trust-dots" data-key="news" data-val="3"></div>
+          <div class="weight-val" id="w-news">30%</div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Alert threshold — notify me when confidence exceeds:</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="trust-dots" data-key="alertThreshold" data-val="9" style="gap:6px;"></div>
+        <div class="weight-val" id="w-alertThreshold">90%</div>
+      </div>
+    </div>
+
+    <!-- Max Drawdown Protection -->
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border2);">
+      <div style="font-size:12px;font-weight:600;margin-bottom:6px;">🛑 Max Drawdown Protection</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Auto-close trade if loss exceeds this % (0 = disabled)</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input class="tg-input" id="tg-max-drawdown-input" placeholder="e.g. 5" type="number" min="0" max="100" style="margin:0;width:80px;">
+        <span style="font-size:12px;color:var(--text2);">%</span>
+        <button class="tg-add-btn" id="tg-save-drawdown-btn">Save</button>
+        <button class="tg-add-btn" style="background:transparent;color:var(--text2)" id="disable-drawdown-btn">Disable</button>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-top:6px;" id="drawdown-hint">Disabled — trades close only at SL or target</div>
+    </div>
+  </div>
+
+  <!-- Intelligence Feed -->
+  <div class="tg-section">
+    <div class="tg-section-title">📡 Intelligence Feed</div>
+    
+    <!-- Two notification toggles -->
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg3);border-radius:8px;">
+        <div>
+          <div style="font-size:12px;font-weight:600;">🔔 Trade Alerts</div>
+          <div style="font-size:11px;color:var(--text2);">Paper trades, signals, wins & losses</div>
+        </div>
+        <div class="toggle-switch" id="trade-notify-toggle"></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg3);border-radius:8px;">
+        <div>
+          <div style="font-size:12px;font-weight:600;">📰 Intel Updates</div>
+          <div style="font-size:11px;color:var(--text2);">Market scans, news, group messages</div>
+        </div>
+        <div class="toggle-switch" id="intel-notify-toggle"></div>
+      </div>
+    </div>
+
+    <div id="intel-feed" style="display:flex;flex-direction:column;gap:8px;max-height:500px;overflow-y:auto;">
+      <div style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0;">Feed will populate as she reads groups and scans market</div>
+    </div>
+  </div>
+
+  <!-- Chart Image Analysis Toggle -->
+  <div class="tg-section">
+    <div class="tg-section-title">🖼️ Chart Image Analysis</div>
+    <div class="auto-trade-toggle">
+      <div>
+        <div class="toggle-label">Auto-analyze chart images</div>
+        <div class="caller-stats">Claude Vision analyzes every chart image posted by tracked callers</div>
+      </div>
+      <div class="toggle-switch" id="tg-chart-analysis-toggle"></div>
+    </div>
+  </div>
+      </div>
+    </div>
+
+    <div class="callers-pane" id="callers-advisors" style="display:none;">
+
     <button id="global-rules-btn" style="font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:9px;padding:7px 14px;margin-bottom:12px;">⚙️ My Default Trade Rules</button>
     <div style="font-size:11px;color:var(--text3);background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-bottom:14px;">⚠️ These are the advisor's calls, not Asuka's AI. Trading them is your choice and your risk. Not financial advice.</div>
     <div id="adv-leaderboard" style="margin-bottom:18px;"></div>
@@ -3623,25 +3583,29 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     <!-- The call feed -->
     <div style="font-size:12px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px;">RECENT CALLS</div>
     <div id="calls-feed">Loading...</div>
-
+    </div>
   </div>
 </div>
 
 <div class="page" id="page-5">
 <div style="overflow-y:auto;height:100%;padding:12px;">
 
-  <!-- Sub tabs -->
-  <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:12px;flex-shrink:0;">
-    <button class="trade-tab active" data-others-tab="study">📚 Study</button>
-    <button class="trade-tab" data-others-tab="tools">🛠️ Tools</button>
-    <button class="trade-tab" data-others-tab="memory">🧠 Memory</button>
-    <button class="trade-tab" data-others-tab="intel">✨ Intelligence</button>
-    <button class="trade-tab" data-others-tab="life">🌸 Life</button>
-    <button class="trade-tab" data-others-tab="her">💞 Her</button>
+    <div style="margin-bottom:10px;">
+    <div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">More</div>
+    <div style="font-size:12px;color:var(--text2);margin-top:2px;">Memory, study, scoreboard, tools, and extras. Personality & voice are in the Customize tab.</div>
+  </div>
+
+<!-- More / Others sub tabs (separate class so they don't fight Trade tabs) -->
+  <div id="others-subnav" style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:12px;flex-shrink:0;overflow-x:auto;">
+    <button class="others-tab active" data-others-tab="memory">Memory</button>
+    <button class="others-tab" data-others-tab="study">Study</button>
+    <button class="others-tab" data-others-tab="intel">Scoreboard</button>
+    <button class="others-tab" data-others-tab="tools">Tools</button>
+    <button class="others-tab" data-others-tab="life">Extras</button>
   </div>
 
   <!-- ══ STUDY TAB ══ -->
-  <div class="others-tab-content active" id="others-study">
+  <div class="others-tab-content" id="others-study">
 
     <div class="tg-section" style="margin-bottom:10px;">
       <div style="font-size:13px;font-weight:700;margin-bottom:4px;">📚 Study with Asuka</div>
@@ -3659,119 +3623,186 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     </div>
   </div>
 
-  <!-- ══ INTELLIGENCE TAB ══ -->
-  <div class="others-tab-content" id="others-intel">
+<div class="others-tab-content" id="others-tools">
 
-    <!-- Precision Scoreboard -->
-    <div class="as-card precision-panel" style="margin-bottom:12px;">
-      <div class="precision-head" style="margin-bottom:8px;">
-        <div>
-          <div class="precision-kicker">Measure</div>
-          <div class="precision-title">Precision Scoreboard</div>
-          <div class="precision-sub">Out-of-sample holdout first. Gate A/B and setup expectancy fill as shadows resolve.</div>
-        </div>
-        <button id="precision-refresh" class="as-btn as-btn-data" style="font-size:11px;padding:6px 12px;flex-shrink:0;">Refresh</button>
-      </div>
-      <div id="precision-scoreboard"><div class="sb-empty">Loading scoreboard…</div></div>
+    <!-- Relocated from Trade → Status (IDs kept for JS) -->
+    <div class="tg-section" style="margin-bottom:10px;padding:12px;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">Account & advanced tools</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.45;">Account usage, utilities, and advanced Telegram admin. To change Asuka’s personality or voice, use Customize.</div>
     </div>
 
-    <!-- Asuka's Brain (learning stats) -->
-    <div class="as-card" style="padding:14px;margin-bottom:12px;">
-      <div style="font-family:var(--display);font-size:16px;font-weight:600;margin-bottom:4px;">Asuka's Brain 🧠</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">She learns from every trade. The more she runs, the sharper she gets.</div>
-      <div id="brain-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">Loading...</div>
+    <!-- Telegram group admin (moved out of Callers — not for following traders) -->
+    <details class="tg-section" style="margin-bottom:10px;padding:12px;">
+      <summary style="font-size:12px;font-weight:700;cursor:pointer;">🛠 Telegram group admin</summary>
+      <div style="font-size:11px;color:var(--text2);margin:8px 0 12px;line-height:1.45;">Kick/ban, join requests, and host/mod presence. Only needed if you run groups — not for following callers.</div>
+  <!-- Group admin (Bot API) -->
+  <div class="tg-section">
+    <div class="tg-section-title">🛠 Manage groups (Asuka admin)</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.5;">
+      Add your bot as <b>admin</b> (Ban users, Delete messages, Pin, Invite users). Then register the group chat id, or send any message in the group so she discovers it.
+      Owner slash cmds in-group: <code>/kick /ban /mute /unmute /del /pin /title /desc</code> (reply to a user/msg).
     </div>
-
-    <!-- Live Agent Swarm -->
-    <div class="as-card" style="padding:14px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-        <div style="font-family:var(--display);font-size:16px;font-weight:600;">Agent Swarm 🐟</div>
-        <span id="swarm-status" class="as-pill as-pill-data" style="font-size:10px;">idle</span>
-      </div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">Legacy swarm — idle while Precision is on. Optional MiroFish veto if you enable it.</div>
-      <div id="swarm-summary" style="font-family:'JetBrains Mono',monospace;font-size:12px;margin-bottom:10px;color:var(--text2);">Waiting for the next scan...</div>
-      <div id="swarm-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;"></div>
-      <div id="swarm-args" style="margin-top:10px;font-size:11px;"></div>
+    <div id="tg-admin-bot-st" style="font-size:11px;color:var(--text3);margin-bottom:8px;">Checking bot…</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <input class="tg-input" id="tg-admin-chat-id" placeholder="Group chat id (−100…) or @publicname" style="margin:0;flex:1;">
+      <button class="tg-add-btn" id="tg-admin-register">Register</button>
     </div>
-
-    <!-- What She Knows About You -->
-    <div class="as-card" style="padding:14px;">
-      <div style="font-family:var(--display);font-size:16px;font-weight:600;margin-bottom:4px;">What Asuka Knows About You 💭</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">Your relationship deepens as she learns more about you.</div>
-      <div id="knows-content">Loading...</div>
+    <div id="tg-admin-groups" style="font-size:12px;margin-bottom:12px;"></div>
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;">Pending join requests</div>
+    <div id="tg-admin-joins" style="font-size:12px;margin-bottom:12px;"><div style="color:var(--text3);">None</div></div>
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;">Quick action</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <select id="tg-admin-action-group" class="tg-input" style="margin:0;"><option value="">Select group</option></select>
+      <select id="tg-admin-action" class="tg-input" style="margin:0;">
+        <option value="post">Post message</option>
+        <option value="kick">Kick user</option>
+        <option value="ban">Ban user</option>
+        <option value="mute">Mute 24h</option>
+        <option value="title">Set title</option>
+        <option value="desc">Set description</option>
+      </select>
+      <input class="tg-input" id="tg-admin-action-arg" placeholder="@user / user id / text" style="margin:0;grid-column:1/-1;">
+      <button class="tg-add-btn" id="tg-admin-run" style="grid-column:1/-1;">Run (asks confirm)</button>
     </div>
-    <!-- Your Rules (she enforces these) -->
-    <div class="as-card" style="padding:14px;margin-bottom:12px;">
-      <div style="font-family:var(--display);font-size:16px;font-weight:600;margin-bottom:4px;">Your Rules 📋</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Tell her "my rule is..." in chat, or add one here. She checks every trade against these and skips ones that break them.</div>
-      <div style="display:flex;gap:6px;margin-bottom:10px;">
-        <input id="rule-input" class="as-input" placeholder="e.g. Never trade memecoins over $50k" style="flex:1;">
-        <button id="rule-add" class="as-btn as-btn-her">Add</button>
-      </div>
-      <div id="rules-list"></div>
-    </div>
-
-    <!-- Trade Replay / Audit -->
-    <div class="as-card" style="padding:14px;margin-bottom:12px;">
-      <div style="font-family:var(--display);font-size:16px;font-weight:600;margin-bottom:4px;">Trade Replay 🔍</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Every decision, fully auditable. See exactly why she took or skipped each trade.</div>
-      <div id="replay-list">Loading...</div>
-      <div id="replay-detail" style="display:none;margin-top:10px;"></div>
-    </div>
-
+    <div id="tg-admin-msg" style="font-size:11px;margin-top:8px;color:var(--text2);"></div>
   </div>
 
-  <div class="others-tab-content" id="others-her">
-    <div class="tg-section" style="margin-bottom:10px;">
+  <!-- Human-like host / mod presence -->
+  <div class="tg-section">
+    <div class="tg-section-title">👤 Group host presence</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.5;">
+      She watches the group like a careful human mod: anti-spam, welcomes, answers @mentions, optional vibe/hype.
+      <b>Kick/ban never auto</b> — only spam delete/mute + your confirms.
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div class="toggle-label">Enabled</div>
+      <div class="toggle" id="tg-mod-enabled"><div class="toggle-knob"></div></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;">Mode</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="tg-add-btn tg-mod-mode" data-m="silent" style="flex:1;font-size:11px;">Silent</button>
+      <button class="tg-add-btn tg-mod-mode" data-m="light" style="flex:1;font-size:11px;border-color:var(--accent);">Light</button>
+      <button class="tg-add-btn tg-mod-mode" data-m="full" style="flex:1;font-size:11px;">Full</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+      <label style="font-size:10px;color:var(--text2);">Max replies/hr (light)<input class="tg-input" id="tg-mod-max" type="number" min="1" max="30" style="margin-top:4px;"></label>
+      <label style="font-size:10px;color:var(--text2);">Cooldownoldown sec<input class="tg-input" id="tg-mod-cd" type="number" min="15" max="600" style="margin-top:4px;"></label>
+      <label style="font-size:10px;color:var(--text2);">Hype every (hours)<input class="tg-input" id="tg-mod-hype-hrs" type="number" min="2" max="48" style="margin-top:4px;"></label>
+      <label style="font-size:10px;color:var(--text2);">Spam mute (hours)<input class="tg-input" id="tg-mod-mute-hrs" type="number" min="1" max="168" style="margin-top:4px;"></label>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:8px 0;">
+      <div class="toggle-label">Auto anti-spam</div>
+      <div class="toggle" id="tg-mod-spam"><div class="toggle-knob"></div></div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:8px 0;">
+      <div class="toggle-label">Welcomes</div>
+      <div class="toggle" id="tg-mod-welcome"><div class="toggle-knob"></div></div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:8px 0;">
+      <div class="toggle-label">Scheduled hype</div>
+      <div class="toggle" id="tg-mod-hype"><div class="toggle-knob"></div></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button class="tg-add-btn" id="tg-mod-save" style="flex:1;">Save host settings</button>
+      <button class="tg-add-btn" id="tg-mod-hype-now" style="flex:1;">Hype now</button>
+    </div>
+    <div id="tg-mod-msg" style="font-size:11px;margin-top:8px;color:var(--text2);"></div>
+    <div id="tg-mod-stats" style="font-size:10px;color:var(--text3);margin-top:6px;"></div>
+  </div>
+
+    </details>
+    <canvas id="equity-spark" width="600" height="56" style="width:100%;height:56px;margin-bottom:10px;border-radius:10px;background:rgba(255,255,255,0.94);border:1px solid rgba(148,163,184,0.07);"></canvas>
+    <!-- Asuka Level -->
+    <div class="tg-section" style="margin-bottom:10px;padding:10px 12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+        <span style="font-size:11px;font-weight:700;">🧠 Asuka <span id="asuka-level" style="color:var(--accent);">Lv.1</span></span>
+        <span id="asuka-xp" style="font-size:9px;color:var(--text2);">0 XP</span>
+      </div>
+      <div style="height:6px;background:rgba(255,255,255,0.94);border-radius:3px;overflow:hidden;">
+        <div id="asuka-xp-bar" style="height:100%;width:0%;background:var(--asuka-grad);border-radius:3px;transition:width 1s ease;"></div>
+      </div>
+      <div id="asuka-xp-detail" style="font-size:9px;color:var(--text2);margin-top:4px;"></div>
+    </div>
+
+    <!-- Position Doctor -->
+    <details class="tg-section" style="margin-bottom:10px;padding:12px;">
+      <summary style="font-size:12px;font-weight:700;margin-bottom:8px;cursor:pointer;">🩺 Position Doctor</summary>
+      <div style="font-size:10px;color:var(--text2);margin-bottom:8px;">Diagnose ANY position — even ones opened elsewhere</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px;">
+        <input class="tg-input" id="pd-coin" placeholder="Coin" style="margin:0;">
+        <select class="tg-input" id="pd-dir" style="margin:0;"><option value="long">Long</option><option value="short">Short</option></select>
+        <input class="tg-input" id="pd-lev" placeholder="Lev (10x)" type="number" style="margin:0;">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+        <input class="tg-input" id="pd-entry" placeholder="Entry price" type="number" style="margin:0;">
+        <input class="tg-input" id="pd-size" placeholder="Size $ (optional)" type="number" style="margin:0;">
+      </div>
+      <button class="tg-add-btn" id="pd-btn" style="width:100%;">🩺 Diagnose My Position</button>
+      <div id="pd-out" style="display:none;margin-top:8px;padding:10px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.2);border-radius:10px;font-size:11px;line-height:1.5;white-space:pre-wrap;"></div>
+    </details>
+
+    <!-- What-If Simulator -->
+    <details class="tg-section" style="margin-bottom:10px;padding:12px;">
+      <summary style="font-size:12px;font-weight:700;margin-bottom:8px;cursor:pointer;">🎮 What-If Simulator</summary>
+      <div style="font-size:10px;color:var(--text2);margin-bottom:8px;">"What if I bought X at Y?" — test any trade idea risk-free</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px;">
+        <input class="tg-input" id="wi-coin" placeholder="Coin" style="margin:0;">
+        <input class="tg-input" id="wi-buy" placeholder="Buy @ (blank=now)" type="number" style="margin:0;">
+        <input class="tg-input" id="wi-sell" placeholder="Sell @ (blank=now)" type="number" style="margin:0;">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+        <input class="tg-input" id="wi-amount" placeholder="Amount $ (100)" type="number" style="margin:0;">
+        <input class="tg-input" id="wi-lev" placeholder="Leverage (1x)" type="number" style="margin:0;">
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="tg-add-btn" id="wi-calc-btn" style="flex:1;">🧮 Calculate</button>
+        <button class="tg-add-btn" id="wi-demo-btn" style="flex:1;background:rgba(52,211,153,0.12);border-color:rgba(52,211,153,0.35);">▶️ Open as Demo Trade</button>
+      </div>
+      <div id="wi-out" style="display:none;margin-top:8px;padding:10px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.2);border-radius:10px;font-size:11px;line-height:1.6;"></div>
+    </details>
+
+
+    <!-- Usage Stats -->
+    <div class="tg-section" style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div style="font-size:13px;font-weight:700;">💞 Asuka & You</div>
-        <div id="her-tier" style="font-size:12px;color:var(--text2);"></div>
+        <div style="font-size:12px;font-weight:700;">📊 Daily Usage</div>
+          <span id="user-tier-badge" style="font-size:10px;padding:3px 8px;border-radius:12px;background:color-mix(in srgb, var(--accent) 14%, transparent);color:var(--accent);font-weight:650;">PRO</span>
       </div>
-      <div id="her-xpbar" style="height:6px;background:var(--bg3);border-radius:6px;overflow:hidden;margin-bottom:10px;"><div id="her-xpfill" style="height:100%;width:0%;background:var(--accent);transition:width .4s;"></div></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--text2);" id="her-stats"></div>
-    </div>
 
-    <div class="tg-section" style="margin-bottom:10px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:10px;">About you (she remembers)</div>
-      <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <input class="tg-input" id="her-callme" placeholder="What she calls you" style="margin:0;flex:1;">
-        <input class="tg-input" id="her-bday" type="date" style="margin:0;flex:1;">
+      <!-- Voice Messages -->
+      <div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;">
+          <span style="color:var(--text2);">🎙️ Voice Messages</span>
+          <span id="voice-usage-text" style="font-weight:600;">0/200</span>
+        </div>
+        <div style="background:var(--bg3);border-radius:4px;height:6px;">
+          <div id="voice-usage-bar" style="height:6px;border-radius:4px;background:var(--green);width:0%;transition:width 0.3s;"></div>
+        </div>
       </div>
-      <input class="tg-input" id="her-dream" placeholder="Your dream / goal (she'll root for it)" style="margin-bottom:8px;">
-      <input class="tg-input" id="her-safeword" placeholder="Safe word — say it to silence her, say it again to wake her" style="margin-bottom:10px;">
-      <div style="font-size:12px;font-weight:700;margin:12px 0 8px;">Shape her personality</div>
-      <div style="font-size:11px;color:var(--text2);">Gentle ↔ Teasing</div>
-      <input id="her-teasing" type="range" min="0" max="100" style="width:100%;accent-color:var(--accent);">
-      <div style="font-size:11px;color:var(--text2);">Reserved ↔ Sweet</div>
-      <input id="her-sweet" type="range" min="0" max="100" style="width:100%;accent-color:var(--accent);">
-      <div style="font-size:11px;color:var(--text2);">Quiet ↔ Chatty</div>
-      <input id="her-chatty" type="range" min="0" max="100" style="width:100%;accent-color:var(--accent);margin-bottom:10px;">
-      <button id="her-save" style="width:100%;padding:11px;border:none;border-radius:11px;background:var(--accent);color:#000;font-weight:700;font-size:13px;cursor:pointer;">Save</button>
-    </div>
 
-    <div class="tg-section" style="margin-bottom:10px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📔 Her diary</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">She writes an entry every night about her day.</div>
-      <div id="her-diary"></div>
-    </div>
-
-    <div class="tg-section" style="margin-bottom:10px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <div style="font-size:12px;font-weight:700;">🎓 Her weekly report card</div>
-        <button id="her-review-now" style="padding:6px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:11px;cursor:pointer;">Review my week now</button>
+<!-- Limit Alert -->
+      <div id="limit-alert" style="display:none;padding:8px;border-radius:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);margin-bottom:8px;">
+        <div style="font-size:11px;color:var(--red);font-weight:600;margin-bottom:6px;" id="limit-alert-msg">Daily limit reached!</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="tg-add-btn" id="buy-day-pass-btn" style="font-size:10px;padding:4px 10px;background:rgba(0,212,255,0.2);color:#00d4ff;">🎫 Day Pass $2</button>
+          <button class="tg-add-btn" id="buy-msg-pack-btn" style="font-size:10px;padding:4px 10px;background:rgba(52,211,153,0.2);color:var(--green);">📦 +500 msgs $5</button>
+          <button class="tg-add-btn" id="upgrade-plan-btn" style="font-size:10px;padding:4px 10px;">⬆️ Upgrade</button>
+        </div>
       </div>
-      <div id="her-shadow" style="font-size:11px;color:var(--text2);margin-bottom:10px;"></div>
-      <div id="her-reports"></div>
+
+      <!-- Auto extend -->
+      <div class="auto-trade-toggle">
+        <div>
+          <div style="font-size:11px;font-weight:600;">Auto-Extend</div>
+          <div style="font-size:10px;color:var(--text2);">Auto-charge when limit hit</div>
+        </div>
+        <div class="toggle-switch" id="auto-extend-toggle"></div>
+      </div>
     </div>
 
-    <div class="tg-section">
-      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📸 Our history</div>
-      <div id="her-moments"></div>
-    </div>
-  </div>
 
-  <!-- ══ TOOLS TAB ══ -->
-  <div class="others-tab-content" id="others-tools">
+
+
 
     <!-- Calculator -->
     <div class="tg-section" style="margin-bottom:10px;">
@@ -3829,12 +3860,11 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     </div>
   </div>
 
-  <!-- ══ MEMORY TAB ══ -->
-  <div class="others-tab-content" id="others-memory">
+<div class="others-tab-content active" id="others-memory">
 
     <div class="tg-section" style="margin-bottom:10px;">
       <div style="font-size:12px;font-weight:700;margin-bottom:4px;">🧪 Intelligence Lab</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Feed Asuka trades, train her on history, export or import her brain</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Teach Asuka from your trades and notes. For personality & voice, use Customize.</div>
 
       <div style="font-size:10px;font-weight:600;color:var(--text2);margin-bottom:6px;">FEED A TRADE (yours or a friend's)</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px;">
@@ -3901,15 +3931,67 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     </div>
   </div>
 
-  <!-- ══ LIFE TAB ══ -->
-  <div class="others-tab-content" id="others-life">
-    <div class="tg-section" style="margin-bottom:10px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div style="font-size:12px;font-weight:700;">🖼️ Wallpapers (behind Asuka)</div>
+<div class="others-tab-content" id="others-intel">
+
+    <!-- Precision Scoreboard -->
+    <div class="as-card precision-panel" style="margin-bottom:12px;">
+      <div class="precision-head" style="margin-bottom:8px;">
+        <div>
+          <div class="precision-kicker">Measure</div>
+          <div class="precision-title">Precision Scoreboard</div>
+          <div class="precision-sub">Out-of-sample holdout first. Gate A/B and setup expectancy fill as shadows resolve.</div>
+        </div>
+        <button id="precision-refresh" class="as-btn as-btn-data" style="font-size:11px;padding:6px 12px;flex-shrink:0;">Refresh</button>
       </div>
-      <div id="wp-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">Loading…</div>
-      <button id="wp-none" style="width:100%;margin-top:8px;padding:9px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text2);font-size:12px;cursor:pointer;">✕ No wallpaper</button>
+      <div id="precision-scoreboard"><div class="sb-empty">Loading scoreboard…</div></div>
     </div>
+
+    <!-- Asuka's Brain (learning stats) -->
+    <div class="as-card" style="padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--display);font-size:16px;font-weight:600;margin-bottom:4px;">Asuka's Brain 🧠</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">She learns from every trade. The more she runs, the sharper she gets.</div>
+      <div id="brain-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">Loading...</div>
+    </div>
+
+    <!-- Live Agent Swarm -->
+    <div class="as-card" style="padding:14px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div style="font-family:var(--display);font-size:16px;font-weight:600;">Agent Swarm 🐟</div>
+        <span id="swarm-status" class="as-pill as-pill-data" style="font-size:10px;">idle</span>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">Legacy swarm — idle while Precision is on. Optional MiroFish veto if you enable it.</div>
+      <div id="swarm-summary" style="font-family:'JetBrains Mono',monospace;font-size:12px;margin-bottom:10px;color:var(--text2);">Waiting for the next scan...</div>
+      <div id="swarm-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;"></div>
+      <div id="swarm-args" style="margin-top:10px;font-size:11px;"></div>
+    </div>
+
+    <!-- What She Knows About You -->
+    <div class="as-card" style="padding:14px;">
+      <div style="font-family:var(--display);font-size:16px;font-weight:600;margin-bottom:4px;">What Asuka Knows About You 💭</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">Your relationship deepens as she learns more about you.</div>
+      <div id="knows-content">Loading...</div>
+    </div>
+    <div class="as-card" style="padding:12px;margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Your Rules</div>
+      <div style="font-size:11px;color:var(--text2);">Trading rules live under <b>Customize</b> so you can edit how Asuka behaves in one place.</div>
+    </div>
+
+    <!-- Trade Replay / Audit -->
+    <div class="as-card" style="padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--display);font-size:16px;font-weight:600;margin-bottom:4px;">Trade Replay 🔍</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Every decision, fully auditable. See exactly why she took or skipped each trade.</div>
+      <div id="replay-list">Loading...</div>
+      <div id="replay-detail" style="display:none;margin-top:10px;"></div>
+    </div>
+
+  </div>
+
+<div class="others-tab-content" id="others-life">
+    <div class="tg-section" style="margin-bottom:10px;padding:12px;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">Extras</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.45;">Quests and subscription. Personality, voice, and look are under the top <b>Customize</b> tab.</div>
+    </div>
+
     <div class="tg-section" style="margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <div style="font-size:12px;font-weight:700;">🎯 Today's quests</div>
@@ -3918,29 +4000,65 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       <div id="quest-list" style="font-size:12px;color:var(--text2);">Loading…</div>
     </div>
 
-    <div class="tg-section" style="margin-bottom:10px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:4px;">🪄 Voice Routines</div>
-      <div style="font-size:10px;color:var(--text2);margin-bottom:8px;">Say the trigger phrase → she runs the actions. One action per line: <b>open:Spotify</b>, <b>url:https://...</b>, <b>music:play</b>, <b>music:pause</b>, <b>volume:40</b>, <b>tradingmode</b></div>
-      <div id="routines-list" style="margin-bottom:8px;"></div>
-      <input class="tg-input" id="rt-trigger" placeholder="Trigger phrases (separate with | ): daddy's home|i'm back" style="margin:0 0 6px;">
-      <textarea class="tg-input" id="rt-actions" placeholder="open:Spotify&#10;music:play&#10;tradingmode" style="margin:0 0 6px;height:54px;resize:vertical;"></textarea>
-      <input class="tg-input" id="rt-reply" placeholder="What she says back: Welcome home~ 💕" style="margin:0 0 6px;">
-      <button class="tg-add-btn" id="rt-add-btn" style="width:100%;">+ Save Routine</button>
-      <div id="rt-status" style="font-size:11px;margin-top:6px;display:none;"></div>
-    </div>
-
-    <!-- Morning briefing -->
-    <div class="tg-section" style="margin-bottom:10px;">
-      <div class="auto-trade-toggle" style="margin-bottom:8px;">
-        <div><div class="toggle-label">🌅 Morning Briefing</div><div class="caller-stats">Daily 8am market + weather summary</div></div>
-        <div class="toggle-switch" id="morning-briefing-toggle"></div>
+    <!-- Subscription -->
+    <div class="tg-section">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">💳 Subscription</div>
+      <div style="padding:12px;background:var(--bg3);border-radius:10px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:14px;font-weight:800;" id="sub-tier-name">PRO</div>
+            <div style="font-size:10px;color:var(--text2);" id="sub-tier-price">$249/year</div>
+          </div>
+          <span id="sub-tier-badge" style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(0,212,255,0.2);color:#00d4ff;">ACTIVE</span>
+        </div>
       </div>
-      <div style="font-size:11px;color:var(--text2);">Asuka sends you a morning briefing via TG every day at 8am with market summary, your open trades, and daily RSI signals</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <button class="tg-add-btn" style="background:rgba(251,191,36,0.15);color:#fbbf24;" id="btn-upgrade-degen" onclick="window._stripeLinks && window.open(window._stripeLinks.upgrade_degen)">⬆️ Upgrade to Degen</button>
+        <button class="tg-add-btn" style="background:rgba(0,212,255,0.1);color:#00d4ff;" id="btn-day-pass" onclick="window._stripeLinks && window.open(window._stripeLinks.day_pass)">🎫 Buy Day Pass</button>
+        <button class="tg-add-btn" style="background:rgba(52,211,153,0.1);color:var(--green);" id="btn-msg-pack" onclick="window._stripeLinks && window.open(window._stripeLinks.message_pack)">📦 Voice message pack</button>
+      </div>
+    </div>
+  </div>
+
+
+
+</div>
+</div><!-- end others page -->
+
+
+
+<!-- PAGE 8 — CUSTOMIZE -->
+<div class="page" id="page-8">
+<div style="overflow-y:auto;height:100%;padding:12px;">
+    <div style="margin-bottom:10px;">
+      <div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Customize</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:2px;">Pick who you're with — each character keeps her own personality, wake word, voice, and vibe.</div>
     </div>
 
+    <div class="tg-section" style="margin-bottom:10px;padding:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:700;">Who's with you</div>
+        <div id="customize-active-label" style="font-size:11px;color:var(--accent);font-weight:650;">—</div>
+      </div>
+      <div id="customize-char-picker" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;"></div>
+      <div style="font-size:11px;color:var(--text2);margin-top:8px;line-height:1.45;">
+        Switching saves the current girl's settings, then loads the other one's. They don't share a personality.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <button type="button" class="tg-add-btn" id="more-open-look" style="flex:1;min-width:140px;">🎭 Look &amp; name</button>
+        <button type="button" class="tg-add-btn" id="more-open-character" style="flex:1;min-width:140px;background:transparent;color:var(--text);">🖼 Full character select</button>
+      </div>
+    </div>
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:700;" id="customize-wallpaper-title">🖼️ Wallpapers</div>
+      </div>
+      <div id="wp-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">Loading…</div>
+      <button id="wp-none" style="width:100%;margin-top:8px;padding:9px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text2);font-size:12px;cursor:pointer;">✕ No wallpaper</button>
+    </div>
     <!-- Personality -->
     <div class="tg-section" style="margin-bottom:10px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">💬 Asuka Personality</div>
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;" id="customize-personality-title">💬 Personality</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;" id="personality-grid">
         <div class="opt-card active" data-personality="chill">
           <div class="opt-emoji">😊</div>
@@ -3988,29 +4106,94 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       </div>
     </div>
 
-    <!-- Subscription -->
-    <div class="tg-section">
-      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">💳 Subscription</div>
-      <div style="padding:12px;background:var(--bg3);border-radius:10px;margin-bottom:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div>
-            <div style="font-size:14px;font-weight:800;" id="sub-tier-name">PRO</div>
-            <div style="font-size:10px;color:var(--text2);" id="sub-tier-price">$249/year</div>
-          </div>
-          <span id="sub-tier-badge" style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(0,212,255,0.2);color:#00d4ff;">ACTIVE</span>
-        </div>
+    <!-- Morning briefing -->
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div class="auto-trade-toggle" style="margin-bottom:8px;">
+        <div><div class="toggle-label">🌅 Morning Briefing</div><div class="caller-stats">Daily 8am market + weather summary</div></div>
+        <div class="toggle-switch" id="morning-briefing-toggle"></div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:6px;">
-        <button class="tg-add-btn" style="background:rgba(251,191,36,0.15);color:#fbbf24;" id="btn-upgrade-degen" onclick="window._stripeLinks && window.open(window._stripeLinks.upgrade_degen)">⬆️ Upgrade to Degen</button>
-        <button class="tg-add-btn" style="background:rgba(0,212,255,0.1);color:#00d4ff;" id="btn-day-pass" onclick="window._stripeLinks && window.open(window._stripeLinks.day_pass)">🎫 Buy Day Pass</button>
-        <button class="tg-add-btn" style="background:rgba(52,211,153,0.1);color:var(--green);" id="btn-msg-pack" onclick="window._stripeLinks && window.open(window._stripeLinks.message_pack)">📦 Voice message pack</button>
-      </div>
+      <div style="font-size:11px;color:var(--text2);">Asuka sends you a morning briefing via TG every day at 8am with market summary, your open trades, and daily RSI signals</div>
     </div>
-  </div>
 
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:4px;">🪄 Voice Routines</div>
+      <div style="font-size:10px;color:var(--text2);margin-bottom:8px;">Say the trigger phrase → she runs the actions. One action per line: <b>open:Spotify</b>, <b>url:https://...</b>, <b>music:play</b>, <b>music:pause</b>, <b>volume:40</b>, <b>tradingmode</b></div>
+      <div id="routines-list" style="margin-bottom:8px;"></div>
+      <input class="tg-input" id="rt-trigger" placeholder="Trigger phrases (separate with | ): daddy's home|i'm back" style="margin:0 0 6px;">
+      <textarea class="tg-input" id="rt-actions" placeholder="open:Spotify&#10;music:play&#10;tradingmode" style="margin:0 0 6px;height:54px;resize:vertical;"></textarea>
+      <input class="tg-input" id="rt-reply" placeholder="What she says back: Welcome home~ 💕" style="margin:0 0 6px;">
+      <button class="tg-add-btn" id="rt-add-btn" style="width:100%;">+ Save Routine</button>
+      <div id="rt-status" style="font-size:11px;margin-top:6px;display:none;"></div>
+    </div>
+
+
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:700;">💞 Bond with you</div>
+        <div id="her-tier" style="font-size:12px;color:var(--text2);"></div>
+      </div>
+      <div id="her-xpbar" style="height:6px;background:var(--bg3);border-radius:6px;overflow:hidden;margin-bottom:10px;"><div id="her-xpfill" style="height:100%;width:0%;background:var(--accent);transition:width .4s;"></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--text2);" id="her-stats"></div>
+    </div>
+
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;">About you</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <input class="tg-input" id="her-callme" placeholder="What she calls you" style="margin:0;flex:1;">
+        <input class="tg-input" id="her-bday" type="date" style="margin:0;flex:1;">
+      </div>
+      <input class="tg-input" id="her-dream" placeholder="Your dream / goal (she'll root for it)" style="margin-bottom:8px;">
+      <input class="tg-input" id="her-safeword" placeholder="Safe word — say it to silence her, say it again to wake her" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin:12px 0 8px;">Fine-tune vibe (sliders)</div>
+      <div style="font-size:11px;color:var(--text2);">Gentle ↔ Teasing</div>
+      <input id="her-teasing" type="range" min="0" max="100" style="width:100%;accent-color:var(--accent);">
+      <div style="font-size:11px;color:var(--text2);">Reserved ↔ Sweet</div>
+      <input id="her-sweet" type="range" min="0" max="100" style="width:100%;accent-color:var(--accent);">
+      <div style="font-size:11px;color:var(--text2);">Quiet ↔ Chatty</div>
+      <input id="her-chatty" type="range" min="0" max="100" style="width:100%;accent-color:var(--accent);margin-bottom:10px;">
+      <button id="her-save" style="width:100%;padding:11px;border:none;border-radius:11px;background:var(--accent);color:#000;font-weight:700;font-size:13px;cursor:pointer;">Save</button>
+    </div>
+
+        <div class="tg-section" style="padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--display);font-size:16px;font-weight:600;margin-bottom:4px;">Your Rules 📋</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Tell her "my rule is..." in chat, or add one here. She checks every trade against these and skips ones that break them.</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <input id="rule-input" class="tg-input" placeholder="e.g. Never trade memecoins over $50k" style="flex:1;">
+        <button id="rule-add" class="tg-add-btn">Add</button>
+      </div>
+      <div id="rules-list"></div>
+    </div>
+
+
+  
+<details class="tg-section" id="more-story-details" style="margin-bottom:10px;padding:12px;">
+      <summary style="font-size:12px;font-weight:700;cursor:pointer;">📖 Diary, report card & history</summary>
+      <div style="font-size:11px;color:var(--text2);margin:8px 0 12px;">Optional — not needed to customize how she acts.</div>
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📔 Her diary (read-only)</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">She writes an entry every night about her day.</div>
+      <div id="her-diary"></div>
+    </div>
+
+    <div class="tg-section" style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:700;">🎓 Weekly report card</div>
+        <button id="her-review-now" style="padding:6px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:11px;cursor:pointer;">Review my week now</button>
+      </div>
+      <div id="her-shadow" style="font-size:11px;color:var(--text2);margin-bottom:10px;"></div>
+      <div id="her-reports"></div>
+    </div>
+
+        </details>
+
+<div class="tg-section">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📸 Shared history</div>
+      <div id="her-moments"></div>
+    </div>
+  
+    <!-- Your Rules (she enforces these) -->
 </div>
-</div><!-- end others page -->
-
+</div>
 
 </div><!-- end pages-wrapper -->
 
@@ -4325,6 +4508,12 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
 /* Full app — only loads on demand (never blocks open) */
 (function() {
   var loading = false;
+  function clearTabLoadingHints(msg) {
+    document.querySelectorAll('.tab-loading-hint').forEach(function(h) {
+      if (msg) { h.textContent = msg; h.style.color = '#ff453a'; }
+      else h.remove();
+    });
+  }
   window.loadDashboardApp = function() {
     if (window.__dashAppLoaded) return;
     if (loading) return;
@@ -4332,44 +4521,46 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
     window.__dashAppLoading = true;
     window.__dashAppLoadStarted = Date.now();
     var run = function() {
+      if (window.__dashAppLoaded) return;
+      if (document.querySelector('script[data-dash-app="1"]')) return;
       var s = document.createElement('script');
-      s.src = './dashboard-app.js?v=20260817-sf-pro';
+      s.src = './dashboard-app.js?v=20260822-tab-fix';
+      s.setAttribute('data-dash-app', '1');
       s.onload = function() {
         window.__dashAppLoaded = true;
         loading = false;
         window.__dashAppLoading = false;
-        document.querySelectorAll('.tab-loading-hint').forEach(function(h) { h.remove(); });
+        clearTabLoadingHints();
         setTimeout(function() {
           if (typeof window.dashAppFinishBoot === 'function') {
-            try { window.dashAppFinishBoot(); } catch(e) { console.error('dashAppFinishBoot:', e); }
+            try { window.dashAppFinishBoot(); } catch (e) { console.error('dashAppFinishBoot:', e); }
           }
           if (window.__pendingPageData != null && typeof window.loadPageData === 'function') {
-            window.loadPageData(window.__pendingPageData);
+            var n = window.__pendingPageData;
             window.__pendingPageData = null;
+            try { window.loadPageData(n); } catch (e) { console.error('loadPageData:', e); }
           }
         }, 50);
       };
       s.onerror = function() {
         loading = false;
         window.__dashAppLoading = false;
-        document.querySelectorAll('.tab-loading-hint').forEach(function(h) {
-          h.textContent = 'Failed to load tab features — try again';
-          h.style.color = '#ff453a';
-        });
+        s.remove();
+        clearTabLoadingHints('Failed to load tab features — tap the tab again');
         console.error('Failed to load dashboard-app.js');
       };
       document.body.appendChild(s);
     };
     // Safety: never leave the overlay forever if idle callback / load stalls
     setTimeout(function() {
+      if (window.__dashAppLoaded) {
+        clearTabLoadingHints();
+        return;
+      }
       document.querySelectorAll('.tab-loading-hint').forEach(function(h) {
-        if (!window.__dashAppLoaded) {
-          h.textContent = 'Still loading… tap Trading again if this sticks';
-        } else {
-          h.remove();
-        }
+        h.textContent = 'Still loading… tap the tab again if this sticks';
       });
-      if (!window.__dashAppLoaded && !document.querySelector('script[src*="dashboard-app.js"]')) {
+      if (!document.querySelector('script[data-dash-app="1"]')) {
         loading = false;
         window.__dashAppLoading = false;
         run();
@@ -4388,6 +4579,8 @@ input:focus,textarea:focus,select:focus { border-color:var(--accent) !important;
       if (window.__dashAppLoaded || window.__dashAppLoading) return;
       if (typeof requestIdleCallback === 'function') {
         requestIdleCallback(function() { window.loadDashboardApp(); }, { timeout: 60000 });
+      } else {
+        window.loadDashboardApp();
       }
     }, 45000);
   };
@@ -4479,10 +4672,11 @@ function premiumLayerInit() {
   // ── Cmd+K command palette ──
   const CMDS = [
     { n:'Go to Dashboard',   run:()=>document.querySelector('.page-tab[data-page="1"]')?.click() },
-    { n:'Go to Telegram',    run:()=>document.querySelector('.page-tab[data-page="2"]')?.click() },
+    { n:'Go to Callers',     run:()=>document.querySelector('.page-tab[data-page="7"]')?.click() },
     { n:'Go to Trading',     run:()=>document.querySelector('.page-tab[data-page="3"]')?.click() },
-    { n:'Go to Calls',       run:()=>document.querySelector('.page-tab[data-page="7"]')?.click() },
-    { n:'Go to Others',      run:()=>document.querySelector('.page-tab[data-page="5"]')?.click() },
+    { n:'Go to Advisors',    run:()=>{ const t=document.querySelector('.page-tab[data-page="7"]'); t?.click(); setTimeout(()=>document.querySelector('.callers-tab[data-callers-tab="advisors"]')?.click(), 80); } },
+    { n:'Go to Customize',  run:()=>document.querySelector('.page-tab[data-page="8"]')?.click() },
+    { n:'Go to More',        run:()=>document.querySelector('.page-tab[data-page="5"]')?.click() },
     { n:'Open Settings',     run:()=>document.getElementById('settings-open-btn')?.click() },
     { n:'📚 Study — new lesson', run:()=>{ try { (window.ipcRenderer||window.asuka?.ipc).invoke('open-classroom') } catch(e){} } },
     { n:'Theme: Apple Blue',   run:()=>applyTheme('apple') },
@@ -4718,7 +4912,7 @@ function premiumLayerInit() {
     })
   }
   document.getElementById('wp-none')?.addEventListener('click', () => (window.ipcRenderer||window.asuka?.ipc).invoke('apply-scene', { name: null }).catch(()=>{}))
-  setTimeout(loadWallpapers, 2800)
+  setTimeout(() => { try { loadWallpapers() } catch(e){} }, 2800)
 
   // ── 🎯 Daily quests ──
   window.loadQuests = async function() {
@@ -4813,17 +5007,19 @@ function premiumLayerInit() {
       || '<div style="color:var(--text3);font-size:12px;">No entries yet — she writes her first one tonight.</div>')
     const rvBtn = document.getElementById('her-review-now')
     if(!rvBtn) return
-    if (rvBtn) rvBtn.onclick = async () => { rvBtn.textContent = 'reviewing…'; await ipc.invoke('weekly-report').catch(()=>{}); rvBtn.textContent = 'Review my week now'; loadHerTab() }
+    if (rvBtn) rvBtn.onclick = async () => { rvBtn.textContent = 'reviewing…'; await ipc.invoke('weekly-report').catch(()=>{}); rvBtn.textContent = 'Review my week now'; window.loadHerTab() }
     document.getElementById('her-save').onclick = async () => {
+      const sliders = {
+          teasing: +document.getElementById('her-teasing').value,
+          sweetness: +document.getElementById('her-sweet').value,
+          chattiness: +document.getElementById('her-chatty').value }
       await ipc.invoke('companion-set', { profile: {
           callMe: document.getElementById('her-callme').value.trim(),
           birthday: document.getElementById('her-bday').value,
           dream: document.getElementById('her-dream').value.trim(),
           safeword: document.getElementById('her-safeword').value.trim().toLowerCase() },
-        sliders: {
-          teasing: +document.getElementById('her-teasing').value,
-          sweetness: +document.getElementById('her-sweet').value,
-          chattiness: +document.getElementById('her-chatty').value } }).catch(()=>{})
+        sliders }).catch(()=>{})
+      await ipc.invoke('patch-character-profile', { sliders }).catch(()=>{})
       const b = document.getElementById('her-save'); b.textContent = 'Saved 💕'; setTimeout(()=>b.textContent='Save', 1400)
     }
   }
@@ -4965,6 +5161,35 @@ if (typeof requestIdleCallback === 'function') {
   }
   window.addEventListener('load', finishBoot);
   setTimeout(finishBoot, 2500);
+})();
+</script>
+
+
+<script>
+(function () {
+  function showCallersPane(name) {
+    document.querySelectorAll('#callers-subnav .callers-tab').forEach(function (t) {
+      t.classList.toggle('active', t.dataset.callersTab === name);
+    });
+    document.querySelectorAll('.callers-pane').forEach(function (p) {
+      var on = (name === 'tg' && p.id === 'callers-tg') || (name === 'advisors' && p.id === 'callers-advisors');
+      p.classList.toggle('active', on);
+      p.style.display = on ? 'block' : 'none';
+    });
+    if (name === 'tg' && typeof window.loadTelegramUI === 'function') {
+      window.loadTelegramUI().catch(function () {});
+    }
+    if (name === 'advisors') {
+      try { if (typeof loadAdvisorTab === 'function') loadAdvisorTab(); } catch (e) {}
+      try { if (typeof renderLeaderboard === 'function') renderLeaderboard(); } catch (e) {}
+    }
+  }
+  document.addEventListener('click', function (e) {
+    var tab = e.target.closest('#callers-subnav .callers-tab');
+    if (!tab) return;
+    showCallersPane(tab.dataset.callersTab || 'tg');
+  });
+  window.showCallersPane = showCallersPane;
 })();
 </script>
 

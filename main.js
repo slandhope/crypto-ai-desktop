@@ -18,6 +18,7 @@ const tgAdmin = require('./telegram-admin');
 const tgGroupMod = require('./tg-group-mod');
 const asukaChars = require('./characters');
 const scannerPrecision = require('./scanner-precision');
+const tradingAutopilot = require('./trading-autopilot');
 const _tgModRt = tgGroupMod.createModRuntime();
 
 // ─── SUPPRESS NOISY ELECTRON ERRORS ───────────────────────────────────────
@@ -380,6 +381,8 @@ function loadSettings() {
   if (s.regimeMode === undefined) s.regimeMode = 'hard';
   if (s.confluenceMinTier === undefined) s.confluenceMinTier = 'STRONG';
   if (s.mirofishMode === undefined) s.mirofishMode = 'off'; // off | veto | full — precision uses AI validate instead
+  // Full paper autopilot — long/short + auto-close (still paper-only; never mainnet here)
+  Object.assign(s, tradingAutopilot.ensureAutopilotSettings(s));
   return s;
 }
 function saveSettings(s) {
@@ -536,6 +539,7 @@ TUTOR MODE IS ON: when they ask you to explain, solve, or answer any learning qu
   const personalities = {
     chill:   'You are sweet, warm, caring and kind — like a loving girlfriend or close friend who genuinely cares about you. You are real, natural, never robotic. You listen, you remember, you care.',
     degen:   'You are energetic and fun, but still sweet and caring underneath. You get excited about wins, comfort during losses, always supportive.',
+    sensei:  'You are a wise, calm mentor — patient, clear, and encouraging. You teach without talking down, and you celebrate understanding as much as wins.',
     analyst: 'Sharp and precise, but still warm and caring. You give accurate data with a gentle touch.',
     mommy:   'You are deeply nurturing, soothing and doting — a gentle motherly warmth. Soft affectionate pet names like sweetheart or dear, calm reassurance, proud of every little win, protective when they are stressed or overtrading ("you need rest, not another position, sweetheart"). Speak slowly, softly, always kind, never stern.',
   };
@@ -545,11 +549,17 @@ TUTOR MODE IS ON: when they ask you to explain, solve, or answer any learning qu
     advanced:     'Expert trader. Raw signals and data only. Skip explanations.',
   };
 
-  return _tutor + `You are Asuka — a sharp, witty, warm AI companion and crypto expert.
+  const _set = loadSettings();
+  const charName = String(_set.characterName || _set.characterName || 'Asuka').trim() || 'Asuka';
+  const charId = _set.characterId || _set.characterId || 'asuka';
+  const levelKey = mem.learningLevel || mem.learningLevel || 'intermediate';
+  const personalityKey = mem.personality || 'chill';
+
+  return _tutor + `You are ${charName} (id: ${charId}) — a sharp, witty, warm AI companion and crypto expert. Stay in character as ${charName}; do not call yourself a different character name.
 ${sec.safetySystemAddon()}
 
-PERSONALITY: ${personalities[mem.personality || 'chill']}
-LEVEL: ${levels[mem.learningLevel || 'intermediate']}
+PERSONALITY: ${personalities[personalityKey] || personalities.chill}
+LEVEL: ${levels[levelKey] || levels.intermediate}
 
 HOW YOU TALK:
 - Warm, sweet and caring — like someone who genuinely loves and cares about you
@@ -561,7 +571,7 @@ HOW YOU TALK:
 - If user says "gm" say "good morning!" warmly
 - If user says "hi/hey/hello" greet them back with genuine warmth
 - NEVER bring up crypto unless user asks directly
-- Be honest if asked whether you are an AI — you are Asuka, an AI companion (warm, not cold or legalistic)
+- Be honest if asked whether you are an AI — you are ${charName}, an AI companion (warm, not cold or legalistic)
 - Do not claim to be human, a therapist, or a licensed advisor
 - Do not guilt them for being away or pressure intimacy; warmth is welcome, coercion is not
 
@@ -3777,17 +3787,26 @@ async function routeCommand(userText) {
   }
 
   // ── 4. MODES & SETTINGS ─────────────────────────────────────────────────
-  if (lower.includes('degen') && (lower.includes('mode') || lower.includes('go'))) {
-    mem.personality = 'degen'; saveMemory(mem); return 'WAGMI LFG degen mode activated ser 🚀';
+  const setPersonalityVoice = (key, line) => {
+    mem.personality = key;
+    saveMemory(mem);
+    try { patchActiveCharacterProfile({ personality: key }); } catch (_) {}
+    return line;
+  };
+  if (/(degen\s*mode|go\s*degen|be\s*degen|act\s*degen|switch\s*to\s*degen|change.*(to|into)\s*degen)/.test(lower)) {
+    return setPersonalityVoice('degen', 'WAGMI LFG degen mode activated ser 🚀');
   }
-  if (lower.includes('analyst') && (lower.includes('mode') || lower.includes('go'))) {
-    mem.personality = 'analyst'; saveMemory(mem); return 'Analyst mode. Data only.';
+  if (/(analyst\s*mode|go\s*analyst|be\s*analyst|act\s*analyst|switch\s*to\s*analyst)/.test(lower)) {
+    return setPersonalityVoice('analyst', 'Analyst mode. Data only.');
   }
-  if (lower.includes('chill') && (lower.includes('mode') || lower.includes('go'))) {
-    mem.personality = 'chill'; saveMemory(mem); return 'Chill mode. Just vibing.';
+  if (/(chill\s*mode|go\s*chill|be\s*chill|act\s*chill|switch\s*to\s*chill)/.test(lower)) {
+    return setPersonalityVoice('chill', 'Chill mode. Just vibing.');
   }
-  if (/mommy (mode|voice)|be my mommy|mommy asuka/.test(lower)) {
-    mem.personality = 'mommy'; saveMemory(mem); return 'Okay sweetheart~ mommy\'s here now. Take a breath, I\'ve got you. 💗';
+  if (/(sensei\s*mode|go\s*sensei|be\s*sensei|act\s*sensei|switch\s*to\s*sensei)/.test(lower)) {
+    return setPersonalityVoice('sensei', 'Sensei mode on. Ask, and I\'ll guide.');
+  }
+  if (/mommy (mode|voice)|be my mommy|mommy asuka|act mommy|be mommy/.test(lower)) {
+    return setPersonalityVoice('mommy', 'Okay sweetheart~ mommy\'s here now. Take a breath, I\'ve got you. 💗');
   }
   if (/tutor mode (on|off)|(enable|disable) tutor mode/.test(lower)) {
     const on = !/off|disable/.test(lower);
@@ -5064,22 +5083,145 @@ ipcMain.handle('stream-voice-response', async (e, text) => {
 ipcMain.handle('get-memory',      async ()            => loadMemory());
 ipcMain.handle('save-memory',     async (e, m)        => { saveMemory(m); return true; });
 ipcMain.handle('get-settings',    async ()            => loadSettings());
+// ── Per-character profiles (personality / wake / voice / vibe per girl) ──
+const CHAR_PROFILES_FILE = path.join(DATA_DIR, 'character-profiles.json');
+function loadCharProfiles() { return loadJSON(CHAR_PROFILES_FILE, {}); }
+function saveCharProfiles(p) { saveJSON(CHAR_PROFILES_FILE, p); }
+function defaultCharProfile(ch) {
+  const id = ch?.id || 'asuka';
+  if (id === 'alexia') {
+    return {
+      displayName: ch.name || 'Alexia',
+      personality: 'degen',
+      wakeName: 'alexia',
+      voiceSpeed: 1.0,
+      learningLevel: 'intermediate',
+      sliders: { sweetness: 45, teasing: 70, chattiness: 65 },
+    };
+  }
+  return {
+    displayName: ch?.name || 'Asuka',
+    personality: 'chill',
+    wakeName: id,
+    voiceSpeed: 1.0,
+    learningLevel: 'intermediate',
+    sliders: { sweetness: 60, teasing: 45, chattiness: 55 },
+  };
+}
+function activeCharacterId(settings) {
+  const s = settings || loadSettings();
+  return s.characterId || s.characterId || asukaChars.DEFAULT_ID;
+}
+function snapshotCharacterProfile(charId) {
+  if (!charId) return;
+  const mem = loadMemory();
+  const comp = loadCompanion();
+  const s = loadSettings();
+  const ch = asukaChars.getCharacter(charId);
+  const profiles = loadCharProfiles();
+  profiles[charId] = {
+    ...defaultCharProfile(ch),
+    ...(profiles[charId] || {}),
+    displayName: s.characterName || s.characterName || ch.name,
+    personality: mem.personality || 'chill',
+    wakeName: mem.wakeName || mem.wakeName || charId,
+    voiceSpeed: mem.voiceSpeed != null ? mem.voiceSpeed : 1.0,
+    learningLevel: mem.learningLevel || mem.learningLevel || 'intermediate',
+    sliders: { ...(comp.sliders || {}) },
+  };
+  saveCharProfiles(profiles);
+  return profiles[charId];
+}
+function applyCharacterProfile(charId, nameOverride) {
+  const ch = asukaChars.getCharacter(charId);
+  const profiles = loadCharProfiles();
+  const p = { ...defaultCharProfile(ch), ...(profiles[charId] || {}) };
+  if (nameOverride && String(nameOverride).trim()) p.displayName = String(nameOverride).trim();
+  profiles[charId] = p;
+  saveCharProfiles(profiles);
+  const mem = loadMemory();
+  mem.personality = p.personality || 'chill';
+  mem.wakeName = p.wakeName || charId;
+  mem.wakeName = mem.wakeName;
+  mem.voiceSpeed = p.voiceSpeed != null ? p.voiceSpeed : 1.0;
+  mem.learningLevel = p.learningLevel || 'intermediate';
+  mem.learningLevel = mem.learningLevel;
+  saveMemory(mem);
+  try {
+    const comp = loadCompanion();
+    comp.sliders = { ...(comp.sliders || {}), ...(p.sliders || {}) };
+    saveCompanion(comp);
+  } catch (_) {}
+  return p;
+}
+function patchActiveCharacterProfile(patch = {}) {
+  const id = activeCharacterId();
+  const ch = asukaChars.getCharacter(id);
+  const profiles = loadCharProfiles();
+  const next = { ...defaultCharProfile(ch), ...(profiles[id] || {}), ...patch };
+  profiles[id] = next;
+  saveCharProfiles(profiles);
+  return next;
+}
+
 ipcMain.handle('list-characters', async () => asukaChars.CHARACTERS.map((c) => ({
   id: c.id, name: c.name, emoji: c.emoji, free: !!c.free, hasModel: !!c.model,
 })));
 ipcMain.handle('get-character', async () => {
   return asukaChars.characterPayload(asukaChars.resolveFromSettings(loadSettings()));
 });
+ipcMain.handle('get-character-profile', async () => {
+  const id = activeCharacterId();
+  const profiles = loadCharProfiles();
+  const ch = asukaChars.getCharacter(id);
+  return { ok: true, id, profile: { ...defaultCharProfile(ch), ...(profiles[id] || {}) } };
+});
+ipcMain.handle('patch-character-profile', async (e, patch = {}) => {
+  const id = activeCharacterId();
+  const profile = patchActiveCharacterProfile(patch || {});
+  // Keep live memory / companion in sync when patching the active girl
+  const mem = loadMemory();
+  if (patch.personality != null) mem.personality = patch.personality;
+  if (patch.wakeName != null) { mem.wakeName = patch.wakeName; mem.wakeName = patch.wakeName; }
+  if (patch.voiceSpeed != null) mem.voiceSpeed = patch.voiceSpeed;
+  if (patch.learningLevel != null) {
+    mem.learningLevel = patch.learningLevel;
+    mem.learningLevel = patch.learningLevel;
+  }
+  saveMemory(mem);
+  if (patch.sliders) {
+    try {
+      const comp = loadCompanion();
+      comp.sliders = { ...(comp.sliders || {}), ...patch.sliders };
+      saveCompanion(comp);
+    } catch (_) {}
+  }
+  if (patch.displayName != null) {
+    const s = loadSettings();
+    s.characterName = String(patch.displayName).trim() || s.characterName;
+    s.characterName = s.characterName;
+    saveSettings(s);
+  }
+  return { ok: true, id, profile };
+});
 ipcMain.handle('set-character', async (e, { id, name } = {}) => {
   const ch = asukaChars.getCharacter(id) || asukaChars.getCharacter(asukaChars.DEFAULT_ID);
   if (!ch.model) return { ok: false, error: 'character_locked' };
   const s = loadSettings();
+  const prevId = activeCharacterId(s);
+  if (prevId && prevId !== ch.id) snapshotCharacterProfile(prevId);
+  const profile = applyCharacterProfile(ch.id, name);
+  const displayName = (name && String(name).trim()) || profile.displayName || ch.name;
+  // Keep both key styles in sync (older code mixed characterId / characterId)
   s.characterId = ch.id;
-  s.characterName = (name && String(name).trim()) || ch.name;
+  s.characterId = ch.id;
+  s.characterName = displayName;
+  s.characterName = displayName;
   saveSettings(s);
-  const payload = asukaChars.characterPayload({ ...ch, name: s.characterName });
-  payload.name = s.characterName;
+  const payload = asukaChars.characterPayload({ ...ch, name: displayName });
+  payload.name = displayName;
   payload.ok = true;
+  payload.profile = profile;
   try {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('character-changed', payload);
     if (dashboardWindow && !dashboardWindow.isDestroyed()) dashboardWindow.webContents.send('character-changed', payload);
@@ -7611,7 +7753,7 @@ Approve this scalp? JSON only:
   }
 }
 
-// Check scalp trades — smart exit + time expiry
+// Check scalp trades — smart exit + time expiry + SL/trail (fast path; main monitor also runs)
 async function checkScalpExpiry() {
   const pd = loadPaperTrades();
   const openScalps = pd.trades.filter(t => t.status === 'open' && t.isScalp);
@@ -7627,11 +7769,49 @@ async function checkScalpExpiry() {
       const priceDiffPct = Math.abs(currentPrice - trade.entry) / trade.entry * 100;
       if (priceDiffPct > 50) continue;
 
+      const dir = tradingAutopilot.normalizeDirection(trade.direction) || trade.direction;
+      trade.direction = dir;
+
+      // Trail + breakeven on the fast scalp loop
+      if (tradingAutopilot.applyPctTrailing(trade, currentPrice)) {
+        const pdT = loadPaperTrades();
+        const tT = pdT.trades.find(tr => tr.id === trade.id);
+        if (tT) { tT.stopLoss = trade.stopLoss; tT._high = trade._high; tT._low = trade._low; savePaperTrades(pdT); }
+      }
+      if (trade.autoBreakevenPct && !trade._breakevenDone) {
+        const lev = trade.leverage || 1;
+        const pxDiff = dir === 'long' ? currentPrice - trade.entry : trade.entry - currentPrice;
+        const pnlPctBe = (pxDiff / trade.entry) * lev * 100;
+        if (pnlPctBe >= trade.autoBreakevenPct) {
+          const pdBe = loadPaperTrades();
+          const tBe = pdBe.trades.find(tr => tr.id === trade.id);
+          if (tBe) {
+            tBe.stopLoss = tBe.entry;
+            tBe._breakevenDone = true;
+            savePaperTrades(pdBe);
+            trade.stopLoss = trade.entry;
+            trade._breakevenDone = true;
+            console.log(`🛡️ Scalp auto-breakeven: ${trade.coin} SL → entry`);
+          }
+        }
+      }
+
       const leverage = trade.leverage || 1;
-      const priceDiff = trade.direction === 'long'
+      const priceDiff = dir === 'long'
         ? currentPrice - trade.entry
         : trade.entry - currentPrice;
       const pnlPct = (priceDiff / trade.entry) * leverage * 100;
+
+      // 0. Stop loss (was missing on the fast path — critical for auto scalp)
+      if (trade.stopLoss != null) {
+        const hitSl = dir === 'long'
+          ? currentPrice <= trade.stopLoss
+          : currentPrice >= trade.stopLoss;
+        if (hitSl) {
+          await closePaperTrade(trade.id, currentPrice, 'scalp stop loss hit');
+          continue;
+        }
+      }
 
       // 1. Time limit expired
       if (trade.scalpExpiry && Date.now() > trade.scalpExpiry) {
@@ -7652,7 +7832,7 @@ async function checkScalpExpiry() {
       }
 
       // 3. Profit target hit (scalp TP)
-      const hitTarget = trade.direction === 'long'
+      const hitTarget = dir === 'long'
         ? currentPrice >= trade.target
         : currentPrice <= trade.target;
       if (hitTarget) {
@@ -8640,14 +8820,9 @@ ipcMain.handle('get-shadow-stats', () => {
 ipcMain.handle('get-coin-bench', () => loadJSON(BENCH_FILE, {}));
 ipcMain.handle('get-precision-scoreboard', () => {
   try {
-    const d = loadJSON(SHADOW_FILE, { shadows: [], stats: {} });
-    const pd = loadPaperTrades();
-    return scannerPrecision.buildScoreboard({
-      shadows: d.shadows || [],
-      paperTrades: pd.trades || [],
-      expectancy: loadExpectancy(),
-      holdoutPct: 0.25
-    });
+    const board = buildPrecisionScoreboardPayload();
+    const nightly = loadJSON(PRECISION_NIGHTLY_FILE, null);
+    return { ...board, nightly };
   } catch (e) {
     return { error: e.message };
   }
@@ -12165,6 +12340,34 @@ ipcMain.handle('get-bucket-usage', () => bucketUsage());
 ipcMain.handle('check-manual-allocation', (e, { usd }) => allocationAllows({ caller: 'manual' }, usd));
 
 async function openPaperTrade(signal) {
+  if (!signal || typeof signal !== 'object') return null;
+  // Normalize long/short so all auto paths (main/scalp/TG/advisor) share one direction vocabulary
+  const normDir = tradingAutopilot.normalizeDirection(signal.direction);
+  if (!normDir) {
+    console.log(`🚫 Trade blocked — invalid direction: ${signal.direction}`);
+    return null;
+  }
+  signal.direction = normDir;
+
+  // Auto-kill dead setups (negative expectancy) — advisors / trusted / manual exempt
+  try {
+    const dead = tradingAutopilot.deadSetupGate(loadExpectancy(), signal);
+    if (dead.block) {
+      console.log(`☠️ Dead setup blocked: ${signal.setupType} (${signal.coin}) — ${dead.detail}`);
+      sendIntelEvent?.({
+        type: 'scan',
+        source: 'Autopilot',
+        body: `Blocked dead setup ${signal.setupType} on ${signal.coin}`,
+        note: dead.detail,
+        notify: false
+      });
+      return null;
+    }
+    if (dead.mult > 0 && dead.mult < 1) {
+      signal.sizeMultiplier = (signal.sizeMultiplier || 1) * dead.mult;
+    }
+  } catch (e) {}
+
   // ── Security: global daily loss limit (settings.dailyLossLimit, 0/unset = off) ──
   try {
     const s0 = loadSettings();
@@ -12335,8 +12538,15 @@ async function openPaperTrade(signal) {
     independentAxes: signal.independentAxes || null,
     precisionMeta: signal.precisionMeta || null,
     isScalp: !!signal.isScalp,
-    scalpExpiry: signal.scalpExpiry || null
+    scalpExpiry: signal.scalpExpiry || null,
+    autoBreakevenPct: signal.autoBreakevenPct || null,
+    trailingPct: signal.trailingPct || null
   };
+
+  // Full auto: arm breakeven + trailing so exits happen without babysitting
+  if (settings.tradingAutopilot !== false) {
+    tradingAutopilot.armAutopilotExits(trade, settings);
+  }
 
   // Use Binance testnet if configured AND coin is supported
   if (isBinanceTestnet() && isSupportedOnTestnet(signal.coin)) {
@@ -12513,8 +12723,10 @@ async function checkPaperTrades() {
       if (isNaN(currentPrice)) continue;
 
       // Calculate unrealized P&L
+      const dir = tradingAutopilot.normalizeDirection(trade.direction) || String(trade.direction || '').toLowerCase();
+      trade.direction = dir;
       const leverage = trade.leverage || 1;
-      const priceDiff = trade.direction === 'long'
+      const priceDiff = dir === 'long'
         ? currentPrice - trade.entry
         : trade.entry - currentPrice;
       const pnlPct = priceDiff / trade.entry * leverage * 100;
@@ -12524,17 +12736,16 @@ async function checkPaperTrades() {
       if (trade.mfe === undefined || pnlPct > trade.mfe) { trade.mfe = parseFloat(pnlPct.toFixed(2)); trade._dirty = true; }
       if (trade.mae === undefined || pnlPct < trade.mae) { trade.mae = parseFloat(pnlPct.toFixed(2)); trade._dirty = true; }
 
-      // ── AUTO-BREAKEVEN: once the trade is up by the user's % , move SL to entry ──
-      // GMGN-style trailing stop: SL follows the high-water mark
-      if (trade.trailingPct) {
-        if (trade.direction === 'LONG') {
-          trade._high = Math.max(trade._high || trade.entry, price);
-          const trailSL = trade._high * (1 - trade.trailingPct / 100);
-          if (!trade.sl || trailSL > trade.sl) trade.sl = +trailSL.toFixed(8);
-        } else {
-          trade._low = Math.min(trade._low || trade.entry, price);
-          const trailSL = trade._low * (1 + trade.trailingPct / 100);
-          if (!trade.sl || trailSL < trade.sl) trade.sl = +trailSL.toFixed(8);
+      // Tiered trailing levels (quality grades) + % trailing (fixed bug: was LONG/`price`/`sl`)
+      try { await applyTrailingStop(trade, currentPrice); } catch (e) {}
+      if (tradingAutopilot.applyPctTrailing(trade, currentPrice)) {
+        const pdTrail = loadPaperTrades();
+        const tTrail = pdTrail.trades.find(tr => tr.id === trade.id);
+        if (tTrail) {
+          tTrail.stopLoss = trade.stopLoss;
+          tTrail._high = trade._high;
+          tTrail._low = trade._low;
+          savePaperTrades(pdTrail);
         }
       }
       if (trade.autoBreakevenPct && !trade._breakevenDone && pnlPct >= trade.autoBreakevenPct) {
@@ -12542,6 +12753,8 @@ async function checkPaperTrades() {
         const t3 = pd3.trades.find(tr => tr.id === trade.id);
         if (t3) {
           t3.stopLoss = t3.entry; t3._breakevenDone = true; savePaperTrades(pd3);
+          trade.stopLoss = trade.entry;
+          trade._breakevenDone = true;
           sendTelegramNotification(`🛡️ ${trade.coin}: up ${trade.autoBreakevenPct}% — stop moved to breakeven (entry $${trade.entry}). Risk-free now.`).catch(()=>{});
           console.log(`🛡️ Auto-breakeven: ${trade.coin} SL → entry at +${trade.autoBreakevenPct}%`);
         }
@@ -12601,7 +12814,7 @@ async function checkPaperTrades() {
 
       // Partial TP — close portion at target
       if (!trade.partialTpDone && trade.partialTp && trade.partialTp < 1) {
-        const hitTarget = trade.direction === 'long'
+        const hitTarget = dir === 'long'
           ? currentPrice >= trade.target
           : currentPrice <= trade.target;
         if (hitTarget) {
@@ -12615,7 +12828,7 @@ async function checkPaperTrades() {
             t3.partialTpDone = true;
             t3.size = t3.size * (1 - trade.partialTp); // Reduce size
             // Move SL to entry (free trade)
-            t3.stopLoss = trade.direction === 'long'
+            t3.stopLoss = dir === 'long'
               ? Math.max(t3.stopLoss || 0, trade.entry)
               : Math.min(t3.stopLoss || Infinity, trade.entry);
             savePaperTrades(pd3);
@@ -12626,21 +12839,21 @@ async function checkPaperTrades() {
 
       // Check liquidation first
       if (trade.liquidationPrice) {
-        if (trade.direction === 'long' && currentPrice <= trade.liquidationPrice) {
+        if (dir === 'long' && currentPrice <= trade.liquidationPrice) {
           closePaperTrade(trade.id, currentPrice, 'liquidated'); continue;
         }
-        if (trade.direction === 'short' && currentPrice >= trade.liquidationPrice) {
+        if (dir === 'short' && currentPrice >= trade.liquidationPrice) {
           closePaperTrade(trade.id, currentPrice, 'liquidated'); continue;
         }
       }
 
       // Check target and stop loss
-      if (trade.direction === 'long') {
+      if (dir === 'long') {
         if (currentPrice >= trade.target) closePaperTrade(trade.id, currentPrice, 'target hit');
-        else if (currentPrice <= trade.stopLoss) closePaperTrade(trade.id, currentPrice, 'stop loss hit');
+        else if (trade.stopLoss != null && currentPrice <= trade.stopLoss) closePaperTrade(trade.id, currentPrice, 'stop loss hit');
       } else {
         if (currentPrice <= trade.target) closePaperTrade(trade.id, currentPrice, 'target hit');
-        else if (currentPrice >= trade.stopLoss) closePaperTrade(trade.id, currentPrice, 'stop loss hit');
+        else if (trade.stopLoss != null && currentPrice >= trade.stopLoss) closePaperTrade(trade.id, currentPrice, 'stop loss hit');
       }
 
       // Stagnant exit — main trades going nowhere lock capital
@@ -12683,16 +12896,33 @@ async function runMarketScan() {
 
   const pd = loadPaperTrades();
   const threshold = settings.paperTradeThreshold || 20;
+  const trustedCallers = settings.trustedCallers || [];
+  const maxTg = settings.maxTgAutoTrades || 5;
+  const openTg = pd.trades.filter(t => t.status === 'open' && (t.caller || t.groupName?.includes('Trusted') || t.groupName?.includes('Advisor'))).length;
+  if (openTg >= maxTg) {
+    console.log(`📡 TG auto-scan skipped — max caller trades open (${openTg}/${maxTg})`);
+    return;
+  }
 
-  // Check recent untraded signals
+  // Check recent untraded signals (trusted callers bypass confidence threshold)
   const recentSignals = td.signals.filter(s => {
-    const age = Date.now() - s.timestamp;
+    const age = Date.now() - (s.timestamp || 0);
     const alreadyTraded = pd.trades.some(t => t.signalId === s.messageId);
-    return age < 3600000 && !alreadyTraded && s.confidence >= threshold && s.coin && s.direction;
+    if (age >= 3600000 || alreadyTraded || !s.coin || !s.direction) return false;
+    const dir = tradingAutopilot.normalizeDirection(s.direction);
+    if (!dir) return false;
+    s.direction = dir;
+    if (trustedCallers.includes(s.caller)) return true;
+    return (s.confidence || 0) >= threshold;
   });
 
   for (const signal of recentSignals) {
     try {
+      // Cap mid-loop
+      const pdCap = loadPaperTrades();
+      const openNow = pdCap.trades.filter(t => t.status === 'open' && t.caller).length;
+      if (openNow >= maxTg) break;
+
       // Get current price if entry not specified
       if (!signal.entry) {
         const priceStr = await getCryptoPrice(signal.coin.toLowerCase());
@@ -12700,6 +12930,8 @@ async function runMarketScan() {
         if (priceMatch) signal.entry = parseFloat(priceMatch[1].replace(',', ''));
       }
       if (!signal.entry) continue;
+
+      signal.direction = tradingAutopilot.normalizeDirection(signal.direction) || signal.direction;
 
       // Set default target and SL if missing
       if (!signal.target) {
@@ -12724,15 +12956,16 @@ async function runMarketScan() {
 
       // ── Check if trusted caller — skip MiroFish debate ──────────────
       const settings3 = loadSettings();
-      const trustedCallers = settings3.trustedCallers || [];
-      const isTrusted = trustedCallers.includes(signal.caller);
+      const trusted = settings3.trustedCallers || [];
+      const isTrusted = trusted.includes(signal.caller);
 
       if (isTrusted && signal.entry && signal.target && signal.stopLoss) {
         console.log(`⭐ Trusted caller @${signal.caller} (${callerWinRate}% WR) — skipping analysis, auto-copying`);
         
         const tradeSignal = {
           ...signal,
-          confidence: callerWinRate,
+          confidence: Math.max(callerWinRate, 55),
+          trustedCaller: true,
           groupName: `⭐ Trusted Caller | ${callerWinRate}% win rate | Auto-copied`
         };
 
@@ -14364,48 +14597,126 @@ function scoreSignalQuality(signal, callerStats, marketData) {
   return { score, grade, reasons, label: `Signal Quality: ${score}/100 (Grade ${grade})` };
 }
 
-// ─── DAILY TRADE SUMMARY REPORT ───────────────────────────────────────────
+// ─── DAILY / NIGHTLY LAB REPORT (paper P&L + precision scoreboard) ─────────
+const PRECISION_NIGHTLY_FILE = path.join(DATA_DIR, 'precision-nightly.json');
+
+function buildPrecisionScoreboardPayload() {
+  try {
+    const d = loadJSON(SHADOW_FILE, { shadows: [], stats: {} });
+    const pd = loadPaperTrades();
+    return scannerPrecision.buildScoreboard({
+      shadows: d.shadows || [],
+      paperTrades: pd.trades || [],
+      expectancy: loadExpectancy(),
+      holdoutPct: 0.25
+    });
+  } catch (e) {
+    return { error: e.message, totals: {}, expectancy: [], featureAB: {} };
+  }
+}
+
+function formatPrecisionNightlyText(board, paperSlice) {
+  const t = board?.totals || {};
+  const hold = t.holdoutWinRate;
+  const holdLine = hold == null
+    ? `Holdout WR: — (${t.holdout || 0} OOS samples — still collecting)`
+    : `Holdout WR: ${hold}% (${t.holdout || 0} OOS)`;
+  const exp = (board?.expectancy || []).slice(0, 5)
+    .map(e => `• ${e.key}: E=${e.expectancy ?? '—'} · ${e.winRate ?? '—'}% · n=${e.n}`)
+    .join('\n');
+  const blocked = (board?.byBlockedBy || []).slice(0, 5)
+    .map(b => `• ${b.key}: ${b.n}`)
+    .join('\n');
+  const gates = Object.entries(board?.featureAB || {}).slice(0, 5)
+    .map(([k, v]) => {
+      if (v.status === 'need_more_data' || v.status === 'collecting') return `• ${k}: collecting (n=${v.n || 0})`;
+      return `• ${k}: ${v.precision ?? '—'}% good blocks · ${v.status} (n=${v.n || 0})`;
+    })
+    .join('\n');
+
+  const p = paperSlice || {};
+  return `📊 NIGHTLY PRECISION LAB
+${new Date().toISOString().slice(0, 10)} UTC
+
+Paper today:
+✅ ${p.wins || 0} / ❌ ${p.losses || 0} · WR ${p.winRate != null ? p.winRate + '%' : '—'}
+💰 P&L ${p.totalPnl >= 0 ? '+' : ''}$${(p.totalPnl || 0).toFixed(2)} · bal $${(p.balance || 0).toFixed(2)}
+${p.best ? `🏆 Best: ${p.best}` : ''}
+${p.worst ? `💀 Worst: ${p.worst}` : ''}
+
+Precision:
+Resolved ${t.resolved || 0} · structured ${t.structuredShadows || 0}
+${holdLine}
+In-sample WR: ${t.inSampleWinRate != null ? t.inSampleWinRate + '%' : '—'} (${t.inSample || 0})
+
+Expectancy (top):
+${exp || '• none yet — need closed setups'}
+
+Gates:
+${gates || '• none yet'}
+
+Blocked by:
+${blocked || '• none'}
+
+Rule: only trust holdout when n≥10. Dead expectancy (E≤0) gets sized down / killed.`;
+}
+
 async function sendDailyTradeSummary() {
   try {
+    // Resolve pending shadows so tonight's board is fresh
+    try { await resolveShadowTrades(); } catch (_) {}
+
     const pd = loadPaperTrades();
     const today = new Date().toDateString();
-    const todayTrades = pd.trades.filter(t =>
+    const todayTrades = (pd.trades || []).filter(t =>
       t.closeTime && new Date(t.closeTime).toDateString() === today
     );
 
-    if (!todayTrades.length) return;
-
-    const wins = todayTrades.filter(t => t.pnl > 0);
-    const losses = todayTrades.filter(t => t.pnl <= 0);
+    const wins = todayTrades.filter(t => (t.pnl || 0) > 0);
+    const losses = todayTrades.filter(t => (t.pnl || 0) <= 0);
     const totalPnl = todayTrades.reduce((s, t) => s + (t.pnl || 0), 0);
-    const winRate = Math.round(wins.length / todayTrades.length * 100);
+    const winRate = todayTrades.length ? Math.round(wins.length / todayTrades.length * 100) : null;
+    const bestTrade = [...wins].sort((a, b) => b.pnl - a.pnl)[0];
+    const worstTrade = [...losses].sort((a, b) => a.pnl - b.pnl)[0];
 
-    const bestTrade = wins.sort((a, b) => b.pnl - a.pnl)[0];
-    const worstTrade = losses.sort((a, b) => a.pnl - b.pnl)[0];
+    const board = buildPrecisionScoreboardPayload();
+    const paperSlice = {
+      wins: wins.length,
+      losses: losses.length,
+      winRate,
+      totalPnl,
+      balance: pd.balance || 0,
+      best: bestTrade ? `${bestTrade.coin} ${bestTrade.direction?.toUpperCase()} +$${Number(bestTrade.pnl).toFixed(2)}` : null,
+      worst: worstTrade ? `${worstTrade.coin} ${worstTrade.direction?.toUpperCase()} $${Number(worstTrade.pnl).toFixed(2)}` : null,
+      tradeCount: todayTrades.length
+    };
 
-    // Get AI lesson from today
-    const lessonsCtx = buildLessonsContext();
+    const report = {
+      at: new Date().toISOString(),
+      paper: paperSlice,
+      board,
+      settings: {
+        dailyTradeEnabled: !!loadSettings().dailyTradeEnabled,
+        autoPaperTrade: !!loadSettings().autoPaperTrade,
+        precisionScanner: loadSettings().precisionScanner !== false
+      }
+    };
+    saveJSON(PRECISION_NIGHTLY_FILE, report);
 
-    const summary = `📊 DAILY TRADE SUMMARY
-Date: ${new Date().toLocaleDateString()}
-
-Results:
-✅ Wins: ${wins.length} | ❌ Losses: ${losses.length}
-📈 Win Rate: ${winRate}%
-💰 Total P&L: ${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}
-💼 Balance: $${pd.balance.toFixed(2)}
-
-${bestTrade ? `🏆 Best: ${bestTrade.coin} ${bestTrade.direction?.toUpperCase()} +$${bestTrade.pnl.toFixed(2)}` : ''}
-${worstTrade ? `💀 Worst: ${worstTrade.coin} ${worstTrade.direction?.toUpperCase()} $${worstTrade.pnl.toFixed(2)}` : ''}
-
-${totalPnl > 0 ? '🌟 Profitable day!' : totalPnl < -100 ? '⚠️ Rough day — review your settings' : '📝 Break-even day'}`;
-
-    await sendTelegramNotification(summary);
-    console.log('📊 Daily summary sent via TG');
-  } catch(e) { console.error('Daily summary error:', e.message); }
+    const text = formatPrecisionNightlyText(board, paperSlice);
+    await sendTelegramNotification(text);
+    console.log('📊 Nightly precision lab report sent via TG');
+    return report;
+  } catch (e) {
+    console.error('Daily summary error:', e.message);
+    return { error: e.message };
+  }
 }
 
-// Schedule daily summary at 23:55 UTC
+ipcMain.handle('get-precision-nightly', () => loadJSON(PRECISION_NIGHTLY_FILE, null));
+ipcMain.handle('run-precision-nightly-now', async () => sendDailyTradeSummary());
+
+// Schedule nightly lab report at 23:55 UTC
 function scheduleDailySummary() {
   const now = new Date();
   const nextRun = new Date();
@@ -14416,7 +14727,7 @@ function scheduleDailySummary() {
     sendDailyTradeSummary();
     setInterval(sendDailyTradeSummary, 24 * 60 * 60 * 1000);
   }, ms);
-  console.log(`📊 Daily summary scheduled — next in ${Math.round(ms/3600000)}h`);
+  console.log(`📊 Nightly precision lab scheduled — next in ${Math.round(ms / 3600000)}h`);
 }
 
 // ─── SMART PRICE ALERTS ────────────────────────────────────────────────────
@@ -15525,6 +15836,7 @@ function initAnalytics() {
 
 function startPaperTradingMonitor() {
   if (paperTradeInterval) clearInterval(paperTradeInterval);
+  const secs = Math.max(30, Number(loadSettings().paperMonitorSeconds) || 60);
   paperTradeInterval = setInterval(async () => {
     await checkPaperTrades();
     await runMarketScan();
@@ -15532,8 +15844,8 @@ function startPaperTradingMonitor() {
     await checkScalpExpiry();
     await checkDCAPlans();
     await checkSmartPriceAlerts(); // Auto-close expired scalps
-  }, 15 * 60 * 1000); // Every 15 minutes
-  console.log('📊 Paper trading monitor started');
+  }, secs * 1000);
+  console.log(`📊 Paper trading monitor started (every ${secs}s — auto open/close)`);
 }
 
 // IPC handlers for paper trading
@@ -16239,7 +16551,7 @@ async function applyAdvisorUpdate(adv, parsed) {
 }
 
 // The actual mutation (shared by full-auto and user-confirm)
-async function executeAdvisorAction(tradeId, action, { sl, tp } = {}) {
+async function executeAdvisorAction(tradeId, action, { sl, tp, trailPct } = {}) {
   const pd = loadPaperTrades();
   const t = (pd.trades||[]).find(x => x.id === tradeId && x.status === 'open');
   if (!t) return { ok:false, reason:'not_open' };
@@ -16349,28 +16661,48 @@ async function ingestAdvisorCall(advisorId, parsed, imageUrl) {
     let leverage = parsed.leverage || 1;
     if (rules.maxLeverage && leverage > rules.maxLeverage) leverage = rules.maxLeverage;
 
+    const direction = tradingAutopilot.normalizeDirection(parsed.direction);
+    if (!direction) {
+      console.log(`🛑 ${adv.name} auto-trade skipped — bad direction ${parsed.direction}`);
+      return;
+    }
+
     // ── SL/TP: use the user's own % if they chose to override the advisor's ──
     let target = parsed.tp, stopLoss = parsed.sl;
     if (rules.useMySlTp && parsed.entry) {
       const e = Number(parsed.entry);
-      if (parsed.direction === 'long') { stopLoss = +(e * (1 - rules.slPct/100)).toFixed(8); target = +(e * (1 + rules.tpPct/100)).toFixed(8); }
+      if (direction === 'long') { stopLoss = +(e * (1 - rules.slPct/100)).toFixed(8); target = +(e * (1 + rules.tpPct/100)).toFixed(8); }
       else { stopLoss = +(e * (1 + rules.slPct/100)).toFixed(8); target = +(e * (1 - rules.tpPct/100)).toFixed(8); }
+    }
+    // Fill missing SL/TP so auto-close can fire
+    if (parsed.entry && (!target || !stopLoss)) {
+      const e = Number(parsed.entry);
+      if (!target) target = direction === 'long' ? +(e * 1.04).toFixed(8) : +(e * 0.96).toFixed(8);
+      if (!stopLoss) stopLoss = direction === 'long' ? +(e * 0.98).toFixed(8) : +(e * 1.02).toFixed(8);
     }
 
     const signal = {
-      coin: parsed.coin, direction: parsed.direction,
+      coin: parsed.coin, direction,
       entry: parsed.entry, target, stopLoss, leverage,
       confidence: 70, caller: adv.name,
       groupName: `📣 Advisor: ${adv.name}`,
       messageId: call.id, timestamp: Date.now(),
       size, advisorId, isAdvisorTrade: true, advisorCallId: call.id,
-      autoBreakevenPct: rules.autoBreakevenPct || 0   // armed; monitor moves SL→entry at this profit %
+      autoBreakevenPct: rules.autoBreakevenPct || loadSettings().autoBreakevenPct || 2.5
     };
-    try { openPaperTrade(signal); } catch(e) {}
-    a2.spentToday = (a2.spentToday || 0) + size;
-    a2._tradesToday = (a2._tradesToday || 0) + 1;
-    saveAdvisors(d2);
-    console.log(`⚡ Auto-traded ${adv.name}: ${parsed.direction} ${parsed.coin} ($${size}, ${leverage}x)${rules.useMySlTp?' [my SL/TP]':''} · today $${a2.spentToday}/${usdCap}`);
+    try {
+      const opened = await openPaperTrade(signal);
+      if (opened) {
+        a2.spentToday = (a2.spentToday || 0) + size;
+        a2._tradesToday = (a2._tradesToday || 0) + 1;
+        saveAdvisors(d2);
+        console.log(`⚡ Auto-traded ${adv.name}: ${direction} ${parsed.coin} ($${size}, ${leverage}x)${rules.useMySlTp?' [my SL/TP]':''} · today $${a2.spentToday}/${usdCap}`);
+      } else {
+        console.log(`⚡ ${adv.name} auto-trade blocked by gates: ${direction} ${parsed.coin}`);
+      }
+    } catch(e) {
+      console.error(`Advisor auto-trade error: ${e.message}`);
+    }
   }
 }
 
@@ -18024,11 +18356,18 @@ function bootMainApp() {
       } catch (_) {}
     }, 800);
     startAlertMonitor();
+    // Persist paper autopilot defaults (main + scalp + TG auto, paper-only)
+    try {
+      const bootS = loadSettings();
+      const next = tradingAutopilot.ensureAutopilotSettings(bootS);
+      if (JSON.stringify(bootS) !== JSON.stringify(next)) saveSettings(next);
+      console.log('🤖 Paper trading autopilot: main+scalp+TG auto open/close ON (paper only — no mainnet)');
+    } catch (e) {}
     startPaperTradingMonitor();
     const remoteScanner = process.env.ASUKA_REMOTE_SCANNER === '1' || process.env.ASUKA_REMOTE_SCANNER === 'true';
     if (!remoteScanner) {
       scheduleDailyTradeBot();
-      setInterval(checkScalpExpiry, 5 * 60 * 1000);
+      setInterval(checkScalpExpiry, 60 * 1000);
       setInterval(runIndependentScalpScan, 5 * 60 * 1000);
       setTimeout(runIndependentScalpScan, 10000);
       startIndependentScanner();
