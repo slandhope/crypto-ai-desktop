@@ -1,5 +1,7 @@
 /**
- * Chat routing + Anthropic prompt caching helpers (server-side cost control).
+ * Chat routing + Anthropic prompt caching.
+ * Quality-first: companion + scanner use Sonnet; Haiku only for trivial acks.
+ * Prompt caching is cost-only — zero quality impact.
  */
 const HAIKU = 'claude-haiku-4-5-20251001';
 const SONNET = 'claude-sonnet-4-6';
@@ -22,24 +24,30 @@ function classifyChatTier(messages, system = '') {
   if (!text) return 'normal';
   if (text.length <= 48 && SIMPLE_RE.test(text)) return 'simple';
   if (DEEP_RE.test(text) || DEEP_RE.test(sys)) return 'deep';
-  if (text.length <= 12 && !/[?]/.test(text)) return 'simple';
   return 'normal';
 }
 
-/** Apply tier caps on top of credits.clampAiRequest output. */
+/** Quality-first tiers — no aggressive token starvation. */
 function applyChatTier(clamped, tier) {
   const base = { ...clamped, tier };
+  const cap = Math.min(Math.max(Number(clamped.max_tokens) || 1024, 256), 2048);
+
   if (tier === 'simple') {
-    return { ...base, model: HAIKU, max_tokens: Math.min(base.max_tokens, 128) };
+    return { ...base, model: HAIKU, max_tokens: Math.min(Math.max(cap, 256), 512) };
   }
   if (tier === 'deep') {
     return {
       ...base,
       model: SONNET,
-      max_tokens: Math.min(Math.max(base.max_tokens, 512), 2048),
+      max_tokens: Math.min(Math.max(cap, 1024), 2048),
     };
   }
-  return { ...base, model: HAIKU, max_tokens: Math.min(base.max_tokens, 384) };
+  // Normal companion chat — full Sonnet quality
+  return {
+    ...base,
+    model: SONNET,
+    max_tokens: Math.min(Math.max(cap, 512), 2048),
+  };
 }
 
 function resolveChatRequest(body, clampFn) {
@@ -49,7 +57,7 @@ function resolveChatRequest(body, clampFn) {
   return applyChatTier(clamped, tier);
 }
 
-/** Wrap system prompt with Anthropic ephemeral prompt cache. */
+/** Wrap system prompt with Anthropic ephemeral prompt cache (same output, lower cost). */
 function buildCachedSystem(system) {
   if (!system) return undefined;
   if (Array.isArray(system)) {

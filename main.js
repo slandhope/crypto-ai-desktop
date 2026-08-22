@@ -4593,8 +4593,7 @@ async function extractConversationLearnings(messages) {
   } catch(e) { return null; }
 }
 
-// Compress old memories — batched (Haiku); skip unless volume or weekly + stale tiers
-const MEMORY_COMPRESS_HAIKU = 'claude-haiku-4-5-20251001';
+// Compress old memories — Sonnet for fidelity; batch when volume or weekly stale tiers
 const COMPRESS_MIN_FRESH = 20;
 
 async function compressMemories() {
@@ -4625,7 +4624,7 @@ async function compressMemories() {
   if (toMedium.length > 0) {
     const combined = toMedium.map(m => m.summary).join('\n');
     const res = await anthropic.messages.create({
-      model: MEMORY_COMPRESS_HAIKU, max_tokens: 200,
+      model: CLAUDE_MODEL, max_tokens: 280,
       messages: [{ role: 'user', content: `Summarize these conversation learnings into one concise paragraph:\n${combined}` }]
     });
     lm.medium.push({ summary: res.content[0].text, timestamp: now, count: toMedium.length });
@@ -4643,7 +4642,7 @@ async function compressMemories() {
   if (toLongterm.length > 0) {
     const combined = toLongterm.map(m => m.summary).join('\n');
     const res = await anthropic.messages.create({
-      model: MEMORY_COMPRESS_HAIKU, max_tokens: 150,
+      model: CLAUDE_MODEL, max_tokens: 220,
       messages: [{ role: 'user', content: `Extract 3-5 core facts about this user's trading behavior from these summaries:\n${combined}` }]
     });
     lm.longterm.push({ summary: res.content[0].text, timestamp: now });

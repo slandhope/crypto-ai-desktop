@@ -240,8 +240,8 @@ async function runPrecisionScan(scanCoin, deps) {
       let disagree = 0;
       for (const role of roles) {
         const r = await anthropic.messages.create({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 80,
+          model: CLAUDE_MODEL,
+          max_tokens: 120,
           messages: [{ role: 'user', content: `You are a crypto ${role}. Math says ${confluence.direction} ${scanCoin} (${confluence.tier}, ${confidence}%). News: ${String(news || '').slice(0, 120)}. Veto only if clear risk. JSON: {"veto":true/false,"reason":"8 words"}` }]
         });
         const j = JSON.parse((r.content[0].text.match(/\{[\s\S]*\}/) || ['{}'])[0]);

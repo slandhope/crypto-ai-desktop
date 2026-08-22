@@ -25,6 +25,8 @@ const scannerPrecision = require('./scanner-precision');
 const { runGrokAgent, detectGrokTask } = require('./grok-agent');
 const { runPrecisionScan, runPrecisionIndependentScalp, runPrecisionScalpForCoin } = require('./scanner-precision-run');
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
+/** Swarm / scalp agents — Sonnet for accuracy (override via SCANNER_AGENT_MODEL). */
+const SCANNER_AGENT_MODEL = process.env.SCANNER_AGENT_MODEL || CLAUDE_MODEL;
 // pull the real Claude key from the vault at boot (Secrets Manager → .env fallback)
 (async () => { try { const k = await getSecret('ANTHROPIC_API_KEY'); if (k) anthropic.apiKey = k; } catch (e) {} })();
 
@@ -1548,13 +1550,13 @@ Only trade when there is a CLEAR edge — don't force trades.`;
         'volatility trader', 'correlation analyst'
       ];
 
-      // MiroFish agent — Claude Haiku with retry on rate limit
+      // MiroFish agent — Sonnet with retry on rate limit
       async function callMiroAgent(role, prompt) {
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
             const res = await anthropic.messages.create({
-              model: 'claude-haiku-4-5-20251001',
-              max_tokens: 150,
+              model: SCANNER_AGENT_MODEL,
+              max_tokens: 200,
               messages: [{ role: 'user', content: prompt + '\n\nRespond with valid JSON only.' }]
             });
             const raw = res.content[0].text.trim();
@@ -2181,12 +2183,12 @@ async function runIndependentScalpScan() {
 
       const performanceCtx = `Today on ${coin}: ${todayWins}W/${todayLosses}L, P&L: $${todayPnl.toFixed(2)}`;
 
-      // ── STEP 1: Haiku Scout ──────────────────────────────────────────
+      // ── STEP 1: Scout (Sonnet) ───────────────────────────────────────
       let scoutResult = null;
       try {
         const scoutRes = await anthropic.messages.create({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 150,
+          model: SCANNER_AGENT_MODEL,
+          max_tokens: 200,
           messages: [{ role: 'user', content: `You are a crypto scalp scout. Find quick trading opportunities.
 
 COIN: ${coin} at $${currentPrice}
@@ -2240,8 +2242,8 @@ JSON only: {"shouldScalp":true/false,"direction":"long"or"short","entry":${curre
         if (i > 0) await delay(400);
         try {
           const aRes = await anthropic.messages.create({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 100,
+            model: SCANNER_AGENT_MODEL,
+            max_tokens: 180,
             messages: [{ role: 'user', content: `You are a crypto ${agentRoles[i]}.
 
 Scout proposes: ${scoutResult.direction?.toUpperCase()} ${coin} at $${currentPrice}
@@ -2499,8 +2501,8 @@ JSON only:
       if (i > 0) await delay(300);
       try {
         const res = await anthropic.messages.create({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 150,
+          model: SCANNER_AGENT_MODEL,
+          max_tokens: 200,
           messages: [{ role: 'user', content: scalpPrompt(agentRoles[i]) + '\n\nJSON only.' }]
         });
         const raw = res.content[0].text.trim();
@@ -2539,8 +2541,8 @@ JSON only:
 
     // Claude final scalp decision
     const finalRes = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 150,
+      model: SCANNER_AGENT_MODEL,
+      max_tokens: 220,
       messages: [{ role: 'user', content: `You are deciding on a scalp trade.
 
 MAIN TRADE: ${mainTrade.direction?.toUpperCase()} ${mainTrade.coin} swing
