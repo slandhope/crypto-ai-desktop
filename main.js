@@ -4593,26 +4593,39 @@ async function extractConversationLearnings(messages) {
   } catch(e) { return null; }
 }
 
-// Compress old memories — runs weekly
+// Compress old memories — batched (Haiku); skip unless volume or weekly + stale tiers
+const MEMORY_COMPRESS_HAIKU = 'claude-haiku-4-5-20251001';
+const COMPRESS_MIN_FRESH = 20;
+
 async function compressMemories() {
   const lm = loadLongMemory();
   const now = Date.now();
   const oneWeek = 7 * 86400000;
   const oneMonth = 30 * 86400000;
 
+  const fresh = lm.fresh || [];
+  const medium = lm.medium || [];
+  const hasStaleFresh = fresh.some((m) => now - m.timestamp > oneWeek);
+  const hasStaleMedium = medium.some((m) => now - m.timestamp > oneMonth);
+  const volumeTrigger = fresh.length > COMPRESS_MIN_FRESH;
+  const weeklyDue = !lm.lastCompressed || (now - lm.lastCompressed >= oneWeek);
+
+  if (!volumeTrigger && !(weeklyDue && (hasStaleFresh || hasStaleMedium))) {
+    return;
+  }
+
   // Move fresh memories older than 7 days to medium
   const stillFresh = [];
   const toMedium = [];
-  for (const m of lm.fresh) {
+  for (const m of fresh) {
     if (now - m.timestamp > oneWeek) toMedium.push(m);
     else stillFresh.push(m);
   }
 
   if (toMedium.length > 0) {
-    // Summarize them into one medium memory
     const combined = toMedium.map(m => m.summary).join('\n');
     const res = await anthropic.messages.create({
-      model: CLAUDE_MODEL, max_tokens: 200,
+      model: MEMORY_COMPRESS_HAIKU, max_tokens: 200,
       messages: [{ role: 'user', content: `Summarize these conversation learnings into one concise paragraph:\n${combined}` }]
     });
     lm.medium.push({ summary: res.content[0].text, timestamp: now, count: toMedium.length });
@@ -4630,7 +4643,7 @@ async function compressMemories() {
   if (toLongterm.length > 0) {
     const combined = toLongterm.map(m => m.summary).join('\n');
     const res = await anthropic.messages.create({
-      model: CLAUDE_MODEL, max_tokens: 150,
+      model: MEMORY_COMPRESS_HAIKU, max_tokens: 150,
       messages: [{ role: 'user', content: `Extract 3-5 core facts about this user's trading behavior from these summaries:\n${combined}` }]
     });
     lm.longterm.push({ summary: res.content[0].text, timestamp: now });
@@ -4975,7 +4988,9 @@ ipcMain.handle('end-conversation', async (e, messages) => {
       if (learning) saveNewLearning(learning);
     }
     const lm = loadLongMemory();
-    if (!lm.lastCompressed || Date.now() - lm.lastCompressed > 7 * 86400000) {
+    if ((lm.fresh || []).length > COMPRESS_MIN_FRESH
+      || !lm.lastCompressed
+      || Date.now() - lm.lastCompressed > 7 * 86400000) {
       compressMemories();
     }
     clearActiveSession();

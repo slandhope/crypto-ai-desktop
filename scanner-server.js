@@ -19,6 +19,7 @@ const anthropic = new Anthropic({
 const { getSecret } = require('./secrets');          // 🔐 key vault
 const https = require('https');                       // for voice proxy
 const credits = require('./credits');                // 🎟️ credit engine
+const { resolveChatRequest, anthropicChatParams } = require('./ai-chat-utils');
 const { authRequired, authOptional, userIdOf } = require('./auth');  // 🔑 real login
 const scannerPrecision = require('./scanner-precision');
 const { runGrokAgent, detectGrokTask } = require('./grok-agent');
@@ -3514,19 +3515,31 @@ api.post('/credits/set-tier', requireAdmin, async (req, res) => {
 // 🤖 the proxy: app → here → Claude. Spend credits atomically; clamp model/tokens.
 async function handleAiChat(req, res) {
   const uid = userIdOf(req);
-  const { messages, system, action, units } = req.body || {};
+  const body = req.body || {};
+  const { messages, system, action, units } = body;
   const act = action || 'chat';
-  const { model, max_tokens } = credits.clampAiRequest(req.body || {});
+  const msgs = toAnthropicMessages(messages);
+  const routed = resolveChatRequest({ ...body, messages: msgs }, credits.clampAiRequest);
   const spent = await credits.spend(uid, act, units || 1);
   if (!spent.ok) return res.status(402).json({ error: spent.reason, message: spent.message, balance: await credits.balance(uid) });
   try {
-    const resp = await anthropic.messages.create({
-      model,
-      max_tokens,
-      system: system || undefined,
-      messages: messages || [{ role: 'user', content: 'Hello' }],
+    const resp = await anthropic.messages.create(anthropicChatParams({
+      system,
+      messages: msgs.length ? msgs : [{ role: 'user', content: 'Hello' }],
+      model: routed.model,
+      max_tokens: routed.max_tokens,
+    }));
+    res.json({
+      content: resp.content,
+      balance: await credits.balance(uid),
+      model: routed.model,
+      max_tokens: routed.max_tokens,
+      tier: routed.tier,
+      cache: resp.usage?.cache_creation_input_tokens != null ? {
+        created: resp.usage.cache_creation_input_tokens || 0,
+        read: resp.usage.cache_read_input_tokens || 0,
+      } : undefined,
     });
-    res.json({ content: resp.content, balance: await credits.balance(uid), model, max_tokens });
   } catch (e) {
     await credits.refund(uid, spent.charged).catch(() => {});
     res.status(500).json({ error: 'ai_failed', detail: e.message });
@@ -3579,18 +3592,18 @@ async function handleAsukaMobileChat(req, res) {
   const body = req.body || {};
   const messages = toAnthropicMessages(body.messages);
   if (!messages.length) return res.status(400).json({ error: 'no_messages' });
-  const { model, max_tokens } = credits.clampAiRequest(body);
+  const routed = resolveChatRequest({ ...body, messages }, credits.clampAiRequest);
   const spent = await credits.spend(uid, 'chat', body.units || 1);
   if (!spent.ok) return res.status(402).json({ error: spent.reason, message: spent.message, balance: await credits.balance(uid) });
   try {
-    const resp = await anthropic.messages.create({
-      model,
-      max_tokens,
+    const resp = await anthropic.messages.create(anthropicChatParams({
       system: body.system || mobileAsukaSystem(body.personality),
       messages,
-    });
+      model: routed.model,
+      max_tokens: routed.max_tokens,
+    }));
     const reply = extractClaudeText(resp);
-    res.json({ reply, content: resp.content, balance: await credits.balance(uid), model, max_tokens });
+    res.json({ reply, content: resp.content, balance: await credits.balance(uid), model: routed.model, max_tokens: routed.max_tokens, tier: routed.tier });
   } catch (e) {
     await credits.refund(uid, spent.charged).catch(() => {});
     res.status(500).json({ error: 'ai_failed', detail: e.message });
